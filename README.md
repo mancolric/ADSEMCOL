@@ -22,6 +22,7 @@ The code is currently under development, i.e., it is not optimized and it can so
 Manuel Colera-Rico (Universidad Politécnica de Madrid)\
 Vít Dolejší (Charles University Prague)
 
+Please feel free to ask any questions at
 m.colera@upm.es
 
 ### Cite as 
@@ -32,11 +33,11 @@ Colera, M., Dolejší, V., 2025. An adaptive spectral element method for systems
 
 Requires BAMG mesh generator, available via [FreeFem](https://freefem.org/), and [Julia](https://julialang.org/) language. 
 
-In the main instalation directory, run `julia install` and follow the instructions to install all the necessary files and Julia packages. REVISAR
+In the main instalation directory, run `julia install` and follow the instructions to install all the necessary files and Julia packages.
 
 ### Usage
 
-The directories `ADSEMCOL/test/test_ConvectionDiffusion` and `ADSEMCOL/test/test_CompressibleFlow` contain several tests concerning the nonlinear convection-diffusion equation and the Euler and Navier--Stokes compressible flow equations.
+The directories `ADSEMCOL/test/test_ConvectionDiffusion/` and `ADSEMCOL/test/test_CompressibleFlow/` contain several tests concerning the nonlinear convection-diffusion equation and the Euler and Navier--Stokes compressible flow equations.
 
 Each test is defined as a function that can be executed from the Julia terminal. Normally, the function has two compolsory arguments: the resolution $h/p$ of the initial mesh (necessary to start the mesh adaptation process), and the discretization order $p$. After that, there are many optional parameters with default values which can be seen in the function header.
 
@@ -56,6 +57,8 @@ TriplePoint(0.02, 5, TolS=1e-5, TolT=1e-3, epsilon=3e-5, tf=0.1, SaveRes=true, D
 
 ```
 
-Above, `SC` is the _study case_, i.e., a number associated with the problem. In this case, `SC=10`. The results are saved in the directory specified in the `ResUbi.jl` file (generated during the installation REVISAR) with the names `SC10_0.jld2` ($t=0$), `SC10_1.jld2` ($t=0.01$), `SC10_2.jld2` ($t=0.02$), ...
+Above, `SC` is the _study case_, i.e., a number associated with the problem. In this case, `SC=10`. The results are saved in the directory specified in the `ResUbi.jl` file (generated during the installation) with the names `SC10_0.jld2` ($t=0$), `SC10_1.jld2` ($t=0.01$), `SC10_2.jld2` ($t=0.02$), ...
+
+There are some useful functions to plot the results of each test in the folder `ADSEMCOL/test/results/`.
 
 Detailed documentation will be uploaded in the future.
