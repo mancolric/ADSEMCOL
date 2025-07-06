@@ -59,8 +59,6 @@ Manifest.toml
 #v-code editor:
 *.json
 
-#Ubication files:
+#Files with private directories:
 *ResUbi.jl
-*FigUbi.jl
-*VideosUbi.jl
 
