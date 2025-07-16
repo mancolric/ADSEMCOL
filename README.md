@@ -32,7 +32,7 @@ Colera, M., Dolejší, V., 2025. An adaptive spectral element method for systems
 
 ### Installation
 
-Requires BAMG mesh generator, available via [FreeFem](https://freefem.org/), and [Julia](https://julialang.org/) language. 
+Requires (i) [Julia](https://julialang.org/) language, and (ii) BAMG mesh generator, which is available via [FreeFem](https://freefem.org/) and [Rheolef](https://membres-ljk.imag.fr/Pierre.Saramito/rheolef/html/binaries_page.html). 
 
 In the main instalation directory, run `julia install` and follow the instructions to install all the necessary files and Julia packages.
 
