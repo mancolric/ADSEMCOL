@@ -6,13 +6,13 @@ function TriplePoint(hp0::Float64, FesOrder::Int;
     epsilon::Float64=1e-3, nu::Float64=0e-3, beta::Float64=0.0, kappa_rho_cv::Float64=0e-6, 
     delta0::Float64=epsilon,
     #
-    TolS::Float64=1e-6, TolS0=1e-7, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2, 
+    TolS::Float64=1e-6, TolS0=0.1*TolS, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2, 
     PostAdapt::Bool=false, 
     #
     TolT::Float64=1e-4, Deltat0::Float64=1e-5,
     #
-    PlotFig::Bool=false, wFig::Float64=9.50, hFig::Float64=6.50, 
-    PlotVars::Vector{String}=String[], 
+    PlotFig::Bool=true, wFig::Float64=9.50, hFig::Float64=6.50, 
+    PlotVars::Vector{String}=String["rho", "v", "e"], 
     SaveFig::Bool=false, Nt_SaveFig::Int=5, Deltat_SaveFig::Float64=Inf,
     mFig::Int=max(1,length(PlotVars)), nFig::Int=Int(ceil(length(PlotVars)/mFig)), cmap::String="jet",
     #
@@ -128,6 +128,9 @@ function TriplePoint(hp0::Float64, FesOrder::Int;
             PyPlot.cla()
             PlotContour(solver.u[1], solver.fes)
             PlotMesh!(solver.mesh, color="w")
+            title(latexstring(LatexString("rho"),
+                    "; t^n=", sprintf1("%.2e", solver.t)), 
+                    fontsize=10)
             if SaveFig
                 savefig("$(VideosUbi)TriplePoint_Mesh_SC$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
