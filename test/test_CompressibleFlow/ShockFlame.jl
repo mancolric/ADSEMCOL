@@ -322,3 +322,142 @@ function ChapmanJouget(gamma::Float64, q::Float64)
     return M0, rho0, u0, p0, rho1, u1, p1, rho2, u2, p2
     
 end
+
+function ChapmanJouget(gamma::Float64, q::Float64, beta0::Float64; 
+    Deltax::Float64=1e-3, xf::Float64=20.0, YF0::Float64=0.01, PlotRes::Bool=false)
+
+    #Compute detonation states:
+    M0, rho0, u0, p0, rho1, u1, p1, rho2, u2, p2 = ChapmanJouget(gamma,q)
+    
+    #Initialize solution:
+#     xv              = [ 0.0, 0.0 ]
+#     rhov            = [ rho0, rho1 ]
+#     uv              = [ u0, u1 ]
+#     pv              = [ p0, p1 ]
+#     YFv             = [ YF0, YF0 ] 
+    
+    #Compute constants:
+    RT0             = p0/rho0
+    RT1             = p1/rho1
+    RTa             = beta0*RT0                     #Activation temperature
+    beta1           = RTa/RT1                       #beta coeff with respect to CJ-1 state
+    Q               = gamma/(gamma-1)*RT0/YF0*q     #Fuel formation mass enthalpy 
+    BB              = u1*exp(beta1)/(1.0*beta1)     #Characteristic length is 1
+                        
+    #Function to compute rho, u, p, YF from vector F:
+    function ExtractVars(Fv::Vector{Float64})
+    
+        #YF = rho YF u / (rho u):
+        YF          = Fv[1]/Fv[2]
+        
+        #F2 = rho u
+        #F3 = p + rho u^2 
+        #F4 = ( gamma/(gamma-1)*p + 1/2 rho u^2 + rho Q YF ) u
+        #   = ( gamma/(gamma-1)*p*u + 1/2 F2 u^2 + F1 Q
+        #Combining these equations:
+        #(gamma/(gamma-1)-1/2) F2 U^2 - gamma/(gamma-1) F3 U + F4-F1*Q = 0
+        A       = (gamma/(gamma-1)-0.5)*Fv[2]
+        B       = -gamma/(gamma-1)*Fv[3]
+        C       = Fv[4]-Fv[1]*Q
+        u       = (-B-sqrt(B^2-4*A*C))/(2*A)    #Positive root provides state 0, negative provides 1
+        
+        #Therefore:
+        rho         = Fv[2]/u
+        p           = Fv[3]-Fv[2]*u
+        
+        return rho, u, p, YF
+        
+    end
+    
+    #Function to march flux variables in space:
+    function dF_dx(Fv::Vector{Float64})
+    
+        rho, u, p, YF   = ExtractVars(Fv)
+        RT              = p/rho
+        mFdot           = -BB*rho*YF*exp(-RTa/RT)
+        return [ mFdot; 0; 0; 0 ]
+        
+    end
+    
+    #Initialize variables:
+    x_n             = 0.0
+    F_n             = [ rho0*YF0*u0 ;
+                        rho0*u0;
+                        p0 + rho0*u0^2;
+                        (gamma/(gamma-1.0)*p0 + rho0*YF0*Q + 0.5*rho0*u0^2)*u0 ]
+                        
+#     display((rho0, u0, p0, YF0))
+#     display((rho1, u1, p1, YF0))
+#     display(ExtractVars(F_n))
+#     return
+    
+    #Apply RK method:
+    RK              = RK_Coefficients("Ascher3")
+    NF              = length(F_n)
+    fm              = zeros(NF, RK.stages)
+    F_np1           = zeros(NF)
+    xv              = [ -xf*0.1, x_n, x_n ]
+    rhov            = [ rho0, rho0, rho1 ]
+    uv              = [ u0, u0, u1 ]
+    pv              = [ p0, p0, p1 ]
+    YFv             = [ YF0, YF0, YF0 ]
+    while x_n < xf
+    
+        #Compute next stage:
+        fm[:,1]         = dF_dx(F_n)
+        for ii=2:RK.stages
+            S           = zeros(NF)
+            for jj=1:ii-1
+                S       += RK.AE[ii,jj]*fm[:,jj]
+            end
+            F_np1       .= F_n + Deltax*S
+            fm[:,ii]    = dF_dx(F_np1)
+        end
+        
+        #Update solution:
+        x_n         += Deltax
+        F_n         .= F_np1
+        
+        #Save solution:
+        xv                      = vcat(xv, x_n)
+        rho_n, u_n, p_n, YF_n   = ExtractVars(F_n)
+        rhov                    = vcat(rhov, rho_n)
+        uv                      = vcat(uv, u_n)
+        pv                      = vcat(pv, p_n)
+        YFv                     = vcat(YFv, YF_n)
+        
+    end
+    
+    if PlotRes
+    
+        Nx      = length(xv)
+        display("theoretical")
+        display((rho2, u2, p2))
+        display("numerical")
+        display((rhov[Nx], uv[Nx], pv[Nx], YFv[Nx]))
+        
+        figure()
+        plot(xv, rhov, "b")
+        plot(xv, uv, "g")
+        plot(xv, pv, "c")
+        plot(xv, pv./rhov, "r")
+        plot(xv, YFv./YF0, "k")
+        legend([latexstring("\\rho"), 
+                latexstring("u"), 
+                latexstring("p"),
+                latexstring("T"), 
+                latexstring("Y_{F}/Y_{F0}")], 
+                loc="best")
+        xlabel("x/L") #Here, L=u1 exp(beta1)/(beta1*BB)
+        
+    end
+    
+#     figure()
+#     plot(xv, rhov.*uv.*YFv, "b")
+#     plot(xv, rhov.*uv, "g")
+#     plot(xv, pv+rhov.*uv.^2, "r")
+#     plot(xv, gamma/(gamma-1)*pv.*uv + 0.5*rhov.*uv.^3 + rhov.*YFv.*Q.*uv, "k")
+    
+    return xv, rhov, uv, pv, YFv
+    
+end
