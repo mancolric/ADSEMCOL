@@ -469,6 +469,8 @@ function RK_Coefficients(RKMethod::String)
                         0.25    0.0     0.75    0.0     0.0 ]   
 #         RK.bhatI    = [ 0.5     0.0     0.0     0.0     0.5 ] #Not L-stable
 #         RK.bhatE    = [ 0.5     0.0     0.0     0.0     0.5 ]
+#         RK.bhatI    = [ 0.0     1.0     0.0     0.0     0.0 ] #Not L-stable
+#         RK.bhatE    = [ 0.0     1.0     0.0     0.0     0.0 ]
         #Solution of stage 3: second order accurate, L-stable, takes into account info
         #at t^(n+1), good stability region with EINRK:
         RK.bhatI    = [ 5/18    -1/9    0.5     0.0     0.0 ]   
