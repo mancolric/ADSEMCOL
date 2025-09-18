@@ -6,7 +6,7 @@ include("basic.jl")
 #   -1: fun! threw an exception
 #   0: maximum of iterations reached
 #   1: step p under tolerance
-#   2: g under tolerance
+#   3: g under tolerance
 
 Base.@kwdef mutable struct NLS_ConvHistory
 
@@ -208,7 +208,7 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
             ch.flag     = 1
             break
         elseif gnorm <= RelTolG*gnorm0+AbsTolG
-            ch.flag     = 2
+            ch.flag     = 3
             break
         elseif ch.nIter==MaxIter
             ch.flag     = 0
@@ -428,7 +428,7 @@ function NLS_gmres(fun!::FW_NLS, x0::GenVector{Float64};
             ch.flag     = 1
             break
         elseif gnorm <= RelTolG*gnorm0+AbsTolG
-            ch.flag     = 2
+            ch.flag     = 3
 #             println("t_residual= ", t_residual)
 #             println("t_SVD= ", t_SVD)
 #             println("t_Matrices= ", t_Matrices)
