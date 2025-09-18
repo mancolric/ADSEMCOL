@@ -385,8 +385,9 @@ function LS_gmres!(LS::LinearSystem1, u::GenVector{Float64}, b::GenVector{Float6
     #DEBUG:
     t_mult          = 0.0
     t_ldiv          = 0.0
-    #ILU0 (quasi-Newton) iteration. Compute residual f=A_mm x_m-b_m and approximate action g=A\f:
-    function QN_ILU0!(x::Vector{Float64}, f::Vector{Float64}, g::Union{Nothing,Vector{Float64}})
+    #ILU0 (quasi-Newton) iteration. Compute residual f=A_mm x_m-b_m and preconditioned residual g=approx(A)\f:
+    f               = zeros(length(uhat_m));
+    function QN_ILU0!(x::Vector{Float64}, g::Vector{Float64})
         t_ini       = time()
         @avxt @. x  *= scaleP_m
         mul!(f, F.Ared_mm, x)              #f = 1.0*A*x
@@ -404,10 +405,9 @@ function LS_gmres!(LS::LinearSystem1, u::GenVector{Float64}, b::GenVector{Float6
     
     #Solve with GMRES:
     flag                    = 1
-    solver_output           = NLS_gmres(FW_NLS((x,f,g)->QN_ILU0!(x,f,g)), uhat_m,
+    solver_output           = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), uhat_m,
                                 memory=100, MaxIter=MaxIter, 
                                 AbsTolX=0.0, RelTolX=0.0, 
-                                AbsTolF=0e-14, RelTolF=0.0,
                                 AbsTolG=AbsTol, RelTolG=RelTol,
                                 Display=Display, history=true,
                                 NormFun=LS.NormFun)
