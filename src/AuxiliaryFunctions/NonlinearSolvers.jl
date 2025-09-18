@@ -208,7 +208,7 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
             ch.flag     = 1
             break
         elseif gnorm <= RelTolG*gnorm0+AbsTolG
-            ch.flag     = 3
+            ch.flag     = 2
             break
         elseif ch.nIter==MaxIter
             ch.flag     = 0
@@ -428,7 +428,7 @@ function NLS_gmres(fun!::FW_NLS, x0::GenVector{Float64};
             ch.flag     = 1
             break
         elseif gnorm <= RelTolG*gnorm0+AbsTolG
-            ch.flag     = 3
+            ch.flag     = 2
 #             println("t_residual= ", t_residual)
 #             println("t_SVD= ", t_SVD)
 #             println("t_Matrices= ", t_Matrices)

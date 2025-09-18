@@ -420,17 +420,13 @@ function LS_gmres!(LS::LinearSystem1, u::GenVector{Float64}, b::GenVector{Float6
     nIter                   = solver_output[2].nIter
     resv                    = solver_output[2].gnorms
     etaA                    = resv[length(resv)]
-    if solver_output[2].flag==3
+    if solver_output[2].flag==2
         #Exit due to convergence in residual g
-        
-    elseif solver_output[2].flag==2
-        etaA        = 1e-14
     else
         if false
             figure()
             ch          = solver_output[2]
             semilogy(ch.pnorms, ".-b")
-            semilogy(ch.fnorms, ".-g")
             semilogy(ch.gnorms, ".-r")
             error("")
         end
