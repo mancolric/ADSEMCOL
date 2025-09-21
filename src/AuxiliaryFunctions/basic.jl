@@ -95,6 +95,9 @@ const AAF64         = AbstractArray{Float64}
 #     return w
 # end
 
+#Alias for function that receives vector of matrices, [x[1], ..., x[M]], and returns matrix M:
+const FW1           = FunctionWrapper{Matrix{Float64}, 
+                        Tuple{Vector{<:AMF64}}}
 #Alias for function that receives vector of matrices, [x[1], ..., x[M]], and returns 
 #vector of matrices [f[1], ..., f[N]]:
 const FW11          = FunctionWrapper{Vector{Matrix{Float64}}, 

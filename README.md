@@ -17,10 +17,13 @@ The code is currently under development, i.e., it is not optimized and it can so
 
 ![](/test/figures/TriplePoint.png)
 
-### Authors and contact
+### Authors, collaborators and contact
 
-Manuel Colera-Rico (Universidad Politécnica de Madrid)\
+Manuel Colera Rico (Universidad Politécnica de Madrid)\
 Vít Dolejší (Charles University Prague)
+
+Gonzalo Sánchez Moreno (UPM, H2 combustion)\
+León Villalba Muñoz (UPM, Shallow water equations)
 
 Please feel free to ask any questions at
 m.colera@upm.es

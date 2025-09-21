@@ -1467,49 +1467,6 @@ function BC_CheckJacobian(solver::SolverData, t::Float64, uv::Vector{Float64}, i
     
 end
 
-function CheckJacobian_old(solver::SolverData; delta::Float64=1e-6)
-
-    #Analytical jacobian:
-    Rhs!(solver, solver.t, solver.uv, true, zeros(size(solver.uv)), solver.Jm)
-    
-    #Numerical jacobian:
-    Jnum        = deepcopy(solver.Jm)
-    Rhs_fun!    = (f,u) -> Rhs!(solver, solver.t, u, false, f, solver.Jm)
-    SpJacobEst!(Jnum, Rhs_fun!, solver.uv)
-    
-    #Plot errors:
-    for II=1:solver.nVars, JJ=1:solver.nVars
-    
-        blockII         = (II-1)*solver.fes.nDof+1:II*solver.fes.nDof
-        blockJJ         = (JJ-1)*solver.fes.nDof+1:JJ*solver.fes.nDof
-        
-        Jex_IJ          = solver.Jm[blockII, blockJJ]
-        Jnum_IJ         = Jnum[blockII, blockJJ]
-        
-        figure()
-        semilogy(abs.(Jex_IJ.nzval), "xb")
-        semilogy(abs.(Jnum_IJ.nzval), "+g")
-        title(string("I=", II, ", J=", JJ))
-        println("I=", II, ", J=", JJ, ", |J_IJ_exactJ-J_IJ_num|=", norm(Jex_IJ-Jnum_IJ,Inf))
-        display(norm(Jex_IJ,Inf))
-        
-    end
-    
-    return
-    
-    figure()
-    plot3D(log10.(abs.(Jnum)))
-    xlabel("i")
-    ylabel("j")
-    figure()
-    plot3D(log10.(abs.(solver.Jm)))
-    xlabel("i")
-    ylabel("j")
-        
-    return
-    
-end
-
 #Check Jacobian for ib-th boundary condition:
 function BC_CheckJacobian(solver::SolverData, ib::Int;
     delta::Float64=1e-6,
