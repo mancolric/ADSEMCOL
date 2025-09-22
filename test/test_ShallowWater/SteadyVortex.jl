@@ -36,9 +36,9 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
         v_phi           = @tturbo @. r*exp(-0.5*(r^2 - 1))
         q1              = @tturbo @. -h*v_phi*x[2]/r + h        #Sin esa h para el problema siga siendo estacionario
         q2              = @tturbo @. h*v_phi*x[1]/r
-        b               = @tturbo @. sin(x[1])
+        b               = @tturbo @. 0.0*x[1]
         
-        return [3.0.-b, 0.0*q1, 0.0*q2, b]
+        return [h, q1, q2, b]
 
     end
 
@@ -52,30 +52,15 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
     #Boundary conditions:
     BC_horiz        = SlipAdiabatic()
     function uLeft(t::Float64, x::Vector{Matrix{Float64}})
-
-        h0              = 1
-        r               = @tturbo @. sqrt(x[1]^2 + x[2]^2 + 1e-10)
-        h               = @tturbo @. h0 - (0.5*exp(-(r^2 - 1)))/g
-        v_phi           = @tturbo @. r*exp(-0.5*(r^2 - 1))
-        q1              = @tturbo @. -h*v_phi*x[2]/r + h
-        q2              = @tturbo @. h*v_phi*x[1]/r
-
+        q1              = @tturbo @. 0.0*x[1] + h0*1.0
+        q2              = @tturbo @. 0.0*x[1]
         return [q1, q2]
 
     end
     BC_left         = SubsonicInlet1(FWt11((t,x)->uLeft(t,x)))
     function uRight(t::Float64, x::Vector{Matrix{Float64}})
-
-#         q1           = @mlv 0.0*x[1]+1.0
-
-        h0              = 1
-        r               = @tturbo @. sqrt(x[1]^2 + x[2]^2 + 1e-10)
-        h               = @tturbo @. h0 - (0.5*exp(-(r^2 - 1)))/g
-        v_phi           = @tturbo @. r*exp(-0.5*(r^2 - 1))
-        q1              = @tturbo @. -h*v_phi*x[2]/r + h
-
+        h               = @tturbo @. 0.0*x[1] + h0
         return [h]
-
     end
     BC_right        = SubsonicOutlet1(FWt11((t,x)->uRight(t,x)))
 
@@ -107,13 +92,13 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
     solver.TimeAdapt        = TimeAdapt
 
     #Set initial and boundary conditions:
-    solver.u0fun        = FW11((x) -> u0fun(x))
-    BC_walls            = SlipAdiabatic()
-    solver.BC           = [BCW(BC_walls), BCW(BC_walls), BCW(BC_walls), BCW(BC_walls)]
+#     solver.u0fun        = FW11((x) -> u0fun(x))
+#     BC_walls            = SlipAdiabatic()
+#     solver.BC           = [BCW(BC_walls), BCW(BC_walls), BCW(BC_walls), BCW(BC_walls)]
 
     #Set initial and boundary conditions:
-#     solver.u0fun        = FW11((x) -> u0fun(x))
-#     solver.BC           = [BCW(BC_horiz), BCW(BC_right), BCW(BC_horiz), BCW(BC_left)]
+    solver.u0fun        = FW11((x) -> u0fun(x))
+    solver.BC           = [BCW(BC_horiz), BCW(BC_right), BCW(BC_horiz), BCW(BC_left)]
 
     #-----------------------------------------------------------------------------
     #INITIAL CONDITION:
@@ -122,7 +107,7 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
     ConvFlag            = LIRKHyp_InitialCondition!(solver)
 #     CheckJacobian(solver, Plot_df_du=false, Plot_df_dgradu=false, 
 #         Plot_dQ_du=true, Plot_dQ_dgradu=false)
-#     for ii = 4
+#     for ii = 2
 #         BC_CheckJacobian(solver, ii, Plot_df_du=true)
 #     end
 #     return

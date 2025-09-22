@@ -80,7 +80,6 @@ function Source!(model::SWE, x::Vector{MFloat}, tau_char::Float64,
     @tturbo @. Q[2]             += -gamma*q1 - g*h*db_dx
     @tturbo @. Q[3]             += -gamma*q2 - g*h*db_dy
     @tturbo @. Q[4]             += -(b-b_exact)/tau_char
-    display(tau_char)
 
     if ComputeJ
 

@@ -44,32 +44,20 @@ mutable struct SlipAdiabatic <: BoundConds
 
 end
 
-#Subsonic inlet. nSpecies+3 conditions:
-#   rhoY_k          = rhoY_k_BC
-#   rhovx           = rhovx_BC
-#   rhovy           = rhovy_BC
-#   (rhoe is extrapolated)
-#   q_j n_j         = 0
+#Subsonic inlet. 3 conditions:
+#   normal flux for h       = 0
+#   q1                      = q1_BC
+#   q2                      = q2_BC
 mutable struct SubsonicInlet1 <: BoundConds
-    fun             ::FWt11     #must return [rhoY_1,...,rhoY_nSpecies, rhovx, rhovy]
+    fun             ::FWt11     #must return [q_1, q_2]
 end
 
-#Supersonic inlet. nSpecies+3 conditions:
-#   rhoY_k          = rhoY_k_BC
-#   rhovx           = rhovx_BC
-#   rhovy           = rhovy_BC
-#   rhoE            = rhoE_BC
-mutable struct SupersonicInlet1 <: BoundConds
-    fun             ::FWt11     #must return [rhoY_1,...,rhoY_nSpecies, rhovx, rhovy, rhoE]
-end
-
-#Subsonic outlet: nSpecies+3 conditions:
-#   p               = p_BC
-#   (rhoY_k, rhov_i are extrapolated)
-#   fmass_(k,j) n_j = 0
-#   tau_ij n_j      = 0
+#Subsonic outlet. 3 conditions:
+#   h                       = h_BC
+#   normal flux for q1      = 0
+#   normal flux for q2      = 0
 mutable struct SubsonicOutlet1 <: BoundConds
-    fun             ::FWt11     #must return [p]
+    fun             ::FWt11     #must return [h]
 end
 
 #Supersonic outlet: nSpecies+3 conditions:
@@ -193,12 +181,10 @@ function FluxSource!(model::SWE, _qp::TrIntVars, ComputeJ::Bool)
     #Compute fluxes and source term:
     HyperbolicFlux!(model, u, ComputeJ, f, df_du)
     #
-    epsilon_qp      = @tturbo @. model.epsilon + 0*u[1]
+    epsilon_qp      = @tturbo @. model.epsilon + 0.0*u[1]
     epsilonFlux!(model, epsilon_qp, du, ComputeJ, f, _qp.df_dgradu, IIv=Vector{Int}(1:3))
     #
     tau_char        = @tturbo @. $minimum(hp_min/lambda)
-    tau_char        = 1e-3
-    @warn "tau_char"
     Source!(model, x, tau_char, u, du, ComputeJ, Q, dQ_du, dQ_du_dx)
 
     #Subgrid viscosity:

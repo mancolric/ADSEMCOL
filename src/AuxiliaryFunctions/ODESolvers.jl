@@ -91,8 +91,15 @@ function ESDIRK3_2_5L_2_SA()
     Am[5,3]     = -2374*(1+2*sq2)/(2835*(5+3*sq2))
     Am[5,4]     = 5827/7560
     
-    return Am
+    bhat        = zeros(5)
+    bhat[1]     = 4555948517383/24713416420891
+    bhat[2]     = 4555948517383/24713416420891
+    bhat[3]     = -7107561914881/25547637784726
+    bhat[4]     = 30698249/44052120
+    bhat[5]     = 49563/233080
     
+    return Am, bhat
+
 end
 
 function ESDIRK4_3_7L_2_SA()
@@ -599,7 +606,7 @@ function RK_Coefficients(RKMethod::String)
         RK.GSA          = true
         RK.const_diag   = true
     elseif RKMETHOD=="KC35"
-        RK.AI           = ESDIRK3_2_5L_2_SA()
+        RK.AI, RK.bhatI = ESDIRK3_2_5L_2_SA()
         RK.AE           = NaN*RK.AI
         RK.order        = 3
         RK.GSA          = true
