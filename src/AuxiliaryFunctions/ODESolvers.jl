@@ -482,7 +482,7 @@ function RK_Coefficients(RKMethod::String)
         #Solution of stage 4: second order accurate, L-stable, takes into account info
         #at t^(n+1), good stability region with EINRK:
         RK.bhatI    = [ 0.5     0.0     0.0     0.5     0.0 ]   
-        RK.bhatE    = [ 0.25    0.0     0.75    0.0     0.0  ]
+        RK.bhatE    = [ 0.25    0.0     0.75    0.0     0.0 ]
         RK.order    = 3  
         RK.GSA          = true
         RK.const_diag   = true
