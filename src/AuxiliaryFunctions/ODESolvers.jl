@@ -295,9 +295,10 @@ function RK_Coefficients(RKMethod::String)
 						11/18 	1/18 	0.0 	0.0  	0.0;
 						5/6 	-5/6 	1/2 	0.0  	0.0;
                         1/4 	7/4 	3/4 	-7/4  	0.0 ]
-#         RK.bhatI    = [ 0.0,    1.0,    0.0,    0.0,    0.0 ] #Does not depend on y^(n+1)
+#         RK.bhatI    = [ 0.0,    1.0,    0.0,    0.0,    0.0 ] #A-stable, does not depend on y^(n+1)
         RK.bhatI    = [ 0.5,    0.0,    0.0,    0.0,    0.5 ] #Not L-stable
 #         RK.bhatI    = [ 0.0,    0.0,    3/2,    0.0,    -1/2 ]  #Not L-stable
+#         RK.bhatI    = [ 0.0,    0.0,    0.0,    1.0,    0.0 ]   #Not L-stable
         RK.bhatE    = copy(RK.bhatI)
         RK.order    = 3
         RK.GSA          = true
@@ -478,10 +479,10 @@ function RK_Coefficients(RKMethod::String)
 #         RK.bhatE    = [ 0.5     0.0     0.0     0.0     0.5 ]
 #         RK.bhatI    = [ 0.0     1.0     0.0     0.0     0.0 ] #Not L-stable
 #         RK.bhatE    = [ 0.0     1.0     0.0     0.0     0.0 ]
-        #Solution of stage 3: second order accurate, L-stable, takes into account info
+        #Solution of stage 4: second order accurate, L-stable, takes into account info
         #at t^(n+1), good stability region with EINRK:
-        RK.bhatI    = [ 5/18    -1/9    0.5     0.0     0.0 ]   
-        RK.bhatE    = [ 4/9     2/9     0.0     0.0     0.0 ]
+        RK.bhatI    = [ 0.5     0.0     0.0     0.5     0.0 ]   
+        RK.bhatE    = [ 0.25    0.0     0.75    0.0     0.0  ]
         RK.order    = 3  
         RK.GSA          = true
         RK.const_diag   = true
@@ -742,8 +743,13 @@ function PlotStabilityRegion!(Rfun::Function, stages::Int, xv::Array{Float64,1},
 #     colorv  = PyPlotColors("jet2",stages)
     leg     = []
     for ss=stages
-#         PyPlot.contour(xm,ym,abs.(Rm[:,:,ss]),[1.0],colors=[colorv[ss]])
+
         PyPlot.contourf(xm,ym,abs.(Rm[:,:,ss]),[0.0, 1.0],colors=[color])
+
+#         PyPlot.contourf(xm,ym,abs.(Rm[:,:,ss]), cmap="jet")
+#         PyPlot.contour(xm,ym,abs.(Rm[:,:,ss]),[1.0],colors=["k"])
+        
+#         PyPlot.contour(xm,ym,abs.(Rm[:,:,ss]),[1.0],colors=[colorv[ss]])
 #         PyPlot.contour(xm,ym,abs.(Rm[:,:,ss]),[1.1],colors=[color],linestyle="dashed")
 #         leg     = vcat(leg,"s=$ss")
 #         surf(xm, ym, log10.(abs.(Rm[:,:,ss])), cmap="jet")
