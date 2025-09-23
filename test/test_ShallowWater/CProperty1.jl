@@ -1,11 +1,11 @@
 cd(@__DIR__)
-include("test_ShallowWaterEquations.jl")
+include("test_ShallowWater.jl")
 
-function dambreak(hp0::Float64, FesOrder::Int;
-    tf::Float64=1.0, RKMethod::String="BPR3",
-    epsilon::Float64=1e-2, delta::Float64=1e-2, gamma::Float64=0.0, g::Float64=9.8,
+function CProperty1(hp0::Float64, FesOrder::Int;
+    tf::Float64=0.48, RKMethod::String="BPR3",
+    epsilon::Float64=0e-3, delta::Float64=1e-2, Deltah::Float64=1e-2, g::Float64=9.8,
     #
-    TolS::Float64=1e-4, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
+    TolS::Float64=1e-4, TolS0=0.01*TolS, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
     #
     TolT::Float64=1e-4, Deltat0::Float64=1e-5, TimeAdapt::Bool=true,
     #
@@ -26,21 +26,20 @@ function dambreak(hp0::Float64, FesOrder::Int;
     ##Define model:
     model               = SWE()
     model.epsilon       = epsilon
-    model.gamma         = gamma
     model.g             = g
     model.CSS           = CSS
-    r0                  = 1.0
-    model.db_dx         = (x) -> @. -x[1]/(delta*sqrt(x[1]^2 + x[2]^2 + 1e-10))*(1 - tanh((r0 - sqrt(x[1]^2 + x[2]^2 + 1e-10))/delta)^2)*0.1
-    model.db_dy         = (x) -> @. -x[2]/(delta*sqrt(x[1]^2 + x[2]^2 + 1e-10))*(1 - tanh((r0 - sqrt(x[1]^2 + x[2]^2 + 1e-10))/delta)^2)*0.1
-    model.b             = (x) -> @. 0.1*tanh((r0 - sqrt(x[1]^2 + x[2]^2 + 1e-10))/delta) + 0.1
+    model.b             = FW1( (x)-> @. 0.8*exp(-5*(x[1]+0.1)^2-50*x[2]^2) )
     function u0fun(x::Vector{Matrix{Float64}})
 
-        r               = @tturbo @. sqrt(x[1]^2 + x[2]^2 + 1e-10)
-        h               = @tturbo @. (0.3/2)*tanh((r0 - r)/delta) + 0.65
-        q1              = @tturbo @. 0.0*h
+        b               = model.b(x)
+        eta             = @. 1.0 + 
+                            SmoothHeaviside(x[1]+0.95, delta, 0.0, Deltah) -
+                            SmoothHeaviside(x[1]+0.85, delta, 0.0, Deltah)
+        h               = @tturbo @. eta-b
+        q1              = @tturbo @. 0.0*x[1]
         q2              = @tturbo @. 0.0*x[1]
-
-        return [h, q1, q2]
+        
+        return [h, q1, q2, b]
 
     end
 
@@ -48,17 +47,17 @@ function dambreak(hp0::Float64, FesOrder::Int;
     #PRE-PROCESS STAGE:
 
     #Mesh:
-    MeshFile                = "../temp/Dambreak$(SC).geo"
+    MeshFile                = "../temp/CProperty1$(SC).geo"
     NX                      = Int(ceil(7.0/(hp0*FesOrder)))
     NY                      = Int(ceil(3.0/(hp0*FesOrder)))
-    TrMesh_Rectangle_Create!(MeshFile, -2.0, 2.0, NX, -2.0, 2.0, NY)
+    TrMesh_Rectangle_Create!(MeshFile, -2.0, 1.0, NX, -0.5, 0.5, NY)
 
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
     solver                  = LIRKHyp_Start(model)
-    solver.ProblemName      = "Dambreak" # Esto es simplemente un nombre?
+    solver.ProblemName      = "CProperty1"
     solver.SC               = SC
     solver.MeshFile         = MeshFile
-    solver.nBounds          = 4             # Si quisiese definir una fuente cómo sería?
+    solver.nBounds          = 4             
     solver.FesOrder         = FesOrder
     solver.RKMethod         = RKMethod
     solver.Deltat0          = Deltat0
@@ -66,28 +65,28 @@ function dambreak(hp0::Float64, FesOrder::Int;
     solver.AMA_MaxIter      = AMA_MaxIter
     solver.AMA_SizeOrder    = AMA_SizeOrder
     solver.AMA_AnisoOrder   = AMA_AnisoOrder
-    solver.TolS_max         = TolS
-    solver.TolS_min         = 0.0*TolS
+    solver.TolS_max         = TolS0
+    solver.TolS_min         = 0.0*TolS0
     solver.TolT             = TolT
     solver.TimeAdapt        = TimeAdapt
 
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x))
-    BC_walls            = DoNothing1()
+    BC_walls            = SlipAdiabatic()
     solver.BC           = [BCW(BC_walls), BCW(BC_walls), BCW(BC_walls), BCW(BC_walls)]
-
 
     #-----------------------------------------------------------------------------
     #INITIAL CONDITION:
 
     #Compute initial condition:
     ConvFlag            = LIRKHyp_InitialCondition!(solver)
-#     CheckJacobian(solver, Plot_df_du=true)
-#     for i = 1:4
-#         kBC = i
-#         BC_CheckJacobian(solver, kBC, Plot_df_du=true)
+#     CheckJacobian(solver, Plot_df_du=false, Plot_df_dgradu=false, 
+#         Plot_dQ_du=true, Plot_dQ_dgradu=false)
+#     for ii = 2
+#         BC_CheckJacobian(solver, ii, Plot_df_du=true)
 #     end
-
+#     return
+    
     #Change TolT:
     if TolT==0.0
         TolT            = 0.01*solver.etaS
@@ -125,23 +124,24 @@ function dambreak(hp0::Float64, FesOrder::Int;
                 println(PlotVars[ii], ": min=", minimum(v_plot), ", max=", maximum(v_plot))
             end
             if SaveFig
-                savefig("$(VideosUbiTFG)Dambreak$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbiTFG)CProperty1$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
             figure(figv[2].number)
             #Loop plot variables:
             for ii=1:length(PlotVars)
                 PyPlot.subplot(mFig, nFig, ii)
+                PyPlot.subplots_adjust(hspace=0.8)
                 PyPlot.cla()
 
-                splot_fun(x1,x2)    = @mlv sqrt(x1^2 + x2^2)
+                splot_fun(x1,x2)    = @mlv x1
                 PlotNodes(splot_fun, solver, PlotVars[ii])
-                xlabel(latexstring("r"), fontsize=10)
+                xlabel(latexstring("x_1"), fontsize=10)
                 title(latexstring(LatexString(PlotVars[ii]),
                                   "; t^n=", sprintf1("%.2e", solver.t)),
                 fontsize=10)
             end
             if SaveFig
-                savefig("$(VideosUbiTFG)DambreakRadial$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbiTFG)CProperty1_Pts$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
 
 
@@ -208,7 +208,7 @@ function dambreak(hp0::Float64, FesOrder::Int;
         ct_SaveRes      += 1
         if SaveRes && ( solver.t-t_lastRes>=Deltat_SaveRes ||
                         ct_SaveRes==Nt_SaveRes || solver.t==tf || solver.t==0.0 )
-            save("$(ResUbi)LIRKHyp_SC$(SC)_$(nb_SaveRes).jld2", "StudyCase", "Dambreak",
+            save("$(ResUbi)LIRKHyp_SC$(SC)_$(nb_SaveRes).jld2", "StudyCase", "CProperty1",
                 "ConvFlag", ConvFlag, "solver", save(solver),
                  "TolS", TolS, "TolT", TolT)
             t_lastRes   += Deltat_SaveRes
@@ -223,6 +223,9 @@ function dambreak(hp0::Float64, FesOrder::Int;
     #-----------------------------------------------------------------------------
     #MARCH IN TIME:
 
+    #Set new tolerance:
+    solver.TolS_max     = TolS
+    
     while solver.t<tf
 
         ConvFlag    = LIRKHyp_Step!(solver)
@@ -239,12 +242,12 @@ function dambreak(hp0::Float64, FesOrder::Int;
 
     hmean               = 2.0*sqrt(solver.Omega/solver.mesh.nElems/TrElem_Area)
     Deltat_mean         = solver.tf/(solver.Nt-1)
-    println("hmean=", sprintf1("%.2e", hmean), "Deltat_mean", sprintf1("%.2e", Deltat_mean))
+    println("hmean=", sprintf1("%.2e", hmean), ", Deltat_mean=", sprintf1("%.2e", Deltat_mean))
 
     #Save results:
     if SaveRes
-        save("$(ResUbi)LIRKHyp_SC$(SC)_1000.jld2", "StudyCase", "Dambreak",
-            "ConvFlag", ConvFlag, "solver", save(solver), "hmean", hmean,  "Deltat_mean", Deltat_mean)
+        save("$(ResUbi)LIRKHyp_SC$(SC)_1000.jld2", "StudyCase", "CProperty1",
+            "ConvFlag", ConvFlag, "solver", save(solver), "hmean", hmean, "Deltat_mean", Deltat_mean)
     end
 
     return solver

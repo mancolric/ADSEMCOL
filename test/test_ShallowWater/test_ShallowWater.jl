@@ -7,12 +7,17 @@ function LatexString(vble::String)
         return "h"
     elseif vble=="q1"
         return "q_1"
-    elseif vble=="rhovy"
+    elseif vble=="q2"
         return "q_2"
+    elseif vble=="v1"
+        return "v_1"
+    elseif vble=="v2"
+        return "v_2"
     elseif vble=="b"
         return "b"
     elseif vble=="eta"
         return "\\eta"
+    else 
         @warn "Variable $(vble) not supported"
         return vble
     end

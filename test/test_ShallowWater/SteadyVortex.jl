@@ -3,7 +3,7 @@ include("test_ShallowWater.jl")
 
 function SteadyVortex(hp0::Float64, FesOrder::Int;
     tf::Float64=10.0, RKMethod::String="BPR3",
-    epsilon::Float64=0e-3, delta0::Float64=epsilon, h0::Float64=1.0, g::Float64=9.8,
+    epsilon::Float64=0e-3, h0::Float64=1.0, g::Float64=9.8,
     #
     TolS::Float64=1e-4, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
     #
@@ -34,7 +34,7 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
         r               = @tturbo @. sqrt(x[1]^2 + x[2]^2 + 1e-10)
         h               = @tturbo @. h0 - (0.5*exp(-(r^2 - 1)))/g
         v_phi           = @tturbo @. r*exp(-0.5*(r^2 - 1))
-        q1              = @tturbo @. -h*v_phi*x[2]/r + h        #Sin esa h para el problema siga siendo estacionario
+        q1              = @tturbo @. -h*v_phi*x[2]/r + h       
         q2              = @tturbo @. h*v_phi*x[1]/r
         b               = @tturbo @. 0.0*x[1]
         
@@ -75,10 +75,10 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
 
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
     solver                  = LIRKHyp_Start(model)
-    solver.ProblemName      = "SteadyVortex" # Esto es simplemente un nombre?
+    solver.ProblemName      = "SteadyVortex" 
     solver.SC               = SC
     solver.MeshFile         = MeshFile
-    solver.nBounds          = 4             # Si quisiese definir una fuente cómo sería?
+    solver.nBounds          = 4             
     solver.FesOrder         = FesOrder
     solver.RKMethod         = RKMethod
     solver.Deltat0          = Deltat0
@@ -265,7 +265,7 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
     errLq,              = LqError(solver, FW11((x) -> utheorfun(tf, x)), q=2.0)
     hmean               = 2.0*sqrt(solver.Omega/solver.mesh.nElems/TrElem_Area)
     Deltat_mean         = solver.tf/(solver.Nt-1)
-    println("hmean=", sprintf1("%.2e", hmean), "Deltat_mean", sprintf1("%.2e", Deltat_mean),
+    println("hmean=", sprintf1("%.2e", hmean), ", Deltat_mean=", sprintf1("%.2e", Deltat_mean),
             ", e_Lq=", sprintf1("%.2e", errLq))
 
     #Save results:
