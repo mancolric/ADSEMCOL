@@ -66,7 +66,7 @@ function CProperty1(hp0::Float64, FesOrder::Int;
     solver.AMA_SizeOrder    = AMA_SizeOrder
     solver.AMA_AnisoOrder   = AMA_AnisoOrder
     solver.TolS_max         = TolS0
-    solver.TolS_min         = 0.0*TolS0
+    solver.TolS_min         = 0.01*TolS0
     solver.TolT             = TolT
     solver.TimeAdapt        = TimeAdapt
 
@@ -225,6 +225,7 @@ function CProperty1(hp0::Float64, FesOrder::Int;
 
     #Set new tolerance:
     solver.TolS_max     = TolS
+    solver.TolS_min     = 0.01*TolS
     
     while solver.t<tf
 

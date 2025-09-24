@@ -1,0 +1,17 @@
+Fully well-balanced: satisface de forma "exacta" las soluciones estacionarias, es decir,
+    div(F(u)) = 0
+Un caso particular es el de "lake at rest", en el cual
+    q1=q2=0 (se satisface div(F1)=0)
+    gh*(dh/dx+db/dx)=0
+    gh*(dh/dy+db/dy)=0
+las dos últimas dan como solución eta=h+b=const. 
+
+En la práctica, es imposible que la solución numérica proporcione la solución exacta, a menos que esta esté dentro del espacio de elementos finitos V_h. Por ejemplo, no se puede cumplir h_h + b = const salvo que b pertenezca a V_h.
+
+Creo que sería mejor definir primero una "solución estacionaria" discretizada, es decir, una solución numérica ubar_h que satisfaga
+    div(F(ubar_h)) = 0
+Además, también hay que discretizar b, por ejemplo, b_h puede ser la proyección L2. De lo contrario, sigue sin poder cumplirse hbar_h+b=const en un caso general.
+
+La ecuación anterior también se puede poner como
+    int (div(F(ubar_h)) psi) = 0 \forall \psi
+Lamentablemente, debido a la forma que tiene F, no es posible calcular esa integral de forma exacta, a no ser que se utilicen reglas de cuadratura especiales (para funciones racionales). Por tanto, si el esquema numérico alcanza un estado estacionario, se tendrá int(div(F(u_h) psi)=0, pero esto no implica div(F(u_h))=0, y que u_h=ubar_h, ya que la integral no se ha calculado exactamente.
