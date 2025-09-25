@@ -1,3 +1,21 @@
+To achieve C-property, it is necessary that
+	eta_h = h_h + b = const + O(1e-12)
+If b is a function that cannot be represented in the finite element space, it is impossible that the latter is achieved. Therefore, we replace the latter condition by
+	eta_h = h_h + b_h = const + O(1e-12)
+with b_h the L2-projection of b. We also work with b_h and its derivatives in the code instead of b.
+
+To achieve C-property, it is necessary that
+	int( h_h nabla (h_h + b_h) ) = 0	
+which is achieved if eta_h = h_h + b_h is constant. Equivalently, if q_h = 0 and eta_h = h_h + b_h = const, then it is possible to show:
+1) the numerical fluxes are zero
+2) the LIRK scheme yields constant solution. Note that y^i = y^1 + tau*sum_j a_ij^E f_j + tau*sum_j (a_ij^I-a_ij^E) * J*y^j and sum_j(a_ij^I-a_ij^E) = c_i - c_i = 0.
+
+To ensure that b_h is the L2-projection of b at all time levels, even after mesh adaptation, we can set
+db_h /dt = db_h/dt - db/dt = - tau_0*(b_h - b)
+so that "errors" in b_h are quickly corrected. Indeed, the steady-state solution of the latter equation is int( (b_h-b) \psi ) = 0, that is, the L2-projection. "tau_0" should be a characteristic time, constant for all the domain maybe min((h/p)/lambda) so the CFL number appears in the discretization.
+
+---
+
 Fully well-balanced: satisface de forma "exacta" las soluciones estacionarias, es decir,
     div(F(u)) = 0
 Un caso particular es el de "lake at rest", en el cual
