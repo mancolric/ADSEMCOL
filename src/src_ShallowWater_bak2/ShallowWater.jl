@@ -27,52 +27,47 @@ Base.@kwdef mutable struct SWE <: ConstModels
     CSS             ::Float64           = 0.1   #Subgrid stabilization
     CW              ::Float64           = 50.0  #Boundary penalty (50.0-200.0 for IIPG)
     b               ::FW1               = FW1( (x)-> zeros(size(x[1])) )
+    gradb           ::FW11              = FW11((x)-> [ 0.0*x[1], 0.0*x[2]] )
     
     #Dependent variables:
-    DepVars         ::Vector{String}    = ["h","q1","q2","v1","v2","epsilon","D_penalty"]
+#     DepVars         ::Vector{String}    = ["h","q1","q2","v1","v2","epsilon","D_penalty"]
 
     #Mandatory fields:
-    nVars           ::Int               = 4     #Number of discretization variables: h, q1, q2, b
+    nVars           ::Int               = 3     #Number of discretization variables: h, q1, q2
 
 end
 
 #Slip condition at a wall:
 #   q_n             = 0     zero normal velocity
-#   epsilon*dh/dn   = 0     zero mass flux
+#   epsilon*deta/dn = 0     zero mass flux
 #   epsilon*dq_t/dn = 0     zero tangential velocity flux
 mutable struct SlipAdiabatic <: BoundConds
 
 end
 
 #Subsonic inlet. 3 conditions:
-#   normal flux for h       = 0
-#   q1                      = q1_BC
-#   q2                      = q2_BC
+#   normal diff flux for eta    = 0
+#   q1                          = q1_BC
+#   q2                          = q2_BC
 mutable struct SubsonicInlet1 <: BoundConds
     fun             ::FWt11     #must return [q_1, q_2]
 end
 
 #Subsonic outlet. 3 conditions:
-#   h                       = h_BC
-#   normal flux for q1      = 0
-#   normal flux for q2      = 0
+#   eta                     = eta_BC
+#   normal diff flux for q1 = 0
+#   normal diff flux for q2 = 0
 mutable struct SubsonicOutlet1 <: BoundConds
     fun             ::FWt11     #must return [h]
 end
 
-#Supersonic outlet: nSpecies+3 conditions:
-#   fmass_(k,j) n_j = 0
-#   tau_nj n_j      = 0
-#   v_t             = 0
-#   q_j n_j         = 0
+#Supersonic outlet/ do nothing: 3 conditions:
+#   normal diff dlux for eta    = 0
+#   normal diff dlux for q1     = 0
+#   normal diff dlux for q2     = 0
 mutable struct SupersonicOutlet1 <: BoundConds
 
 end
-
-#Do nothing: nSpecies+3 conditions:
-#   fmass_(k,j) n_j = 0
-#   tau_ij n_j      = 0
-#   q_j n_j         = 0
 mutable struct DoNothing1 <: BoundConds
 
 end
@@ -92,10 +87,11 @@ end
 function DepVars(model::SWE, t::Float64, x::Vector{<:AMF64},
     u::Vector{<:AMF64}, vout::Vector{String})
 
-    h           = u[1]
+    eta         = u[1]
     q1          = u[2]
     q2          = u[3]
-    b           = u[4]
+    b           = model.b(x)
+    h           = eta-b
     nout        = length(vout)
     xout        = Vector{Vector{Array{Float64,ndims(q1)}}}(undef,nout)
     for ivar in eachindex(vout)
@@ -115,9 +111,9 @@ function DepVars(model::SWE, t::Float64, x::Vector{<:AMF64},
         elseif vble=="epsilon"
             xout[ivar]      = [fill(model.epsilon, size(u[1]))]
         elseif vble=="eta"
-            xout[ivar]      = [h + b]
+            xout[ivar]      = [eta]
         elseif vble=="D_penalty"
-            D_penalty       = max(model.epsilon)
+            D_penalty       = model.epsilon
             xout[ivar]      = [fill(D_penalty, size(u[1]))]
        else
            error("Variable $(vble) not supported")
@@ -161,10 +157,11 @@ function FluxSource!(model::SWE, _qp::TrIntVars, ComputeJ::Bool)
     dQ_du_dx        = _qp.dQ_dgradu
 
     #Get variables:
-    h               = u[1]
+    eta             = u[1]
     q1              = u[2]
     q2              = u[3]
-    b               = u[4]
+    b               = model.b(x)
+    h               = eta-b
     v1              = @tturbo @. q1/h
     v2              = @tturbo @. q2/h
     g               = model.g
@@ -176,25 +173,24 @@ function FluxSource!(model::SWE, _qp::TrIntVars, ComputeJ::Bool)
     hp_min          = _hmin(_qp.Integ2D.mesh)./_qp.FesOrder * ones(1, _qp.nqp)
     
     #Characteristic velocity:
-    lambda              = @tturbo @. sqrt(v1*v1 + v2*v2) + sqrt(g*h)
-    
-    #CFL number:
-    Deltat_CFL_lambda   = @tturbo @. $minimum(hp_min/lambda)
-    Deltat_CFL_epsilon  = @tturbo @. $minimum(hp_min*hp_min/model.epsilon)
-    _qp.Deltat_CFL      = min(Deltat_CFL_lambda, Deltat_CFL_epsilon)
+    lambda          = @tturbo @. sqrt(v1*v1 + v2*v2) + sqrt(g*h)
     
     #Compute fluxes and source term:
-    HyperbolicFlux!(model, u, ComputeJ, f, df_du)
+    HyperbolicFlux!(model, x, u, ComputeJ, f, df_du)
     #
-    epsilon_qp          = @tturbo @. model.epsilon + 0.0*u[1]
-    epsilonFlux!(model, epsilon_qp, du, ComputeJ, f, _qp.df_dgradu, IIv=Vector{Int}(1:3))
-    #   
-    tau_char            = _qp.Deltat_CFL
-    Source!(model, x, tau_char, u, du, ComputeJ, Q, dQ_du, dQ_du_dx)
+    epsilon_qp      = @tturbo @. model.epsilon + 0.0*u[1]
+    epsilonFlux!(model, epsilon_qp, du, ComputeJ, f, _qp.df_dgradu)
+    #
+    Source!(model, x, u, du, ComputeJ, Q, dQ_du, dQ_du_dx)
 
     #Subgrid viscosity:
     epsilon_SS          = @tturbo @. model.CSS*lambda*hp
     epsilonFlux!(model, epsilon_SS, duB, ComputeJ, _qp.fB, _qp.dfB_dgraduB)
+
+    #CFL number:
+    Deltat_CFL_lambda   = @tturbo @. $minimum(hp_min/lambda)
+    Deltat_CFL_epsilon  = @tturbo @. $minimum(hp_min*hp_min/model.epsilon)
+    _qp.Deltat_CFL      = min(Deltat_CFL_lambda, Deltat_CFL_epsilon)
 
     return
 
