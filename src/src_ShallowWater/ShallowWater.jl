@@ -138,10 +138,16 @@ include("ShallowWater_BC.jl")
 # #Compute normalization factors from solution. Mass matrix has already been computed.
 function nFactsCompute!(solver::SolverData{SWE})
 
-
+    #L2-norm of h:
+    nVars           = solver.nVars
+    h               = solver.u[1]
+    h_L2            = sqrt( dot(h, solver.MII, h)/solver.Omega )
+    
     #Normalization factors:
-    solver.nFacts                   .= 1.0
-
+    solver.nFacts[1]        = h_L2
+    solver.nFacts[2:3]      .= sqrt(solver.model.g*h_L2)
+    solver.nFacts[4]        = h_L2
+    
     return
 
 end
@@ -179,8 +185,8 @@ function FluxSource!(model::SWE, _qp::TrIntVars, ComputeJ::Bool)
     lambda              = @tturbo @. sqrt(v1*v1 + v2*v2) + sqrt(g*h)
     
     #CFL number:
-    Deltat_CFL_lambda   = @tturbo @. $minimum(hp_min/lambda)
-    Deltat_CFL_epsilon  = @tturbo @. $minimum(hp_min*hp_min/model.epsilon)
+    Deltat_CFL_lambda   = @tturbo @. $minimum(hp_min/(lambda+1e-12))
+    Deltat_CFL_epsilon  = @tturbo @. $minimum(hp_min*hp_min/(model.epsilon+1e-12))
     _qp.Deltat_CFL      = min(Deltat_CFL_lambda, Deltat_CFL_epsilon)
     
     #Compute fluxes and source term:

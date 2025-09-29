@@ -6,6 +6,7 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
     epsilon::Float64=0e-3, h0::Float64=1.0, g::Float64=9.8,
     #
     TolS::Float64=1e-4, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
+    SpaceAdapt::Bool=true, 
     #
     TolT::Float64=1e-4, Deltat0::Float64=1e-5, TimeAdapt::Bool=true,
     #
@@ -88,6 +89,7 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
     solver.AMA_AnisoOrder   = AMA_AnisoOrder
     solver.TolS_max         = TolS
     solver.TolS_min         = 0.0*TolS
+    solver.SpaceAdapt       = SpaceAdapt
     solver.TolT             = TolT
     solver.TimeAdapt        = TimeAdapt
 
