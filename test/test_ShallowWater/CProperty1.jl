@@ -3,11 +3,13 @@ include("test_ShallowWater.jl")
 
 function CProperty1(hp0::Float64, FesOrder::Int;
     tf::Float64=0.48, RKMethod::String="BPR3",
-    epsilon::Float64=0e-3, delta::Float64=1e-2, Deltah::Float64=1e-2, g::Float64=9.8,
+    epsilon::Float64=0e-3, delta::Float64=1e-2, Deltah::Float64=0e-2, g::Float64=9.8,
     #
     TolS::Float64=1e-4, TolS0=0.01*TolS, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
     #
     TolT::Float64=1e-4, Deltat0::Float64=1e-5, TimeAdapt::Bool=true,
+    #
+    CA::Float64=1e-2, 
     #
     PlotFig::Bool=false, wFig::Float64=9.50, hFig::Float64=6.50,
     PlotVars::Vector{String}=String[],
@@ -69,6 +71,7 @@ function CProperty1(hp0::Float64, FesOrder::Int;
     solver.TolS_min         = 0.01*TolS0
     solver.TolT             = TolT
     solver.TimeAdapt        = TimeAdapt
+    solver.CA               = CA
 
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x))
