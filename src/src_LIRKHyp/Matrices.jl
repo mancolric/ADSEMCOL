@@ -1165,10 +1165,6 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     _qp.gradu       = Solution_gradCompute(u, fes, Integ2D.QRule.xi, Integ2D.Jinv)
     _qp.graduB      = Solution_gradCompute(uB, fes.BSpace, Integ2D.QRule.xi, Integ2D.Jinv)
     #
-#     _qp.f, _qp.df_du, _qp.df_duB, 
-#         _qp.df_dgradu, _qp.df_dgraduB       = FluxAllocate(nVars, (_qp.nElems, _qp.nqp), ComputeJ)
-#     _qp.fB, _qp.dfB_du, _qp.dfB_duB, 
-#         _qp.dfB_dgradu, _qp.dfB_dgraduB     = FluxAllocate(nVars, (_qp.nElems, _qp.nqp), ComputeJ)
     _qp.f, _qp.df_du, _qp.df_dgradu         = FluxAllocate(nVars, (_qp.nElems, _qp.nqp), ComputeJ)
     _qp.fB, _qp.dfB_du, _qp.dfB_dgraduB     = FluxAllocate(nVars, (_qp.nElems, _qp.nqp), ComputeJ)
     _qp.Q, _qp.dQ_du, _qp.dQ_dgradu         = bFluxAllocate(nVars, (_qp.nElems, _qp.nqp), ComputeJ)
@@ -1324,6 +1320,9 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     end
     
 #     println("Boundary terms = ", time()-t_ini)
+    
+#     display(flux_ElemsDof[4])
+#     error("")
     
     #---------------------------------------------------------------------
     #Assemble:

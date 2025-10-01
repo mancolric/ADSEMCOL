@@ -108,11 +108,17 @@ function epsilonFlux!(model::SWE, tau::MFloat, duB::Matrix{MFloat},
 
     for II=IIv, jj=1:2
         @avxt @. fB[II,jj]              -= tau*duB[II,jj]
+        if II==1
+            @tturbo @. fB[II,jj]        += tau*duB[4,jj]
+        end
     end
 
     if ComputeJ
         for II=IIv, jj=1:2
-            @avxt @. dfB_dduB[II,jj,II,jj]  -= tau
+            @avxt @. dfB_dduB[II,jj,II,jj]      -= tau
+            if II==1
+                @tturbo @. dfB_dduB[II,jj,4,jj] += tau
+            end
         end
     end
 

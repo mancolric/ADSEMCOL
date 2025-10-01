@@ -201,7 +201,7 @@ function FluxSource!(model::SWE, _qp::TrIntVars, ComputeJ::Bool)
     #Subgrid viscosity:
     epsilon_SS          = @tturbo @. model.CSS*lambda*hp
     epsilonFlux!(model, epsilon_SS, duB, ComputeJ, _qp.fB, _qp.dfB_dgraduB)
-
+    
     return
 
 end
