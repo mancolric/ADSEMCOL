@@ -1,7 +1,7 @@
 cd(@__DIR__)
 include("test_ShallowWater.jl")
 
-function SteadyVortex(hp0::Float64, FesOrder::Int;
+function TravellingVortex(hp0::Float64, FesOrder::Int;
     tf::Float64=10.0, RKMethod::String="BPR3",
     epsilon::Float64=0e-3, h0::Float64=1.0, g::Float64=9.8,
     #
