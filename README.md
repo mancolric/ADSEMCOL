@@ -17,13 +17,10 @@ The code is currently under development, i.e., it is not optimized and it can so
 
 ![](/test/figures/TriplePoint.png)
 
-### Authors, collaborators and contact
+### Authors and contact
 
 Manuel Colera Rico (Universidad Politécnica de Madrid)\
 Vít Dolejší (Charles University Prague)
-
-Gonzalo Sánchez Moreno (UPM, H2 combustion)\
-León Villalba Muñoz (UPM, Shallow water equations)
 
 Please feel free to ask any questions at
 m.colera@upm.es
@@ -31,7 +28,9 @@ m.colera@upm.es
 
 ### Cite as 
 
-Colera, M., Dolejší, V., 2025. An adaptive spectral element method for systems of conservation laws. Under review in Journal of Computational Physics.
+M. Colera, V. Dolejší, 2025: [An adaptive spectral element method for systems of conservation laws](https://doi.org/10.1016/j.jcp.2025.114322). Journal of Computational Physics 541, 114322.
+
+M. Colera, V. Dolejší, 2025: [ADSEMCOL - Adaptive Spectral Element Method for Systems of Conservation Laws](https://github.com/mancolric/ADSEMCOL/).
 
 ### Installation
 
