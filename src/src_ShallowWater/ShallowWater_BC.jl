@@ -4,7 +4,7 @@ function uRotate(model::SWE, nb::Vector{MFloat}, tb::Vector{MFloat}, u::Vector{M
 
     q           = Vector{Matrix{Float64}}(undef, nVars)
 
-    #h remains the same:
+    #eta remains the same:
     q[1]        = @tturbo @. u[1]
     #v_n    = v_x * n_x + v_y * n_y
     q[2]        = @tturbo @. u[2]*nb[1] + u[3]*nb[2]
@@ -23,7 +23,7 @@ function qRotate(model::SWE, nb::Vector{MFloat}, tb::Vector{MFloat}, qBC::Vector
 
     uBC         = Vector{Matrix{Float64}}(undef, nVars)
 
-    #h remains the same:
+    #eta remains the same:
     uBC[1]      = @tturbo @. qBC[1]
     #v_x    = v_n * n_x + v_t * t_x
     uBC[2]      = @tturbo @. qBC[3]*tb[1] + qBC[2]*nb[1]
@@ -139,8 +139,8 @@ function bflux!(model::SWE, BC::SlipAdiabatic,
     bflux                   = _bqp.f
     dbflux_du               = _bqp.df_du
     dbflux_dgradu           = _bqp.df_dgradu
-    h                       = 1.0./sqrt.(metric.lambda_bar[ParentElems])*ones(1,_bqp.nqp) #OJO que esto es el tamaño de los elementos
-    hp                      = h./_bqp.FesOrder
+    hmesh                   = 1.0./sqrt.(metric.lambda_bar[ParentElems])*ones(1,_bqp.nqp) 
+    hp                      = hmesh./_bqp.FesOrder
     
     #----------------------------------------------------------------
     #Hyperbolic flux. Impose conditions on "u":
@@ -203,7 +203,7 @@ function bflux!(model::SWE, BC::SlipAdiabatic,
     end
     
     #----------------------------------------------------------------
-    #Viscous flux. Impose conditions on "f". 
+    #Diffusive flux. Impose conditions on "f". 
     
     #NOTE: The procedure is:
     #1) Obtain fn_I from u and grad u. This contains fluxes for [h,q1,q2,b].
@@ -291,9 +291,9 @@ function bflux!(model::SWE, BC::SlipAdiabatic,
 end
 
 #Subsonic inlet. 3 conditions:
-#   normal flux for h       = 0
-#   q1                      = q1_BC
-#   q2                      = q2_BC
+#   normal diff flux for eta    = 0
+#   q1                          = q1_BC
+#   q2                          = q2_BC
 function bflux!(model::SWE, BC::SubsonicInlet1,
                 _bqp::TrBintVars, ComputeJ::Bool)
    
@@ -310,8 +310,8 @@ function bflux!(model::SWE, BC::SubsonicInlet1,
     bflux                   = _bqp.f
     dbflux_du               = _bqp.df_du
     dbflux_dgradu           = _bqp.df_dgradu
-    h                       = 1.0./sqrt.(metric.lambda_bar[ParentElems])*ones(1,_bqp.nqp) #OJO que esto es el tamaño de los elementos
-    hp                      = @tturbo @. h/_bqp.FesOrder
+    hmesh                   = 1.0./sqrt.(metric.lambda_bar[ParentElems])*ones(1,_bqp.nqp) #OJO que esto es el tamaño de los elementos
+    hp                      = @tturbo @. hmesh/_bqp.FesOrder
     
     #----------------------------------------------------------------
     #Hyperbolic flux. Impose conditions on "u":
@@ -399,9 +399,9 @@ function bflux!(model::SWE, BC::SubsonicInlet1,
 end
 
 #Subsonic outlet. 3 conditions:
-#   h                       = h_BC
-#   normal flux for q1      = 0
-#   normal flux for q2      = 0
+#   eta                     = eta_BC
+#   normal diff flux for q1 = 0
+#   normal diff flux for q2 = 0
 function bflux!(model::SWE, BC::SubsonicOutlet1,
                 _bqp::TrBintVars, ComputeJ::Bool)
    
@@ -511,12 +511,14 @@ function bflux!(model::SWE, BC::SubsonicOutlet1,
 
 end
 
+#Supersonic outlet/ do nothing: 3 conditions:
+#   normal diff dlux for eta    = 0
+#   normal diff dlux for q1     = 0
+#   normal diff dlux for q2     = 0
 function bflux!(model::SWE, BC::Union{DoNothing1,SupersonicOutlet1},
                 _bqp::TrBintVars, ComputeJ::Bool)
-
-    @warn "not reviewed"
     
-    nVars                   = 3
+    nVars                   = model.nVars
 
     nb                      = _bqp.nb
     tb                      = _bqp.tb
@@ -562,10 +564,7 @@ function bflux!(model::SWE, BC::Union{DoNothing1,SupersonicOutlet1},
     end
 
 
-    #----------------------------------------------------------------
-    #Viscous flux:
-
-    #We impose zero viscous fluxes
+    #Diffusive and penalty fluxes are zero.
 
     return
 

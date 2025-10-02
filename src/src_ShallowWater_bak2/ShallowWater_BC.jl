@@ -119,7 +119,7 @@ function bflux!(model::SWE, BC::SlipAdiabatic,
     bflux                   = _bqp.f
     dbflux_du               = _bqp.df_du
     dbflux_dgradu           = _bqp.df_dgradu
-    h                       = 1.0./sqrt.(metric.lambda_bar[ParentElems])*ones(1,_bqp.nqp) #OJO que esto es el tamaño de los elementos
+    h                       = 1.0./sqrt.(metric.lambda_bar[ParentElems])*ones(1,_bqp.nqp) 
     hp                      = h./_bqp.FesOrder
     
     #----------------------------------------------------------------

@@ -13,8 +13,6 @@ function LatexString(vble::String)
         return "v_1"
     elseif vble=="v2"
         return "v_2"
-    elseif vble=="vr"
-        return "v_r"
     elseif vble=="b"
         return "b"
     elseif vble=="eta"

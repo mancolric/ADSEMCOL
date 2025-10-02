@@ -3,11 +3,9 @@ function HyperbolicFlux!(model::SWE,
     ComputeJ::Bool, f::Matrix{MFloat}, df_du::Array{MFloat,3})where MFloat<:AbstractMatrix{Float64}
 
     #Get variables:
-    eta             = u[1]
+    h               = u[1]
     q1              = u[2]
     q2              = u[3]
-    b               = u[4]
-    h               = eta-b
     g               = model.g
     gamma           = model.gamma
 
@@ -18,10 +16,10 @@ function HyperbolicFlux!(model::SWE,
     #Hyperbolic fluxes:
     @tturbo @. f[1,1]           += q1
     @tturbo @. f[1,2]           += q2
-    @tturbo @. f[2,1]           += v1*q1 + g*(0.5*eta*eta-eta*b)
+    @tturbo @. f[2,1]           += v1*q1 + 0.5*g*h^2
     @tturbo @. f[2,2]           += v2*q1
     @tturbo @. f[3,1]           += v1*q2
-    @tturbo @. f[3,2]           += v2*q2 + g*(0.5*eta*eta-eta*b)
+    @tturbo @. f[3,2]           += v2*q2 + 0.5*g*h^2
 
     #Get Jacobian, if necessary:
     if ComputeJ
@@ -37,10 +35,9 @@ function HyperbolicFlux!(model::SWE,
         @tturbo @. df_du[1,2,3]     += 1
 
         #Derivatives of f(2,1)
-        @tturbo @. df_du[2,1,1]     += -q1^2/h^2 + g*(eta-b)
+        @tturbo @. df_du[2,1,1]     += -q1^2/h^2 + g*h
         @tturbo @. df_du[2,1,2]     += 2*q1/h
         @tturbo @. df_du[2,1,3]     += 0
-        @tturbo @. df_du[2,1,4]     += -g*eta
 
         #Derivatives of f(2,2)
         @tturbo @. df_du[2,2,1]     += -q1*q2/h^2
@@ -53,10 +50,9 @@ function HyperbolicFlux!(model::SWE,
         @tturbo @. df_du[3,1,3]     += q1/h
 
         #Derivatives of f(3,2)
-        @tturbo @. df_du[3,2,1]     += -q2^2/h^2 + g*(eta-b)
+        @tturbo @. df_du[3,2,1]     += -q2^2/h^2 + g*h
         @tturbo @. df_du[3,2,2]     += 0
         @tturbo @. df_du[3,2,3]     += 2*q2/h
-        @tturbo @. df_du[3,2,4]     += -g*eta
 
     end
 
@@ -68,13 +64,13 @@ function Source!(model::SWE, x::Vector{MFloat}, tau_char::Float64,
     u::Vector{MFloat}, du_dx::Matrix{MFloat}, ComputeJ::Bool,
     Q::Vector{MFloat}, dQ_du::Matrix{MFloat}, dQ_du_dx::Array{MFloat,3}) where MFloat<:AbstractMatrix{Float64}
 
+#     tau_char        = Inf
 
     #Get variables:
-    eta             = u[1]
+    h               = u[1]
     q1              = u[2]
     q2              = u[3]
     b               = u[4]
-    h               = eta-b
     b_exact         = model.b(x)
     g               = model.g
     db_dx           = du_dx[4,1]

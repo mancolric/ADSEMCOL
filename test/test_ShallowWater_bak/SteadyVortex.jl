@@ -38,9 +38,8 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
         q1              = @tturbo @. -h*v_phi*x[2]/r + h       
         q2              = @tturbo @. h*v_phi*x[1]/r
         b               = @tturbo @. 0.0*x[1]
-        eta             = h
         
-        return [eta, q1, q2, b]
+        return [h, q1, q2, b]
 
     end
 
@@ -62,8 +61,7 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
     BC_left         = SubsonicInlet1(FWt11((t,x)->uLeft(t,x)))
     function uRight(t::Float64, x::Vector{Matrix{Float64}})
         h               = @tturbo @. 0.0*x[1] + h0
-        eta             = h
-        return [eta]
+        return [h]
     end
     BC_right        = SubsonicOutlet1(FWt11((t,x)->uRight(t,x)))
 
@@ -109,9 +107,9 @@ function SteadyVortex(hp0::Float64, FesOrder::Int;
 
     #Compute initial condition:
     ConvFlag            = LIRKHyp_InitialCondition!(solver)
-#     CheckJacobian(solver, Plot_df_du=false, Plot_df_dgradu=true, 
-#         Plot_dQ_du=false, Plot_dQ_dgradu=false)
-#     for ii = 4
+#     CheckJacobian(solver, Plot_df_du=false, Plot_df_dgradu=false, 
+#         Plot_dQ_du=true, Plot_dQ_dgradu=false)
+#     for ii = 2
 #         BC_CheckJacobian(solver, ii, Plot_df_du=true)
 #     end
 #     return

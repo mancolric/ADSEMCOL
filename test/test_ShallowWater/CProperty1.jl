@@ -1,6 +1,8 @@
 cd(@__DIR__)
 include("test_ShallowWater.jl")
 
+#CProperty1(0.1, 5, tf=1.0, TolS=1e-5, TolS0=1e-5, delta=1e-3, epsilon=0e-2, Deltah=0e-3, PlotFig=true, PlotVars=["eta", "v1", "v2", "b"], RKMethod="BPR3", TimeAdapt=false, Deltat0=1e-2);
+
 function CProperty1(hp0::Float64, FesOrder::Int;
     tf::Float64=0.48, RKMethod::String="BPR3",
     epsilon::Float64=0e-3, delta::Float64=1e-2, Deltah::Float64=0e-2, g::Float64=9.8,
@@ -33,15 +35,14 @@ function CProperty1(hp0::Float64, FesOrder::Int;
     model.b             = FW1( (x)-> @. 0.8*exp(-5*(x[1]+0.1)^2-50*x[2]^2) )
     function u0fun(x::Vector{Matrix{Float64}})
 
-        b               = model.b(x)
+        b               = model.b(x)+1e-4*sin.(x[1])
         eta             = @. 1.0 + 
                             SmoothHeaviside(x[1]+0.95, delta, 0.0, Deltah) -
                             SmoothHeaviside(x[1]+0.85, delta, 0.0, Deltah)
-        h               = @tturbo @. eta-b
         q1              = @tturbo @. 0.0*x[1]
         q2              = @tturbo @. 0.0*x[1]
         
-        return [h, q1, q2, b]
+        return [eta, q1, q2, b]
 
     end
 
