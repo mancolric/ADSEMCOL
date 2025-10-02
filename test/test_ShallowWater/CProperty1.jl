@@ -32,13 +32,17 @@ function CProperty1(hp0::Float64, FesOrder::Int;
     model.epsilon       = epsilon
     model.g             = g
     model.CSS           = CSS
-    model.b             = FW1( (x)-> @. 0.8*exp(-5*(x[1]+0.1)^2-50*x[2]^2) )
+#     model.b             = FW1( (x)-> @. 0.8*exp(-5*(x[1]+0.1)^2-50*x[2]^2) )
+    av                  = rand(4)
+    model.b             = FW1( (x)-> @. av[1]*sin(2*pi*x[1])+av[2]*cos(4*pi*x[1]) + 
+                                        av[3]*sin(3*pi*x[2])+av[4]*cos(5*pi*x[1]) ) 
     function u0fun(x::Vector{Matrix{Float64}})
 
         b               = model.b(x)+1e-4*sin.(x[1])
-        eta             = @. 1.0 + 
-                            SmoothHeaviside(x[1]+0.95, delta, 0.0, Deltah) -
-                            SmoothHeaviside(x[1]+0.85, delta, 0.0, Deltah)
+#         eta             = @. 1.0 + 
+#                             SmoothHeaviside(x[1]+0.95, delta, 0.0, Deltah) -
+#                             SmoothHeaviside(x[1]+0.85, delta, 0.0, Deltah)
+        eta             = @. 10.0 + Deltah*exp(-5*(x[1]+0.1)^2-50*x[2]^2)
         q1              = @tturbo @. 0.0*x[1]
         q2              = @tturbo @. 0.0*x[1]
         
