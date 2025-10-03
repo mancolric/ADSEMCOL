@@ -1,7 +1,0 @@
-To ensure that b_h is the L2-projection of b at all time levels, even after mesh adaptation, we can set
-db_h /dt = db_h/dt - db/dt = - tau_0*(b_h - b)
-so that "errors" in b_h are quickly corrected. Indeed, the steady-state solution of the latter equation is int( (b_h-b) \psi ) = 0, that is, the L2-projection. "tau_0" should be a characteristic time, constant for all the domain maybe min((h/p)/lambda) so the CFL number appears in the discretization.
-
-TODO:
--Change source and fluxes terms to achieve WB.
--Test AP.

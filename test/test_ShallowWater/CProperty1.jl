@@ -38,7 +38,7 @@ function CProperty1(hp0::Float64, FesOrder::Int;
                                         av[3]*sin(3*pi*x[2])+av[4]*cos(5*pi*x[1]) ) 
     function u0fun(x::Vector{Matrix{Float64}})
 
-        b               = model.b(x)+1e-4*sin.(x[1])
+        b               = model.b(x)
 #         eta             = @. 1.0 + 
 #                             SmoothHeaviside(x[1]+0.95, delta, 0.0, Deltah) -
 #                             SmoothHeaviside(x[1]+0.85, delta, 0.0, Deltah)

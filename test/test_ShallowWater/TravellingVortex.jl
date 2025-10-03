@@ -66,7 +66,7 @@ function TravellingVortex(hp0::Float64, FesOrder::Int;
         return [eta]
     end
     BC_right        = SubsonicOutlet1(FWt11((t,x)->uRight(t,x)))
-
+    
     #---------------------------------------------------------------------
     #PRE-PROCESS STAGE:
 

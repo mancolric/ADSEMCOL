@@ -125,7 +125,7 @@ function nFactsCompute!(solver::SolverData{SWE})
     
     #Normalization factors:
     solver.nFacts[1]        = eta_L2
-    solver.nFacts[2:3]      .= sqrt(solver.model.g*h_L2)
+    solver.nFacts[2:3]      .= h_L2*sqrt(solver.model.g*h_L2)
     solver.nFacts[4]        = eta_L2
     
     return
