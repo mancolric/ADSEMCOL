@@ -1,0 +1,253 @@
+function HyperbolicFlux!(model::SWE,
+    u::Vector{MFloat},
+    ComputeJ::Bool, f::Matrix{MFloat}, df_du::Array{MFloat,3})where MFloat<:AbstractMatrix{Float64}
+
+    return HyperbolicFlux1!(model, u, ComputeJ, f, df_du)
+
+end
+
+function Source!(model::SWE, x::Vector{MFloat}, tau_char::Float64,
+    u::Vector{MFloat}, du_dx::Matrix{MFloat}, ComputeJ::Bool,
+    Q::Vector{MFloat}, dQ_du::Matrix{MFloat}, dQ_du_dx::Array{MFloat,3}) where MFloat<:AbstractMatrix{Float64}
+
+    return Source1!(model, x, tau_char, u, du_dx, ComputeJ, Q, dQ_du, dQ_du_dx)
+
+end
+
+function epsilonFlux!(model::SWE, tau::MFloat, duB::Matrix{MFloat},
+                      ComputeJ::Bool,
+                      fB::Matrix{MFloat}, dfB_dduB::Array{MFloat,4};
+                      IIv::Vector{Int}=Vector{Int}(1:model.nVars)) where MFloat<:Matrix{Float64}
+
+    for II=IIv, jj=1:2
+        @avxt @. fB[II,jj]              -= tau*duB[II,jj]
+    end
+
+    if ComputeJ
+        for II=IIv, jj=1:2
+            @avxt @. dfB_dduB[II,jj,II,jj]      -= tau
+        end
+    end
+
+    return
+
+end
+
+#------------------------------
+
+function HyperbolicFlux1!(model::SWE,
+    u::Vector{MFloat},
+    ComputeJ::Bool, f::Matrix{MFloat}, df_du::Array{MFloat,3})where MFloat<:AbstractMatrix{Float64}
+
+    #Get variables:
+    eta             = u[1]
+    q1              = u[2]
+    q2              = u[3]
+    q3              = u[4]
+    P               = u[5]
+    b               = u[6]
+    h               = eta-b
+    g               = model.g
+    gamma           = model.gamma
+
+    #Velocities:
+    v1              = @tturbo @. q1/h
+    v2              = @tturbo @. q2/h
+    v3              = @tturbo @. q3/h
+    
+    #Hyperbolic fluxes:
+    @tturbo @. f[1,1]           += q1
+    @tturbo @. f[1,2]           += q2
+    @tturbo @. f[2,1]           += v1*q1 + g*(0.5*eta*eta-eta*b)
+    @tturbo @. f[2,2]           += v2*q1
+    @tturbo @. f[3,1]           += v1*q2
+    @tturbo @. f[3,2]           += v2*q2 + g*(0.5*eta*eta-eta*b)
+
+    #Get Jacobian, if necessary:
+    if ComputeJ
+
+        #Derivatives of f(1,1)
+        @tturbo @. df_du[1,1,2]     += 1.0
+
+        #Derivatives of f(1,2)
+        @tturbo @. df_du[1,2,3]     += 1.0
+
+        #Derivatives of f(2,1)
+        @tturbo @. df_du[2,1,1]     += -q1^2/h^2 + g*h
+        @tturbo @. df_du[2,1,2]     += 2*q1/h
+        @tturbo @. df_du[2,1,4]     += +q1^2/h^2 - g*eta
+
+        #Derivatives of f(2,2)
+        @tturbo @. df_du[2,2,1]     += -q1*q2/h^2
+        @tturbo @. df_du[2,2,2]     += q2/h
+        @tturbo @. df_du[2,2,3]     += q1/h
+        @tturbo @. df_du[2,2,4]     += +q1*q2/h^2
+
+        #Derivatives of f(3,1)
+        @tturbo @. df_du[3,1,1]     += -q1*q2/h^2
+        @tturbo @. df_du[3,1,2]     += q2/h
+        @tturbo @. df_du[3,1,3]     += q1/h
+        @tturbo @. df_du[3,1,4]     += +q1*q2/h^2
+        
+        #Derivatives of f(3,2)
+        @tturbo @. df_du[3,2,1]     += -q2^2/h^2 + g*h
+        @tturbo @. df_du[3,2,3]     += 2*q2/h
+        @tturbo @. df_du[3,2,4]     += +q2^2/h^2 - g*eta
+
+    end
+
+    return
+
+end
+
+function Source1!(model::SWE, x::Vector{MFloat}, tau_char::Float64,
+    u::Vector{MFloat}, du_dx::Matrix{MFloat}, ComputeJ::Bool,
+    Q::Vector{MFloat}, dQ_du::Matrix{MFloat}, dQ_du_dx::Array{MFloat,3}) where MFloat<:AbstractMatrix{Float64}
+
+
+    #Get variables:
+    eta             = u[1]
+    q1              = u[2]
+    q2              = u[3]
+    b               = u[4]
+    h               = eta-b
+    b_exact         = model.b(x)
+    g               = model.g
+    db_dx           = du_dx[4,1]
+    db_dy           = du_dx[4,2]
+    gamma           = model.gamma
+
+    @tturbo @. Q[1]             += 0
+    @tturbo @. Q[2]             += -gamma*q1 - g*eta*db_dx
+    @tturbo @. Q[3]             += -gamma*q2 - g*eta*db_dy
+    @tturbo @. Q[4]             += -(b-b_exact)/tau_char
+
+    if ComputeJ
+
+        #Derivatives of Q(2)
+        @tturbo @. dQ_du[2,1]       += -g*db_dx
+        @tturbo @. dQ_du[2,2]       += -gamma
+        @tturbo @. dQ_du_dx[2,4,1]  += -g*eta
+
+        #Derivatives of Q(3)
+        @tturbo @. dQ_du[3,1]       += -g*db_dy
+        @tturbo @. dQ_du[3,3]       += -gamma
+        @tturbo @. dQ_du_dx[3,4,2]  += -g*eta
+        
+        #Derivatives of Q(4)
+        @tturbo @. dQ_du[4,4]       += -1.0/tau_char
+        
+    end
+    
+    return
+
+end
+
+#=
+function HyperbolicFlux2!(model::SWE,
+    u::Vector{MFloat},
+    ComputeJ::Bool, f::Matrix{MFloat}, df_du::Array{MFloat,3})where MFloat<:AbstractMatrix{Float64}
+
+    #Get variables:
+    eta             = u[1]
+    q1              = u[2]
+    q2              = u[3]
+    b               = u[4]
+    h               = eta-b
+    g               = model.g
+    gamma           = model.gamma
+
+    #Velocities:
+    v1              = @tturbo @. q1/h
+    v2              = @tturbo @. q2/h
+
+    #Hyperbolic fluxes:
+    @tturbo @. f[1,1]           += q1
+    @tturbo @. f[1,2]           += q2
+    @tturbo @. f[2,1]           += v1*q1
+    @tturbo @. f[2,2]           += v2*q1
+    @tturbo @. f[3,1]           += v1*q2
+    @tturbo @. f[3,2]           += v2*q2
+
+    #Get Jacobian, if necessary:
+    if ComputeJ
+
+        #Derivatives of f(1,1)
+        @tturbo @. df_du[1,1,2]     += 1.0
+
+        #Derivatives of f(1,2)
+        @tturbo @. df_du[1,2,3]     += 1.0
+
+        #Derivatives of f(2,1)
+        @tturbo @. df_du[2,1,1]     += -q1^2/h^2
+        @tturbo @. df_du[2,1,2]     += 2*q1/h
+        @tturbo @. df_du[2,1,4]     += +q1^2/h^2
+
+        #Derivatives of f(2,2)
+        @tturbo @. df_du[2,2,1]     += -q1*q2/h^2
+        @tturbo @. df_du[2,2,2]     += q2/h
+        @tturbo @. df_du[2,2,3]     += q1/h
+        @tturbo @. df_du[2,2,4]     += +q1*q2/h^2
+
+        #Derivatives of f(3,1)
+        @tturbo @. df_du[3,1,1]     += -q1*q2/h^2
+        @tturbo @. df_du[3,1,2]     += q2/h
+        @tturbo @. df_du[3,1,3]     += q1/h
+        @tturbo @. df_du[3,1,4]     += +q1*q2/h^2
+        
+        #Derivatives of f(3,2)
+        @tturbo @. df_du[3,2,1]     += -q2^2/h^2
+        @tturbo @. df_du[3,2,3]     += 2*q2/h
+        @tturbo @. df_du[3,2,4]     += +q2^2/h^2
+
+    end
+
+    return
+
+end
+
+function Source2!(model::SWE, x::Vector{MFloat}, tau_char::Float64,
+    u::Vector{MFloat}, du_dx::Matrix{MFloat}, ComputeJ::Bool,
+    Q::Vector{MFloat}, dQ_du::Matrix{MFloat}, dQ_du_dx::Array{MFloat,3}) where MFloat<:AbstractMatrix{Float64}
+
+
+    #Get variables:
+    eta             = u[1]
+    q1              = u[2]
+    q2              = u[3]
+    b               = u[4]
+    h               = eta-b
+    b_exact         = model.b(x)
+    g               = model.g
+    deta_dx         = du_dx[1,1]
+    deta_dy         = du_dx[1,2]
+    gamma           = model.gamma
+
+    @tturbo @. Q[1]             += 0
+    @tturbo @. Q[2]             += -gamma*q1 - g*h*deta_dx
+    @tturbo @. Q[3]             += -gamma*q2 - g*h*deta_dy
+    @tturbo @. Q[4]             += -(b-b_exact)/tau_char
+
+    if ComputeJ
+
+        #Derivatives of Q(2)
+        @tturbo @. dQ_du[2,1]       += -g*deta_dx
+        @tturbo @. dQ_du[2,2]       += -gamma
+        @tturbo @. dQ_du[2,4]       += +g*deta_dx
+        @tturbo @. dQ_du_dx[2,1,1]  += -g*h
+
+        #Derivatives of Q(3)
+        @tturbo @. dQ_du[3,1]       += -g*deta_dy
+        @tturbo @. dQ_du[3,3]       += -gamma
+        @tturbo @. dQ_du[3,4]       += +g*deta_dy
+        @tturbo @. dQ_du_dx[3,1,2]  += -g*h
+        
+        #Derivatives of Q(4)
+        @tturbo @. dQ_du[4,4]       += -1.0/tau_char
+        
+    end
+    
+    return
+
+end
+=#

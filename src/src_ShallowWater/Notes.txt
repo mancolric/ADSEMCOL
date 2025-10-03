@@ -1,0 +1,7 @@
+Model 1: hyperbolic flux is convective + g, source term is -g*eta*nabla b
+Model 2: hyperbolic flux is convective, source term is -g*h*nabla eta
+
+-C-property: if Deltah=0, OK with both models. If Deltah>0, there is noise in q1 and q2. The noise behaves as TolS.
+
+-Travelling vortex. With model 2, outlet is unstable (both for subsonic and supersonic outlet conditions).
+
