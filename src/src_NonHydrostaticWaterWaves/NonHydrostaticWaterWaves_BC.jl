@@ -283,12 +283,12 @@ function bflux!(model::NHWW, BC::SlipAdiabatic,
 
 end
 
-#Subsonic inlet. 5 conditions (4 Dirichlet):
+#Subsonic inlet. 5 conditions (3 Dirichlet):
 #   normal diff flux for eta    = 0
 #   q1                          = q1_BC
 #   q2                          = q2_BC
 #   q3                          = q3_BC
-#   p                           = p_BC
+#   normal diff flux for p      = p_BC
 function bflux!(model::NHWW, BC::SubsonicInlet1,
                 _bqp::TrBintVars, ComputeJ::Bool)
    
@@ -320,8 +320,8 @@ function bflux!(model::NHWW, BC::SubsonicInlet1,
     uBC[2]                  = uDir[1]
     uBC[3]                  = uDir[2]
     uBC[4]                  = uDir[3]
-    uBC[5]                  = uDir[4]
-#     uBC[5]                  = u[5]
+#     uBC[5]                  = uDir[4]
+    uBC[5]                  = u[5]
     uBC[6]                  = u[6]
     
     #Derivatives:
@@ -330,7 +330,7 @@ function bflux!(model::NHWW, BC::SubsonicInlet1,
     
         alloc!(duBC_du, size(u[1]))
         @tturbo @. duBC_du[1,1]     += 1.0
-#         @tturbo @. duBC_du[5,5]     += 1.0
+        @tturbo @. duBC_du[5,5]     += 1.0
         @tturbo @. duBC_du[6,6]     += 1.0
         
     end
@@ -367,7 +367,7 @@ function bflux!(model::NHWW, BC::SubsonicInlet1,
     
     #Compute viscous flux:
     epsilon         = @tturbo @. model.epsilon + 0.0*u[1]
-    epsilonFlux!(model, epsilon, du, ComputeJ, flux, dflux_dgradu, IIv=Vector{Int}(2:5))
+    epsilonFlux!(model, epsilon, du, ComputeJ, flux, dflux_dgradu, IIv=Vector{Int}(2:4))
     #Note that no mass flux is enforced by imposing an appropriate value for IIv
     
     #Total normal flux (f_{Ij} n_j) through the boundary:
@@ -397,12 +397,12 @@ function bflux!(model::NHWW, BC::SubsonicInlet1,
 
 end
 
-#Subsonic outlet. 5 conditions (1 Dirichlet):
+#Subsonic outlet. 5 conditions (2 Dirichlet):
 #   eta                     = eta_BC
 #   normal diff flux for q1 = 0
 #   normal diff flux for q2 = 0
 #   normal diff flux for q3 = 0
-#   normal diff flux for p  = 0
+#   p                       = p_BC
 function bflux!(model::NHWW, BC::SubsonicOutlet1,
                 _bqp::TrBintVars, ComputeJ::Bool)
    
@@ -434,9 +434,9 @@ function bflux!(model::NHWW, BC::SubsonicOutlet1,
     uBC[2]                  = u[2]
     uBC[3]                  = u[3]
     uBC[4]                  = u[4]
-    uBC[5]                  = u[5]
-#     uBC[6]                  = u[6]
-    uBC[6]                  = uDir[2]
+    uBC[5]                  = uDir[2]
+#     uBC[5]                  = u[5]
+    uBC[6]                  = u[6]
     
     #Derivatives:
     duBC_du                 = Matrix{Matrix{Float64}}(undef,nVars,nVars)
@@ -446,8 +446,8 @@ function bflux!(model::NHWW, BC::SubsonicOutlet1,
         @tturbo @. duBC_du[2,2]     += 1.0
         @tturbo @. duBC_du[3,3]     += 1.0
         @tturbo @. duBC_du[4,4]     += 1.0
-        @tturbo @. duBC_du[5,5]     += 1.0
-#         @tturbo @. duBC_du[6,6]     += 1.0
+#         @tturbo @. duBC_du[5,5]     += 1.0
+        @tturbo @. duBC_du[6,6]     += 1.0
         
     end
 
@@ -485,7 +485,7 @@ function bflux!(model::NHWW, BC::SubsonicOutlet1,
     
     #Compute viscous flux:
     epsilon         = @tturbo @. model.epsilon + 0.0*u[1]
-    epsilonFlux!(model, epsilon, du, ComputeJ, flux, dflux_dgradu, IIv=[1])
+    epsilonFlux!(model, epsilon, du, ComputeJ, flux, dflux_dgradu, IIv=[1,5])
     #Note that no momentum flux is enforced by imposing an appropriate value for IIv
     
     #Total normal flux (f_{Ij} n_j) through the boundary:

@@ -1,7 +1,5 @@
 include("../src_LIRKHyp/LIRKHyp.jl")
 
-@warn "Review comments for BC"
-
 #------------------------------------------------------------------
 #STRUCTURES WITH CONSTITUTIVE MODELS AND BOUNDARY CONDITIONS:
 
@@ -24,26 +22,32 @@ Base.@kwdef mutable struct NHWW <: ConstModels
 
 end
 
-#Slip condition at a wall:
-#   q_n             = 0     zero normal velocity
-#   epsilon*deta/dn = 0     zero diff mass flux
-#   epsilon*dq_t/dn = 0     zero tangential velocity flux
+#SlipAdiabatic boundary. 5 conditions:
+#   q_n                         = 0
+#   normal diff flux for h      = 0
+#   normal diff flux for q_t    = 0
+#   normal diff flux for q_3    = 0
+#   normal diff flux for p      = 0
 mutable struct SlipAdiabatic <: BoundConds
 
 end
 
-#Subsonic inlet. 3 conditions:
+#Subsonic inlet. 5 conditions (3 Dirichlet):
 #   normal diff flux for eta    = 0
 #   q1                          = q1_BC
 #   q2                          = q2_BC
+#   q3                          = q3_BC
+#   normal diff flux for p      = p_BC
 mutable struct SubsonicInlet1 <: BoundConds
     fun             ::FWt11     #must return [q_1, q_2]
 end
 
-#Subsonic outlet. 3 conditions:
+#Subsonic outlet. 5 conditions (2 Dirichlet):
 #   eta                     = eta_BC
 #   normal diff flux for q1 = 0
 #   normal diff flux for q2 = 0
+#   normal diff flux for q3 = 0
+#   p                       = p_BC
 mutable struct SubsonicOutlet1 <: BoundConds
     fun             ::FWt11     #must return [h]
 end
@@ -163,11 +167,15 @@ function FluxSource!(model::NHWW, _qp::TrIntVars, ComputeJ::Bool)
     eta             = u[1]
     q1              = u[2]
     q2              = u[3]
-    b               = u[4]
+    q3              = u[4]
+    p               = u[5]
+    b               = u[6]
     h               = eta-b
     v1              = @tturbo @. q1/h
     v2              = @tturbo @. q2/h
+    v3              = @tturbo @. q3/h
     g               = model.g
+    c               = model.c
     
     #Mesh size:
     A_Elems         = areas(_qp.Integ2D.mesh)
@@ -176,7 +184,7 @@ function FluxSource!(model::NHWW, _qp::TrIntVars, ComputeJ::Bool)
     hp_min          = _hmin(_qp.Integ2D.mesh)./_qp.FesOrder * ones(1, _qp.nqp)
     
     #Characteristic velocity:
-    lambda              = @tturbo @. sqrt(v1*v1 + v2*v2) + sqrt(g*h)
+    lambda              = @tturbo @. sqrt(v1*v1 + v2*v2 + v3*v3) + sqrt(g*h + p + c*c)
     
     #CFL number:
     Deltat_CFL_lambda   = @tturbo @. $minimum(hp_min/(lambda+1e-12))
@@ -187,7 +195,7 @@ function FluxSource!(model::NHWW, _qp::TrIntVars, ComputeJ::Bool)
     HyperbolicFlux!(model, u, ComputeJ, f, df_du)
     #
     epsilon_qp          = @tturbo @. model.epsilon + 0.0*u[1]
-    epsilonFlux!(model, epsilon_qp, du, ComputeJ, f, _qp.df_dgradu, IIv=Vector{Int}(1:3))
+    epsilonFlux!(model, epsilon_qp, du, ComputeJ, f, _qp.df_dgradu)
     #   
     tau_char            = _qp.Deltat_CFL
     Source!(model, x, tau_char, u, du, ComputeJ, Q, dQ_du, dQ_du_dx)

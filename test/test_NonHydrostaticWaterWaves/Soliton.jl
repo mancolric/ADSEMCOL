@@ -9,7 +9,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
     TolS::Float64=1e-4, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
     SpaceAdapt::Bool=true, 
     #
-    TolT::Float64=1e-4, Deltat0::Float64=1e-5, TimeAdapt::Bool=true,
+    TolT::Float64=1e-4, Deltat0::Float64=1e-3, TimeAdapt::Bool=true,
     #
     PlotFig::Bool=false, wFig::Float64=9.50, hFig::Float64=6.50,
     PlotVars::Vector{String}=String[],
@@ -33,7 +33,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
     model.c             = alpha*sqrt(g*h0)
     model.CSS           = CSS
 
-    function utheorfun(t::Float64, x::Vector{Matrix{Float64}})
+    function utheorfun(t::Float64, x::Vector{Matrix{Float64}}) 
 
         eta, q1, q2, q3, p      = SolitonExact(t, x[1], A=A, gamma=gamma, h0=h0, x0=0.0, g=g)
         b                       = @. 0.0*x[1]
@@ -65,8 +65,8 @@ function Soliton(hp0::Float64, FesOrder::Int;
         p               = @tturbo @. 0.0*x[1]
         return [eta, p]
     end
-#     BC_right        = SubsonicOutlet1(FWt11((t,x)->uRight(t,x)))
-    BC_right        = DoNothing1()
+    BC_right        = SubsonicOutlet1(FWt11((t,x)->uRight(t,x)))
+#     BC_right        = DoNothing1()
     
     #---------------------------------------------------------------------
     #PRE-PROCESS STAGE:
@@ -141,7 +141,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
         if PlotFig && ( solver.t-t_lastFig>=Deltat_SaveFig ||
                         ct_SaveFig==Nt_SaveFig || solver.t==tf || solver.t==0.0 )
 
-            figure(figv[1].number)
+            figure(figv[1].number)        
             #Loop plot variables:
             for ii=1:length(PlotVars)
                 PyPlot.subplot(mFig, nFig, ii)
@@ -156,34 +156,39 @@ function Soliton(hp0::Float64, FesOrder::Int;
             if SaveFig
                 savefig("$(VideosUbiTFG)Soliton$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
+            
             figure(figv[2].number)
+            #Domain limits:
+            c0      = sqrt(g*(A+h0))
+            l0      = h0*sqrt((A+h0)/h0)
+            x11     = c0*solver.t-10*l0
+            x12     = c0*solver.t+10*l0
+            #Interpolate exact solution:
+            x1v     = linspace(x11, x12, 500)
+            x2v     = zeros(size(x1v))
+            xm      = [ x1v, x2v ]
+            um      = utheorfun(solver.t, Vector{<:AMF64}(xm))
+            vm      = DepVars(solver.model, solver.t, Vector{<:AMF64}(xm), um, PlotVars)
             #Loop plot variables:
             for ii=1:length(PlotVars)
                 PyPlot.subplot(mFig, nFig, ii)
                 PyPlot.subplots_adjust(hspace=0.8)
                 PyPlot.cla()
-
                 splot_fun(x1,x2)    = @mlv x1
                 PlotNodes(splot_fun, solver, PlotVars[ii])
+                plot(x1v, vm[ii][1], "r", linewidth=0.5)
                 xlabel(latexstring("x_1"), fontsize=10)
                 title(latexstring(LatexString(PlotVars[ii]),
                                   "; t^n=", sprintf1("%.2e", solver.t)),
-                fontsize=10)
+                        fontsize=10)
+                xlim([x11, x12])
+                
             end
             if SaveFig
                 savefig("$(VideosUbiTFG)Soliton_Pts$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
 
-
-#=
-            figure(figv[2].number)
-            PyPlot.cla()
-            PlotContour(solver.u[1], solver.fes)
-            PlotMesh!(solver.mesh, color="w")
-            if SaveFig
-                savefig("$(VideosUbi)Sod_Problem_Mesh$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-            end
-
+            #=
             figure(figv[3].number)
             PyPlot.cla()
             semilogy(solver.tv, solver.etaSv, ".-b")
@@ -199,29 +204,12 @@ function Soliton(hp0::Float64, FesOrder::Int;
             xlabel(L"t")
             if SaveFig && solver.t==tf
                 savefig("$(VideosUbi)Sod_Problem_Errors$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-            end=#
+            end
+            =#
 
             t_lastFig           += Deltat_SaveFig
             ct_SaveFig          = 0
             nb_SaveFig          += 1
-
-#             figure(figv[4].number)
-#
-#             #Loop plot variables:
-#             for ii=1:length(PlotVars)
-#                 PyPlot.subplot(mFig, nFig, ii)
-#                 PyPlot.cla()
-#
-#                 splot_fun(x1,x2)    = @mlv x1
-#                 PlotNodes(splot_fun, solver, PlotVars[ii])
-#                 xlabel(latexstring("x_1"), fontsize=10)
-#                 title(latexstring(LatexString(PlotVars[ii]),
-#                                   "; t^n=", sprintf1("%.2e", solver.t)),
-#                 fontsize=10)
-#             end
-#             if SaveFig
-#                 savefig("$(VideosUbi)Sod_Problem_Pts$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-#             end
 
         end
         return
@@ -261,7 +249,6 @@ function Soliton(hp0::Float64, FesOrder::Int;
             break
         end
 
-
         PlotSol()
         SaveSol()
 
@@ -283,7 +270,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
 
 end
 
-function SolitonExact(t::Float64, x::Matrix{Float64}; A::Float64=0.2, gamma::Float64=2.0, 
+function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=2.0, 
     h0::Float64=1.0, x0::Float64=0.0, g::Float64=9.8, theta::Float64=0.0)
 
     #Soliton velocity and length:
