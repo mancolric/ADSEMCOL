@@ -76,7 +76,7 @@ function HyperbolicFlux1!(model::NHWW,
         @tturbo @. df_du[2,1,1]     += -q1^2/h^2 + g*(eta-b) + p
         @tturbo @. df_du[2,1,2]     += 2*q1/h
         @tturbo @. df_du[2,1,5]     += h
-        @tturbo @. df_du[2,1,6]     += +q1^2/h^2 - g*eta
+        @tturbo @. df_du[2,1,6]     += +q1^2/h^2 - g*eta - p
         
         #Derivatives of f(2,2)
         @tturbo @. df_du[2,2,1]     += -q1*q2/h^2
@@ -91,10 +91,10 @@ function HyperbolicFlux1!(model::NHWW,
         @tturbo @. df_du[3,1,6]     += +q1*q2/h^2
         
         #Derivatives of f(3,2)
-        @tturbo @. df_du[3,2,1]     += -q2^2/h^2 + g*(eta-b)
+        @tturbo @. df_du[3,2,1]     += -q2^2/h^2 + g*(eta-b) + p
         @tturbo @. df_du[3,2,3]     += 2*q2/h
-        @tturbo @. df_du[3,2,4]     += h
-        @tturbo @. df_du[3,2,6]     += +q2^2/h^2 - g*eta
+        @tturbo @. df_du[3,2,5]     += h
+        @tturbo @. df_du[3,2,6]     += +q2^2/h^2 - g*eta - p
 
         #Derivatives of f(4,1)
         @tturbo @. df_du[4,1,1]     += -q3*q1/h^2
@@ -163,6 +163,9 @@ function Source1!(model::NHWW, x::Vector{MFloat}, tau_char::Float64,
         @tturbo @. dQ_du[3,1]       += -g*db_dy
         @tturbo @. dQ_du[3,5]       += -gamma*db_dy
         @tturbo @. dQ_du_dx[3,6,2]  += -g*eta - gamma*p
+        
+        #Derivatives of Q(4)
+        @tturbo @. dQ_du[4,5]       += gamma
         
         #Derivatives of Q(5)
         @tturbo @. dQ_du[5,1]       += -(p+c*c)*(-4*q3/h^3 + 4*q1/h^3*db_dx + 4*q2/h^3*db_dy)

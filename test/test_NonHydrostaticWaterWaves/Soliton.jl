@@ -35,7 +35,8 @@ function Soliton(hp0::Float64, FesOrder::Int;
 
     function utheorfun(t::Float64, x::Vector{Matrix{Float64}})
 
-        eta, q1, q2, q3, p      = SolitonExact(t, x[1], A=A, gamma=gamma, h0=h0, x0=0.0, g=g)
+        eta, q1, q2, q3, p      = SolitonExact(t, x[1], A=A, gamma=gamma, h0=h0, x0=0.0, g=g) +
+                                    SolitonExact(t, x[2], A=A, gamma=gamma, h0=h0, x0=0.0, g=g)
         b                       = @. 0.0*x[1]
         
         return [eta, q1, q2, q3, p, b]
@@ -73,7 +74,8 @@ function Soliton(hp0::Float64, FesOrder::Int;
     MeshFile                = "../temp/Soliton$(SC).geo"
     NX                      = Int(ceil(7.0/(hp0*FesOrder)))
     NY                      = Int(ceil(3.0/(hp0*FesOrder)))
-    TrMesh_Rectangle_Create!(MeshFile, -20.0, 100.0, NX, -5.0, 5.0, NY)
+#     TrMesh_Rectangle_Create!(MeshFile, -20.0, 100.0, NX, -5.0, 5.0, NY)
+    TrMesh_Rectangle_Create!(MeshFile, -2.0, 1.0, NX, -5.0, 5.0, NY)
 
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
     solver                  = LIRKHyp_Start(model)
@@ -108,10 +110,10 @@ function Soliton(hp0::Float64, FesOrder::Int;
 
     #Compute initial condition:
     ConvFlag            = LIRKHyp_InitialCondition!(solver)
-#     CheckJacobian(solver, Plot_df_du=false, Plot_df_dgradu=true, 
+#     CheckJacobian(solver, Plot_df_du=true, Plot_df_dgradu=true, 
 #         Plot_dQ_du=false, Plot_dQ_dgradu=false)
 #     for ii = 4
-#         BC_CheckJacobian(solver, ii, Plot_df_du=true)
+#         BC_CheckJacobian(solver, ii, Plot_df_du=true, Plot_df_dgradu=true)
 #     end
 #     return
     

@@ -49,7 +49,7 @@ function _dq_du(model::NHWW, nb::Vector{MFloat}, tb::Vector{MFloat}) where MFloa
     
     #eta, q3, p and b remain the same:
     for II=[1,4,5,6]
-        dq_du[II,II]        += 1.0
+        dq_du[II,II]        .+= 1.0
     end
     
     #q1 and q2 are rotated:
@@ -70,7 +70,7 @@ function _duBC_dqBC(model::NHWW, nb::Vector{MFloat}, tb::Vector{MFloat}) where M
     
     #eta, q3, p and b remain the same:
     for II=[1,4,5,6]
-        duBC_dqBC[II,II]    += 1.0
+        duBC_dqBC[II,II]    .+= 1.0
     end
     
     #q1 and q2 are rotated:
