@@ -7,8 +7,8 @@ Base.@kwdef mutable struct NHWW <: ConstModels
 
     #Model's characteristic fields:
     epsilon         ::Float64           = 0.0   #Rusanov-type viscosity
-    gamma           ::Float64           = 0.0   #Friction coefficient
-    g               ::Float64           = 9.8   #Gravity force in -y direction
+    gamma           ::Float64           = 2.0   #Parameter
+    g               ::Float64           = 9.8   #Gravity force in -z direction
     c               ::Float64           = 5*sqrt(10*10)
     CSS             ::Float64           = 0.1   #Subgrid stabilization
     CW              ::Float64           = 50.0  #Boundary penalty (50.0-200.0 for IIPG)

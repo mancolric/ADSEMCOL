@@ -146,8 +146,8 @@ function Source1!(model::NHWW, x::Vector{MFloat}, tau_char::Float64,
     db_dx           = du_dx[6,1]
     db_dy           = du_dx[6,2]
 
-    @tturbo @. Q[2]             += -gamma*q1 - g*eta*db_dx - gamma*p*db_dx
-    @tturbo @. Q[3]             += -gamma*q2 - g*eta*db_dy - gamma*p*db_dy
+    @tturbo @. Q[2]             += - g*eta*db_dx - gamma*p*db_dx
+    @tturbo @. Q[3]             += - g*eta*db_dy - gamma*p*db_dy
     @tturbo @. Q[4]             += gamma*p
     @tturbo @. Q[5]             += -(p+c*c)*(2*q3/h^2 - 2*q1/h^2*db_dx - 2*q2/h^2*db_dy) 
     @tturbo @. Q[6]             += -1.0/tau_char*(b-b_exact)
@@ -156,13 +156,11 @@ function Source1!(model::NHWW, x::Vector{MFloat}, tau_char::Float64,
 
         #Derivatives of Q(2)
         @tturbo @. dQ_du[2,1]       += -g*db_dx
-        @tturbo @. dQ_du[2,2]       += -gamma
         @tturbo @. dQ_du[2,5]       += -gamma*db_dx
         @tturbo @. dQ_du_dx[2,6,1]  += -g*eta - gamma*p
 
         #Derivatives of Q(3)
         @tturbo @. dQ_du[3,1]       += -g*db_dy
-        @tturbo @. dQ_du[3,3]       += -gamma
         @tturbo @. dQ_du[3,5]       += -gamma*db_dy
         @tturbo @. dQ_du_dx[3,6,2]  += -g*eta - gamma*p
         
