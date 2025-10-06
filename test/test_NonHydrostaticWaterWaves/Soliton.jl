@@ -35,8 +35,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
 
     function utheorfun(t::Float64, x::Vector{Matrix{Float64}})
 
-        eta, q1, q2, q3, p      = SolitonExact(t, x[1], A=A, gamma=gamma, h0=h0, x0=0.0, g=g) +
-                                    SolitonExact(t, x[2], A=A, gamma=gamma, h0=h0, x0=0.0, g=g)
+        eta, q1, q2, q3, p      = SolitonExact(t, x[1], A=A, gamma=gamma, h0=h0, x0=0.0, g=g)
         b                       = @. 0.0*x[1]
         
         return [eta, q1, q2, q3, p, b]
@@ -52,7 +51,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
     #Boundary conditions:
     BC_horiz        = SlipAdiabatic()
     function uLeft(t::Float64, x::Vector{Matrix{Float64}})
-        q1              = @tturbo @. 0.0*x[1] + h0*1.0
+        q1              = @tturbo @. 0.0*x[1]
         q2              = @tturbo @. 0.0*x[1]
         q3              = @tturbo @. 0.0*x[1]
         p               = @tturbo @. 0.0*x[1]
@@ -63,9 +62,11 @@ function Soliton(hp0::Float64, FesOrder::Int;
     function uRight(t::Float64, x::Vector{Matrix{Float64}})
         h               = @tturbo @. 0.0*x[1] + h0
         eta             = h
-        return [eta]
+        p               = @tturbo @. 0.0*x[1]
+        return [eta, p]
     end
-    BC_right        = SubsonicOutlet1(FWt11((t,x)->uRight(t,x)))
+#     BC_right        = SubsonicOutlet1(FWt11((t,x)->uRight(t,x)))
+    BC_right        = DoNothing1()
     
     #---------------------------------------------------------------------
     #PRE-PROCESS STAGE:
@@ -74,8 +75,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
     MeshFile                = "../temp/Soliton$(SC).geo"
     NX                      = Int(ceil(7.0/(hp0*FesOrder)))
     NY                      = Int(ceil(3.0/(hp0*FesOrder)))
-#     TrMesh_Rectangle_Create!(MeshFile, -20.0, 100.0, NX, -5.0, 5.0, NY)
-    TrMesh_Rectangle_Create!(MeshFile, -2.0, 1.0, NX, -5.0, 5.0, NY)
+    TrMesh_Rectangle_Create!(MeshFile, -20.0, 100.0, NX, -5.0, 5.0, NY)
 
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
     solver                  = LIRKHyp_Start(model)
@@ -110,8 +110,8 @@ function Soliton(hp0::Float64, FesOrder::Int;
 
     #Compute initial condition:
     ConvFlag            = LIRKHyp_InitialCondition!(solver)
-#     CheckJacobian(solver, Plot_df_du=true, Plot_df_dgradu=true, 
-#         Plot_dQ_du=false, Plot_dQ_dgradu=false)
+#     CheckJacobian(solver, Plot_df_du=true, Plot_df_dgradu=true)
+#     CheckJacobian(solver, Plot_dQ_du=true, Plot_dQ_dgradu=true)
 #     for ii = 4
 #         BC_CheckJacobian(solver, ii, Plot_df_du=true, Plot_df_dgradu=true)
 #     end
@@ -284,7 +284,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
 end
 
 function SolitonExact(t::Float64, x::Matrix{Float64}; A::Float64=0.2, gamma::Float64=2.0, 
-    h0::Float64=1.0, x0::Float64=0.0, g::Float64=9.8)
+    h0::Float64=1.0, x0::Float64=0.0, g::Float64=9.8, theta::Float64=0.0)
 
     #Soliton velocity and length:
     c0      = sqrt(g*(A+h0))
@@ -292,12 +292,13 @@ function SolitonExact(t::Float64, x::Matrix{Float64}; A::Float64=0.2, gamma::Flo
     z       = @. (x - (x0 + c0*t))/l0
     phi     = @. sech(z)
     dphi    = @. -sinh(z)/cosh(z)^2
-    d2phi   = @. - 1/cosh(z) + 2*sinh(z)/cosh(z)^3
+    d2phi   = @. - 1/cosh(z) + 2*sinh(z)^2/cosh(z)^3
     
     #Solution:
     h       = @. h0 + A*phi^2
-    q1      = @. c0*(h-h0)
-    q2      = @. 0.0*h
+    q       = @. c0*(h-h0)
+    q1      = @. q*cos(theta)
+    q2      = @. q*sin(theta)
     q3      = @. -A*c0*h0/l0*phi*dphi
     p       = @. A*c0^2*h0^2/(2*l0^2*h^2)*( (2*h0-h)*dphi^2 + h*phi*d2phi )
     eta     = h

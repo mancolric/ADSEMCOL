@@ -1,5 +1,7 @@
 include("../src_LIRKHyp/LIRKHyp.jl")
 
+@warn "Review comments for BC"
+
 #------------------------------------------------------------------
 #STRUCTURES WITH CONSTITUTIVE MODELS AND BOUNDARY CONDITIONS:
 

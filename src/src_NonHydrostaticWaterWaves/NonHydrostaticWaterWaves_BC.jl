@@ -321,6 +321,7 @@ function bflux!(model::NHWW, BC::SubsonicInlet1,
     uBC[3]                  = uDir[2]
     uBC[4]                  = uDir[3]
     uBC[5]                  = uDir[4]
+#     uBC[5]                  = u[5]
     uBC[6]                  = u[6]
     
     #Derivatives:
@@ -329,6 +330,7 @@ function bflux!(model::NHWW, BC::SubsonicInlet1,
     
         alloc!(duBC_du, size(u[1]))
         @tturbo @. duBC_du[1,1]     += 1.0
+#         @tturbo @. duBC_du[5,5]     += 1.0
         @tturbo @. duBC_du[6,6]     += 1.0
         
     end
@@ -433,7 +435,8 @@ function bflux!(model::NHWW, BC::SubsonicOutlet1,
     uBC[3]                  = u[3]
     uBC[4]                  = u[4]
     uBC[5]                  = u[5]
-    uBC[6]                  = u[6]
+#     uBC[6]                  = u[6]
+    uBC[6]                  = uDir[2]
     
     #Derivatives:
     duBC_du                 = Matrix{Matrix{Float64}}(undef,nVars,nVars)
@@ -444,7 +447,7 @@ function bflux!(model::NHWW, BC::SubsonicOutlet1,
         @tturbo @. duBC_du[3,3]     += 1.0
         @tturbo @. duBC_du[4,4]     += 1.0
         @tturbo @. duBC_du[5,5]     += 1.0
-        @tturbo @. duBC_du[6,6]     += 1.0
+#         @tturbo @. duBC_du[6,6]     += 1.0
         
     end
 
