@@ -1,4 +1,4 @@
-function uRotate(model::SWE, nb::Vector{MFloat}, tb::Vector{MFloat}, u::Vector{MFloat}) where MFloat<:AbstractMatrix{Float64}
+function uRotate(model::NHWW, nb::Vector{MFloat}, tb::Vector{MFloat}, u::Vector{MFloat}) where MFloat<:AbstractMatrix{Float64}
 
     nVars       = model.nVars
 
@@ -8,16 +8,18 @@ function uRotate(model::SWE, nb::Vector{MFloat}, tb::Vector{MFloat}, u::Vector{M
     q[1]        = @tturbo @. u[1]
     #v_n    = v_x * n_x + v_y * n_y
     q[2]        = @tturbo @. u[2]*nb[1] + u[3]*nb[2]
-    #t_n    = v_x * t_x + v_y * t_y
+    #v_t    = v_x * t_x + v_y * t_y
     q[3]        = @tturbo @. u[2]*tb[1] + u[3]*tb[2]
-    #b remains the same:
+    #q3, p and b remain the same:
     q[4]        = @tturbo @. u[4]
-
+    q[5]        = @tturbo @. u[5]
+    q[6]        = @tturbo @. u[6]
+    
     return q
 
 end
 
-function qRotate(model::SWE, nb::Vector{MFloat}, tb::Vector{MFloat}, qBC::Vector{MFloat}) where MFloat<:AbstractMatrix{Float64}
+function qRotate(model::NHWW, nb::Vector{MFloat}, tb::Vector{MFloat}, qBC::Vector{MFloat}) where MFloat<:AbstractMatrix{Float64}
 
     nVars       = model.nVars
 
@@ -26,77 +28,63 @@ function qRotate(model::SWE, nb::Vector{MFloat}, tb::Vector{MFloat}, qBC::Vector
     #eta remains the same:
     uBC[1]      = @tturbo @. qBC[1]
     #v_x    = v_n * n_x + v_t * t_x
-    uBC[2]      = @tturbo @. qBC[3]*tb[1] + qBC[2]*nb[1]
+    uBC[2]      = @tturbo @. qBC[2]*nb[1] + qBC[3]*tb[1]
     #v_y    = v_n * n_y + v_t * t_y
-    uBC[3]      = @tturbo @. qBC[3]*tb[2] + qBC[2]*nb[2]
-    #b remains the same:
+    uBC[3]      = @tturbo @. qBC[2]*nb[2] + qBC[3]*tb[2]
+    #q3, p and b remain the same:
     uBC[4]      = @tturbo @. qBC[4]
+    uBC[5]      = @tturbo @. qBC[5]
+    uBC[6]      = @tturbo @. qBC[6]
     
     return uBC
 
 end
 
-function _dq_du(model::SWE, nb::Vector{MFloat}, tb::Vector{MFloat}) where MFloat<:AbstractMatrix{Float64}
+function _dq_du(model::NHWW, nb::Vector{MFloat}, tb::Vector{MFloat}) where MFloat<:AbstractMatrix{Float64}
 
 
     #Derivatives of q w.r.t. u:
-    dq_du                   = Matrix{Matrix{Float64}}(undef, 4, 4)
+    dq_du                   = Matrix{Matrix{Float64}}(undef, model.nVars, model.nVars)
+    alloc!(dq_du, size(nb[1]))
     
-    dq_du[1,1]              = fill(1.0, size(nb[1]))
-    dq_du[1,2]              = fill(0.0, size(nb[1]))
-    dq_du[1,3]              = fill(0.0, size(nb[1]))
-    dq_du[1,4]              = fill(0.0, size(nb[1]))
-
-    dq_du[2,1]              = fill(0.0, size(nb[1]))
-    dq_du[2,2]              = nb[1]
-    dq_du[2,3]              = nb[2]
-    dq_du[2,4]              = fill(0.0, size(nb[1]))
-
-    dq_du[3,1]              = fill(0.0, size(nb[1]))
-    dq_du[3,2]              = tb[1]
-    dq_du[3,3]              = tb[2]
-    dq_du[3,4]              = fill(0.0, size(nb[1]))
+    #eta, q3, p and b remain the same:
+    for II=[1,4,5,6]
+        dq_du[II,II]        += 1.0
+    end
     
-    dq_du[4,1]              = fill(0.0, size(nb[1]))
-    dq_du[4,2]              = fill(0.0, size(nb[1]))
-    dq_du[4,3]              = fill(0.0, size(nb[1]))
-    dq_du[4,4]              = fill(1.0, size(nb[1]))
+    #q1 and q2 are rotated:
+    dq_du[2,2]              .= nb[1]
+    dq_du[2,3]              .= nb[2]
+    dq_du[3,2]              .= tb[1]
+    dq_du[3,3]              .= tb[2]
 
     return dq_du
 
 end
 
-function _duBC_dqBC(model::SWE, nb::Vector{MFloat}, tb::Vector{MFloat}) where MFloat<:AbstractMatrix{Float64}
+function _duBC_dqBC(model::NHWW, nb::Vector{MFloat}, tb::Vector{MFloat}) where MFloat<:AbstractMatrix{Float64}
 
     #Derivatives of uBC w.r.t. qBC:
-    duBC_dqBC           = Matrix{Matrix{Float64}}(undef, 4, 4)
+    duBC_dqBC           = Matrix{Matrix{Float64}}(undef, model.nVars, model.nVars)
+    alloc!(duBC_dqBC, size(nb[1]))
     
-    duBC_dqBC[1,1]      = @tturbo @. 1.0 + nb[1]*0
-    duBC_dqBC[1,2]      = 0*nb[1]
-    duBC_dqBC[1,3]      = 0*nb[1]
-    duBC_dqBC[1,4]      = 0*nb[1]
-
-    duBC_dqBC[2,1]      = 0*nb[1]
-    duBC_dqBC[2,2]      = nb[1]
-    duBC_dqBC[2,3]      = tb[1]
-    duBC_dqBC[2,4]      = 0*nb[1]
+    #eta, q3, p and b remain the same:
+    for II=[1,4,5,6]
+        duBC_dqBC[II,II]    += 1.0
+    end
     
-    duBC_dqBC[3,1]      = 0*nb[1]
-    duBC_dqBC[3,2]      = nb[2]
-    duBC_dqBC[3,3]      = tb[2]
-    duBC_dqBC[3,4]      = 0*nb[1]
-    
-    duBC_dqBC[4,1]      = 0*nb[1]
-    duBC_dqBC[4,2]      = 0*nb[1]
-    duBC_dqBC[4,3]      = 0*nb[1]
-    duBC_dqBC[4,4]      = @tturbo @. 1.0 + nb[1]*0
+    #q1 and q2 are rotated:
+    duBC_dqBC[2,2]          .= nb[1]
+    duBC_dqBC[2,3]          .= tb[1]
+    duBC_dqBC[3,2]          .= nb[2]
+    duBC_dqBC[3,3]          .= tb[2]
     
     return duBC_dqBC
 
 end
 
 #Impose penalty flux fn_I = sigma*(u_I - uBC_I):
-function penalty!(model::SWE, 
+function penalty!(model::NHWW, 
     hp::MFloat,
     u::Vector{MFloat}, uBC::Vector{MFloat}, duBC_du::Matrix{MFloat}, 
     ComputeJ::Bool,
@@ -105,7 +93,7 @@ function penalty!(model::SWE,
     #Penalty parameter:
     sigma           = @tturbo @. model.CW * model.epsilon / hp
     
-    #Update boundary flux for mass and momentum, not for "b"
+    #Update boundary flux for mass, momentum and pressure not for "b"
     for II=1:model.nVars-1
         @tturbo @. bflux[II]                += sigma*(u[II]-uBC[II])
         if ComputeJ
@@ -119,11 +107,13 @@ function penalty!(model::SWE,
     
 end
 
-#SlipAdiabatic boundary. 3 conditions:
-#   q_n                     = 0
-#   normal flux for h       = 0
-#   normal flux for q_t     = 0
-function bflux!(model::SWE, BC::SlipAdiabatic,
+#SlipAdiabatic boundary. 5 conditions:
+#   q_n                         = 0
+#   normal diff flux for h      = 0
+#   normal diff flux for q_t    = 0
+#   normal diff flux for q_3    = 0
+#   normal diff flux for p      = 0
+function bflux!(model::NHWW, BC::SlipAdiabatic,
     _bqp::TrBintVars, ComputeJ::Bool)
     
     nVars                   = model.nVars
@@ -153,11 +143,13 @@ function bflux!(model::SWE, BC::SlipAdiabatic,
 
     #Rotate, impose BC and rotate again:
     q                       = uRotate(model, nb, tb, u)
-    qBC                     = Vector{Matrix{Float64}}(undef,4)
+    qBC                     = Vector{Matrix{Float64}}(undef,model.nVars)
     qBC[1]                  = @. 1.0*q[1]
     qBC[2]                  = @. 0.0*q[2]
     qBC[3]                  = @. 1.0*q[3]
     qBC[4]                  = @. 1.0*q[4]
+    qBC[5]                  = @. 1.0*q[5]
+    qBC[6]                  = @. 1.0*q[6]
     uBC                     = qRotate(model, nb, tb, qBC)
 
     #Compute derivatives of uBC wrt u, if required. Note that
@@ -171,6 +163,8 @@ function bflux!(model::SWE, BC::SlipAdiabatic,
         @tturbo @. dqBC_dq[1,1]     += 1.0
         @tturbo @. dqBC_dq[3,3]     += 1.0
         @tturbo @. dqBC_dq[4,4]     += 1.0
+        @tturbo @. dqBC_dq[5,5]     += 1.0
+        @tturbo @. dqBC_dq[6,6]     += 1.0
         
         #Matrices duBC/dqBC and dq/du are standard:
         dq_du                   = _dq_du(model,nb,tb)
@@ -224,7 +218,7 @@ function bflux!(model::SWE, BC::SlipAdiabatic,
     
     #Compute viscous flux:
     epsilon         = @tturbo @. model.epsilon + 0.0*u[1]
-    epsilonFlux!(model, epsilon, du, ComputeJ, flux, dflux_dgradu, IIv=Vector{Int}(1:3))
+    epsilonFlux!(model, epsilon, du, ComputeJ, flux, dflux_dgradu)
     
     #Total normal flux (f_{Ij} n_j) through the boundary:
     fn, dfn_du, dfn_dgradu      = ProjectFlux(flux, dflux_du, dflux_dgradu, nb, ComputeJ) 
@@ -232,8 +226,7 @@ function bflux!(model::SWE, BC::SlipAdiabatic,
     #Rotate fluxes:
     g                           = uRotate(model, nb, tb, fn)
     
-    #Force zero fluxes for h and qt. That is, all components of gBC are zero except 
-    #that of qn:
+    #Force zero fluxes all variables except for q_n:
     gBC                         = Vector{Matrix{Float64}}(undef, nVars)
     alloc!(gBC, size(u[1]))
     @tturbo @. gBC[2]           = g[2]     
@@ -290,11 +283,13 @@ function bflux!(model::SWE, BC::SlipAdiabatic,
 
 end
 
-#Subsonic inlet. 3 conditions:
+#Subsonic inlet. 5 conditions (4 Dirichlet):
 #   normal diff flux for eta    = 0
 #   q1                          = q1_BC
 #   q2                          = q2_BC
-function bflux!(model::SWE, BC::SubsonicInlet1,
+#   q3                          = q3_BC
+#   p                           = p_BC
+function bflux!(model::NHWW, BC::SubsonicInlet1,
                 _bqp::TrBintVars, ComputeJ::Bool)
    
     nVars                   = model.nVars
@@ -324,7 +319,9 @@ function bflux!(model::SWE, BC::SubsonicInlet1,
     uBC[1]                  = u[1]
     uBC[2]                  = uDir[1]
     uBC[3]                  = uDir[2]
-    uBC[4]                  = u[4]
+    uBC[4]                  = uDir[3]
+    uBC[5]                  = uDir[4]
+    uBC[6]                  = u[6]
     
     #Derivatives:
     duBC_du                 = Matrix{Matrix{Float64}}(undef,nVars,nVars)
@@ -332,7 +329,7 @@ function bflux!(model::SWE, BC::SubsonicInlet1,
     
         alloc!(duBC_du, size(u[1]))
         @tturbo @. duBC_du[1,1]     += 1.0
-        @tturbo @. duBC_du[4,4]     += 1.0
+        @tturbo @. duBC_du[6,6]     += 1.0
         
     end
 
@@ -368,7 +365,7 @@ function bflux!(model::SWE, BC::SubsonicInlet1,
     
     #Compute viscous flux:
     epsilon         = @tturbo @. model.epsilon + 0.0*u[1]
-    epsilonFlux!(model, epsilon, du, ComputeJ, flux, dflux_dgradu, IIv=Vector{Int}(2:3))
+    epsilonFlux!(model, epsilon, du, ComputeJ, flux, dflux_dgradu, IIv=Vector{Int}(2:5))
     #Note that no mass flux is enforced by imposing an appropriate value for IIv
     
     #Total normal flux (f_{Ij} n_j) through the boundary:
@@ -398,11 +395,13 @@ function bflux!(model::SWE, BC::SubsonicInlet1,
 
 end
 
-#Subsonic outlet. 3 conditions:
+#Subsonic outlet. 5 conditions (1 Dirichlet):
 #   eta                     = eta_BC
 #   normal diff flux for q1 = 0
 #   normal diff flux for q2 = 0
-function bflux!(model::SWE, BC::SubsonicOutlet1,
+#   normal diff flux for q3 = 0
+#   normal diff flux for p  = 0
+function bflux!(model::NHWW, BC::SubsonicOutlet1,
                 _bqp::TrBintVars, ComputeJ::Bool)
    
     nVars                   = model.nVars
@@ -433,6 +432,8 @@ function bflux!(model::SWE, BC::SubsonicOutlet1,
     uBC[2]                  = u[2]
     uBC[3]                  = u[3]
     uBC[4]                  = u[4]
+    uBC[5]                  = u[5]
+    uBC[6]                  = u[6]
     
     #Derivatives:
     duBC_du                 = Matrix{Matrix{Float64}}(undef,nVars,nVars)
@@ -442,6 +443,8 @@ function bflux!(model::SWE, BC::SubsonicOutlet1,
         @tturbo @. duBC_du[2,2]     += 1.0
         @tturbo @. duBC_du[3,3]     += 1.0
         @tturbo @. duBC_du[4,4]     += 1.0
+        @tturbo @. duBC_du[5,5]     += 1.0
+        @tturbo @. duBC_du[6,6]     += 1.0
         
     end
 
@@ -511,11 +514,13 @@ function bflux!(model::SWE, BC::SubsonicOutlet1,
 
 end
 
-#Supersonic outlet/ do nothing: 3 conditions:
+#Supersonic outlet/ do nothing: 5 conditions (0 Dirichlet):
 #   normal diff dlux for eta    = 0
 #   normal diff dlux for q1     = 0
 #   normal diff dlux for q2     = 0
-function bflux!(model::SWE, BC::Union{DoNothing1,SupersonicOutlet1},
+#   normal diff dlux for q3     = 0
+#   normal diff dlux for p      = 0
+function bflux!(model::NHWW, BC::Union{DoNothing1,SupersonicOutlet1},
                 _bqp::TrBintVars, ComputeJ::Bool)
     
     nVars                   = model.nVars

@@ -9,6 +9,7 @@ Base.@kwdef mutable struct NHWW <: ConstModels
     epsilon         ::Float64           = 0.0   #Rusanov-type viscosity
     gamma           ::Float64           = 0.0   #Friction coefficient
     g               ::Float64           = 9.8   #Gravity force in -y direction
+    c               ::Float64           = 5*sqrt(10*10)
     CSS             ::Float64           = 0.1   #Subgrid stabilization
     CW              ::Float64           = 50.0  #Boundary penalty (50.0-200.0 for IIPG)
     b               ::FW1               = FW1( (x)-> zeros(size(x[1])) )
@@ -71,23 +72,23 @@ function DepVars(model::NHWW, t::Float64, x::Vector{<:AMF64},
     q1          = u[2]
     q2          = u[3]
     q3          = u[4]
-    P           = u[5]
+    p           = u[5]
     b           = u[6]
     h           = eta-b
     nout        = length(vout)
     xout        = Vector{Vector{Array{Float64,ndims(q1)}}}(undef,nout)
     for ivar in eachindex(vout)
         vble    = vout[ivar]
-        if vble=="h"
-            xout[ivar]      = [h]
+        if vble=="eta"
+            xout[ivar]      = [eta]
         elseif vble=="q1"
             xout[ivar]      = [q1]
         elseif vble=="q2"
             xout[ivar]      = [q2]
         elseif vble=="q3"
             xout[ivar]      = [q3]
-        elseif vble=="P"
-            xout[ivar]      = [P]
+        elseif vble=="p"
+            xout[ivar]      = [p]
         elseif vble=="b"
             xout[ivar]      = [b]
         elseif vble=="v1"
@@ -98,12 +99,10 @@ function DepVars(model::NHWW, t::Float64, x::Vector{<:AMF64},
             xout[ivar]      = [@tturbo @. q3/h]
         elseif vble=="vr"
             xout[ivar]      = [@tturbo @. sqrt(q1*q1+q2*q2)/h]
-        elseif vble=="p"
-            xout[ivar]      = [@tturbo @. P/h]
         elseif vble=="epsilon"
             xout[ivar]      = [fill(model.epsilon, size(u[1]))]
-        elseif vble=="eta"
-            xout[ivar]      = [eta]
+        elseif vble=="h"
+            xout[ivar]      = [h]
         elseif vble=="D_penalty"
             D_penalty       = max(model.epsilon)
             xout[ivar]      = [fill(D_penalty, size(u[1]))]
@@ -134,10 +133,11 @@ function nFactsCompute!(solver::SolverData{NHWW})
     h_L2            = sqrt( dot(h, solver.MII, h)/solver.Omega )
     
     #Normalization factors:
-    solver.nFacts[1]        = eta_L2
-    solver.nFacts[2:4]      .= h_L2*sqrt(solver.model.g*h_L2)
-    solver.nFacts[5]        = solver.model.g*h_L2       
-    solver.nFacts[6]        = eta_L2
+#     solver.nFacts[1]        = eta_L2
+#     solver.nFacts[2:4]      .= h_L2*sqrt(solver.model.g*h_L2)
+#     solver.nFacts[5]        = solver.model.g*h_L2       
+#     solver.nFacts[6]        = eta_L2
+    solver.nFacts   .= 1.0
     
     return
 
