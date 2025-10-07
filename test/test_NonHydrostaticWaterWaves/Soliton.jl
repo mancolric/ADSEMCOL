@@ -4,7 +4,7 @@ include("test_NonHydrostaticWaterWaves.jl")
 function Soliton(hp0::Float64, FesOrder::Int;
     tf::Float64=10.0, RKMethod::String="BPR3",
     epsilon::Float64=0e-3, alpha::Float64=5.0, g::Float64=9.8, A::Float64=0.2, 
-    h0::Float64=1.0, gamma::Float64=2.0, 
+    h0::Float64=1.0, gamma::Float64=2.0, xend::Float64=100.0, 
     #
     TolS::Float64=1e-4, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
     SpaceAdapt::Bool=true, 
@@ -30,15 +30,31 @@ function Soliton(hp0::Float64, FesOrder::Int;
     model.epsilon       = epsilon
     model.gamma         = gamma
     model.g             = g
-    model.c             = alpha*sqrt(g*h0)
+    c                   = alpha*sqrt(g*h0)
+    model.c             = c
+    model.h0            = h0
     model.CSS           = CSS
 
+#     function utheorfun(t::Float64, x::Vector{Matrix{Float64}}) 
+# 
+#         h, q1, q2, q3, p        = SolitonExact(t, x[1], A=A, gamma=gamma, 
+#                                                 h0=h0, x0=0.0, g=g) + 
+#                                     SolitonExact(t, x[2], A=A, gamma=gamma, 
+#                                                 h0=h0, x0=0.0, g=g, theta=pi/2)
+#         b                       = @. sin(x[1])+cos(x[2])
+#         eta                     = @. h+b
+#         P                       = @. h*(p-c*c*log(h/h0))
+#         return [eta, q1, q2, q3, P, b]
+# 
+#     end
     function utheorfun(t::Float64, x::Vector{Matrix{Float64}}) 
 
-        eta, q1, q2, q3, p      = SolitonExact(t, x[1], A=A, gamma=gamma, h0=h0, x0=0.0, g=g)
+        h, q1, q2, q3, p        = SolitonExact(t, x[1], A=A, gamma=gamma, 
+                                                h0=h0, x0=0.0, g=g)
         b                       = @. 0.0*x[1]
-        
-        return [eta, q1, q2, q3, p, b]
+        eta                     = h
+        P                       = @. h*(p-c*c*log(h/h0))
+        return [eta, q1, q2, q3, P, b]
 
     end
     
@@ -73,9 +89,10 @@ function Soliton(hp0::Float64, FesOrder::Int;
 
     #Mesh:
     MeshFile                = "../temp/Soliton$(SC).geo"
-    NX                      = Int(ceil(7.0/(hp0*FesOrder)))
-    NY                      = Int(ceil(3.0/(hp0*FesOrder)))
-    TrMesh_Rectangle_Create!(MeshFile, -20.0, 100.0, NX, -5.0, 5.0, NY)
+    NX                      = Int(ceil((xend+20.0)/(hp0*FesOrder)))
+    NY                      = Int(ceil(10.0/(hp0*FesOrder)))
+#     TrMesh_Rectangle_Create!(MeshFile, -5.0, 5.0, NX, -5.0, 5.0, NY)
+    TrMesh_Rectangle_Create!(MeshFile, -20.0, xend, NX, -5.0, 5.0, NY)
 
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
     solver                  = LIRKHyp_Start(model)
@@ -109,7 +126,8 @@ function Soliton(hp0::Float64, FesOrder::Int;
     #INITIAL CONDITION:
 
     #Compute initial condition:
-    ConvFlag            = LIRKHyp_InitialCondition!(solver)
+    ConvFlag            = LIRKHyp_InitialCondition!(solver, AMA_RefineFactor=0.9, 
+                            DEq_MaxIter=0)
 #     CheckJacobian(solver, Plot_df_du=true, Plot_df_dgradu=true)
 #     CheckJacobian(solver, Plot_dQ_du=true, Plot_dQ_dgradu=true)
 #     for ii = 4

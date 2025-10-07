@@ -10,7 +10,7 @@ function uRotate(model::NHWW, nb::Vector{MFloat}, tb::Vector{MFloat}, u::Vector{
     q[2]        = @tturbo @. u[2]*nb[1] + u[3]*nb[2]
     #v_t    = v_x * t_x + v_y * t_y
     q[3]        = @tturbo @. u[2]*tb[1] + u[3]*tb[2]
-    #q3, p and b remain the same:
+    #q3, P and b remain the same:
     q[4]        = @tturbo @. u[4]
     q[5]        = @tturbo @. u[5]
     q[6]        = @tturbo @. u[6]
@@ -31,7 +31,7 @@ function qRotate(model::NHWW, nb::Vector{MFloat}, tb::Vector{MFloat}, qBC::Vecto
     uBC[2]      = @tturbo @. qBC[2]*nb[1] + qBC[3]*tb[1]
     #v_y    = v_n * n_y + v_t * t_y
     uBC[3]      = @tturbo @. qBC[2]*nb[2] + qBC[3]*tb[2]
-    #q3, p and b remain the same:
+    #q3, P and b remain the same:
     uBC[4]      = @tturbo @. qBC[4]
     uBC[5]      = @tturbo @. qBC[5]
     uBC[6]      = @tturbo @. qBC[6]

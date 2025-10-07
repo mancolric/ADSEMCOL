@@ -149,7 +149,8 @@ end
 #   -1: linear solver for (M-a_kk*Deltat*J)^failed
 #   -2: linear solver for embedded RK failed
 #   -(2+i): AMA failed with flag=`-i 
-function LIRKHyp_InitialCondition!(solver::SolverData)
+function LIRKHyp_InitialCondition!(solver::SolverData; 
+    AMA_RefineFactor::Float64=0.5, DEq_MaxIter::Int=10)
 
     t_start     = time()
     
@@ -297,7 +298,7 @@ function LIRKHyp_InitialCondition!(solver::SolverData)
     
     #Adapt mesh if necessary:
     AMA_flag, AMA_iters = AdaptMesh!(solver, solver.u0fun, solver.TolS_min, solver.SfS*solver.TolS_max,
-                            AMA_RefineFactor=0.5, DEq_MaxIter=10)
+                            AMA_RefineFactor=AMA_RefineFactor, DEq_MaxIter=DEq_MaxIter)
     if AMA_flag<0
         printstyled("AMA algorithm failed. Aborting\n", 
                         color=:magenta)

@@ -10,19 +10,17 @@ Base.@kwdef mutable struct NHWW <: ConstModels
     gamma           ::Float64           = 2.0   #Parameter
     g               ::Float64           = 9.8   #Gravity force in -z direction
     c               ::Float64           = 5*sqrt(10*10)
+    h0              ::Float64           = 1.0
     CSS             ::Float64           = 0.1   #Subgrid stabilization
     CW              ::Float64           = 50.0  #Boundary penalty (50.0-200.0 for IIPG)
     b               ::FW1               = FW1( (x)-> zeros(size(x[1])) )
     
-    #Dependent variables:
-#     DepVars         ::Vector{String}    = ["h","q1","q2","v1","v2","epsilon","D_penalty"]
-
     #Mandatory fields:
     nVars           ::Int               = 6     #Number of discretization variables: h, q1, q2, b
 
 end
 
-#SlipAdiabatic boundary. 5 conditions:
+#SlipAdiabatic boundary. 5 conditions (1 Dirichlet):
 #   q_n                         = 0
 #   normal diff flux for h      = 0
 #   normal diff flux for q_t    = 0
@@ -78,9 +76,10 @@ function DepVars(model::NHWW, t::Float64, x::Vector{<:AMF64},
     q1          = u[2]
     q2          = u[3]
     q3          = u[4]
-    p           = u[5]
+    P           = u[5]
     b           = u[6]
     h           = eta-b
+    c           = model.c
     nout        = length(vout)
     xout        = Vector{Vector{Array{Float64,ndims(q1)}}}(undef,nout)
     for ivar in eachindex(vout)
@@ -93,8 +92,10 @@ function DepVars(model::NHWW, t::Float64, x::Vector{<:AMF64},
             xout[ivar]      = [q2]
         elseif vble=="q3"
             xout[ivar]      = [q3]
+        elseif vble=="P"
+            xout[ivar]      = [P]
         elseif vble=="p"
-            xout[ivar]      = [p]
+            xout[ivar]      = [@tturbo @. P/h + c*c*log(h/model.h0)]
         elseif vble=="b"
             xout[ivar]      = [b]
         elseif vble=="v1"
@@ -130,20 +131,15 @@ include("NonHydrostaticWaterWaves_BC.jl")
 
 # #Compute normalization factors from solution. Mass matrix has already been computed.
 function nFactsCompute!(solver::SolverData{NHWW})
-
-    #L2-norm of eta and h:
-    nVars           = solver.nVars
-    eta             = solver.u[1]
-    eta_L2          = sqrt( dot(eta, solver.MII, eta)/solver.Omega )
-    h               = solver.u[1]-solver.u[6]
-    h_L2            = sqrt( dot(h, solver.MII, h)/solver.Omega )
     
     #Normalization factors:
-#     solver.nFacts[1]        = eta_L2
-#     solver.nFacts[2:4]      .= h_L2*sqrt(solver.model.g*h_L2)
-#     solver.nFacts[5]        = solver.model.g*h_L2       
-#     solver.nFacts[6]        = eta_L2
-    solver.nFacts   .= 1.0
+    h0                      = solver.model.h0
+    solver.nFacts[1]        = h0
+    solver.nFacts[2:4]      .= h0*sqrt(solver.model.g*h0)
+#     solver.nFacts[5]        = h0*solver.model.g*h0          #~ h u^2
+    solver.nFacts[5]        = h0*(solver.model.c)^2
+    solver.nFacts[6]        = h0
+#     solver.nFacts           .= 1.0
     
     return
 
@@ -164,18 +160,20 @@ function FluxSource!(model::NHWW, _qp::TrIntVars, ComputeJ::Bool)
     dQ_du_dx        = _qp.dQ_dgradu
 
     #Get variables:
+    g               = model.g
+    c               = model.c
+    h0              = model.h0
     eta             = u[1]
     q1              = u[2]
     q2              = u[3]
     q3              = u[4]
-    p               = u[5]
+    P               = u[5]
     b               = u[6]
     h               = eta-b
+    p               = @tturbo @. P/h + (c*c)*log(h/h0)
     v1              = @tturbo @. q1/h
     v2              = @tturbo @. q2/h
     v3              = @tturbo @. q3/h
-    g               = model.g
-    c               = model.c
     
     #Mesh size:
     A_Elems         = areas(_qp.Integ2D.mesh)
@@ -183,13 +181,17 @@ function FluxSource!(model::NHWW, _qp::TrIntVars, ComputeJ::Bool)
     hp              = h_Elems./_qp.FesOrder * ones(1, _qp.nqp)
     hp_min          = _hmin(_qp.Integ2D.mesh)./_qp.FesOrder * ones(1, _qp.nqp)
     
-    #Characteristic velocity:
-    lambda              = @tturbo @. sqrt(v1*v1 + v2*v2 + v3*v3) + sqrt(g*h + p + c*c)
+    #Characteristic velocities (original system and relaxed one)
+    #   lambdac is used for subgrid stabilization and tau_char 
+    #   lambda0 for definition of CFL
+    lambda0             = @tturbo @. sqrt(v1*v1 + v2*v2 + v3*v3) + sqrt(g*h + p)
+    lambdac             = @tturbo @. sqrt(v1*v1 + v2*v2 + v3*v3) + sqrt(g*h + p + c*c)
     
     #CFL number:
-    Deltat_CFL_lambda   = @tturbo @. $minimum(hp_min/(lambda+1e-12))
+    Deltat_CFL_lambda0  = @tturbo @. $minimum(hp_min/(lambda0+1e-12))
+    Deltat_CFL_lambdac  = @tturbo @. $minimum(hp_min/(lambdac+1e-12))
     Deltat_CFL_epsilon  = @tturbo @. $minimum(hp_min*hp_min/(model.epsilon+1e-12))
-    _qp.Deltat_CFL      = min(Deltat_CFL_lambda, Deltat_CFL_epsilon)
+    _qp.Deltat_CFL      = min(Deltat_CFL_lambda0, Deltat_CFL_epsilon)
     
     #Compute fluxes and source term:
     HyperbolicFlux!(model, u, ComputeJ, f, df_du)
@@ -197,11 +199,11 @@ function FluxSource!(model::NHWW, _qp::TrIntVars, ComputeJ::Bool)
     epsilon_qp          = @tturbo @. model.epsilon + 0.0*u[1]
     epsilonFlux!(model, epsilon_qp, du, ComputeJ, f, _qp.df_dgradu)
     #   
-    tau_char            = _qp.Deltat_CFL
+    tau_char            = min(Deltat_CFL_lambdac, Deltat_CFL_epsilon)
     Source!(model, x, tau_char, u, du, ComputeJ, Q, dQ_du, dQ_du_dx)
 
     #Subgrid viscosity:
-    epsilon_SS          = @tturbo @. model.CSS*lambda*hp
+    epsilon_SS          = @tturbo @. model.CSS*lambdac*hp
     epsilonFlux!(model, epsilon_SS, duB, ComputeJ, _qp.fB, _qp.dfB_dgraduB)
     
     return
