@@ -136,8 +136,8 @@ function nFactsCompute!(solver::SolverData{NHWW})
     h0                      = solver.model.h0
     solver.nFacts[1]        = h0
     solver.nFacts[2:4]      .= h0*sqrt(solver.model.g*h0)
-#     solver.nFacts[5]        = h0*solver.model.g*h0          #~ h u^2
-    solver.nFacts[5]        = h0*(solver.model.c)^2
+    solver.nFacts[5]        = h0*solver.model.g*h0          #~ h u^2
+#     solver.nFacts[5]        = h0*(solver.model.c)^2
     solver.nFacts[6]        = h0
 #     solver.nFacts           .= 1.0
     

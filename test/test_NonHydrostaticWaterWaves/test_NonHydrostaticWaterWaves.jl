@@ -25,6 +25,8 @@ function LatexString(vble::String)
         return "\\eta"
     elseif vble=="p"
         return "p"
+    elseif vble=="P"
+        return "P"
     else 
         @warn "Variable $(vble) not supported"
         return vble

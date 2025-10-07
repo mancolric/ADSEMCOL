@@ -172,7 +172,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
                 println(PlotVars[ii], ": min=", minimum(v_plot), ", max=", maximum(v_plot))
             end
             if SaveFig
-                savefig("$(VideosUbiTFG)Soliton$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbi)Soliton$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
             
             figure(figv[2].number)
@@ -203,7 +203,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
                 
             end
             if SaveFig
-                savefig("$(VideosUbiTFG)Soliton_Pts$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbi)SolitonNodes$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
 
             #=
@@ -311,3 +311,77 @@ function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=2.0,
     return [ eta, q1, q2, q3, p ]
     
 end
+
+function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0, 
+    h0::Float64=1.0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), Deltaxi::Float64=1e-6)
+
+    #Initial and final values for xi:
+    xi0         = 0.0       #symmetry is applied later
+    xif         = 10.0      #for this value sech(xif)=O(1e-13)
+    
+    #Soliton velocity and length:
+    c0          = sqrt(g*(A+h0))
+    l0          = h0*sqrt((A+h0)/(A*gamma/2))
+    
+    #Load coefficients:
+    RKCoeffs    = RK_Coefficients("KC4B")
+    Am          = RKCoeffs.AE
+    cv          = RKCoeffs.c
+    ss          = RKCoeffs.stages
+    
+    #Initial condition for u=[h,w]:
+    un0         = [ h0+A, 0.0 ]
+    
+    #Function to march in time:
+    function SolitonFun(u::Vector{Float64})
+        h           = u[1]
+        w           = u[2]
+        p           = (c0^2*(h-h0)*h0/h - 0.5*g*(h^2-h0^2))/h
+        hprime      = -2*l0*c^2*h/(c0*h0)*(c^2 + c0^2*h0/h + 
+                            - 2*c0*h0^2/h^2 + 0.5*g*h0^2/h + 0.5*g*h)^(-1) * w
+        wprime      = -2*l0/(c0*h0)*p
+        return [hprime, wprime]
+    end
+    
+    #Loop:
+    xin         = xi0
+    un          = un0
+    xiv         = [xi0]
+    um          = permutedims(un)
+    fm          = zeros(length(un), ss)
+    while xin<=xif
+    
+        #First stage:
+        unp1            = copy(un)
+        xinp1           = xin
+        fm[:,1]         = SolitonFun(un)
+        
+        #Loop stages:
+        for kk=2:ss
+        
+            xinp1       = xin + cv[kk]*Deltaxi
+            unp1        .= un
+            for ll=1:ss-1
+                unp1    .+= Deltaxi*Am[kk,ll]*fm[:,ll]
+            end
+            fm[:,kk]    = SolitonFun(unp1)
+            
+        end
+        
+        #Update solution:
+        xin         = xinp1
+        un          = unp1
+        xiv         = vcat(xiv, xin)
+        um          = vcat(um, permutedims(un))
+        
+        println("xi=", xin)
+        
+    end
+    
+    figure()
+    plot(xiv, um[:,1])
+    
+    figure()
+    plot(xiv, um[:,2])
+            
+end    
