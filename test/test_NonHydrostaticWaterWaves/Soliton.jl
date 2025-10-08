@@ -90,7 +90,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
     #Mesh:
     MeshFile                = "../temp/Soliton$(SC).geo"
     NX                      = Int(ceil((xend+20.0)/(hp0*FesOrder)))
-    NY                      = Int(ceil(10.0/(hp0*FesOrder)))
+    NY                      = 2
 #     TrMesh_Rectangle_Create!(MeshFile, -5.0, 5.0, NX, -5.0, 5.0, NY)
     TrMesh_Rectangle_Create!(MeshFile, -20.0, xend, NX, -5.0, 5.0, NY)
 
@@ -313,19 +313,21 @@ function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=2.0,
 end
 
 function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0, 
-    h0::Float64=1.0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), Deltaxi::Float64=1e-6)
+    h0::Float64=1.0, href::Float64=h0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), 
+    Deltaxi::Float64=1e-6, xif::Float64=10.0, theta::Float64=0.0)
 
     #Initial and final values for xi:
     xi0         = 0.0       #symmetry is applied later
-    xif         = 10.0      #for this value sech(xif)=O(1e-13)
     
     #Soliton velocity and length:
     c0          = sqrt(g*(A+h0))
-    l0          = h0*sqrt((A+h0)/(A*gamma/2))
+    l0          = h0*sqrt((A+h0)/h0)
+#     l0          = h0*sqrt((A+h0)/(A*gamma/2))
     
     #Load coefficients:
-    RKCoeffs    = RK_Coefficients("KC4B")
-    Am          = RKCoeffs.AE
+    RKCoeffs    = RK_Coefficients("BPR3")
+    Bm          = RKCoeffs.AE
+    ABm         = RKCoeffs.AI-RKCoeffs.AE
     cv          = RKCoeffs.c
     ss          = RKCoeffs.stages
     
@@ -333,14 +335,27 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0,
     un0         = [ h0+A, 0.0 ]
     
     #Function to march in time:
-    function SolitonFun(u::Vector{Float64})
+    function SolitonFun(u::Vector{Float64}, ComputeJ::Bool)
         h           = u[1]
         w           = u[2]
         p           = (c0^2*(h-h0)*h0/h - 0.5*g*(h^2-h0^2))/h
         hprime      = -2*l0*c^2*h/(c0*h0)*(c^2 + c0^2*h0/h + 
                             - 2*c0*h0^2/h^2 + 0.5*g*h0^2/h + 0.5*g*h)^(-1) * w
         wprime      = -2*l0/(c0*h0)*p
-        return [hprime, wprime]
+        f           = [hprime, wprime]
+#         f           = [ 1.0, 1.0 ]
+        J           = zeros(0,0)
+        if ComputeJ
+            J       = zeros(2,2)
+            delta   = 1e-6
+            for jj=1:size(J,2)
+                upert       = copy(u)
+                upert[jj]   += delta
+                fpert       = SolitonFun(upert, false)[1]
+                J[:,jj]     = (fpert-f)/(delta)
+            end
+        end
+        return f, J
     end
     
     #Loop:
@@ -349,28 +364,34 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0,
     xiv         = [xi0]
     um          = permutedims(un)
     fm          = zeros(length(un), ss)
+    Jum         = zeros(length(un), ss)
     while xin<=xif
     
         #First stage:
         unp1            = copy(un)
         xinp1           = xin
-        fm[:,1]         = SolitonFun(un)
+        fm[:,1],Jn      = SolitonFun(un, true)
+        Jum[:,1]        = Jn*un
+        LSm             = eye(2) - Deltaxi*ABm[2,2]*Jn
+        LSm_F           = factorize(LSm)
         
         #Loop stages:
         for kk=2:ss
         
             xinp1       = xin + cv[kk]*Deltaxi
-            unp1        .= un
-            for ll=1:ss-1
-                unp1    .+= Deltaxi*Am[kk,ll]*fm[:,ll]
+            zn          = 1.0*un
+            for ll=1:kk-1
+                zn      .+= Deltaxi*(Bm[kk,ll]*fm[:,ll] + ABm[kk,ll]*Jum[:,ll])
             end
-            fm[:,kk]    = SolitonFun(unp1)
+            unp1        .= LSm_F\zn
+            fm[:,kk]    = SolitonFun(unp1, false)[1]
+            Jum[:,kk]   = Jn*unp1
             
         end
         
         #Update solution:
         xin         = xinp1
-        un          = unp1
+        un          .= unp1
         xiv         = vcat(xiv, xin)
         um          = vcat(um, permutedims(un))
         
@@ -378,10 +399,31 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0,
         
     end
     
-    figure()
-    plot(xiv, um[:,1])
+    #Extract solution:
+    aux     = length(xiv):-1:1
+    xiv     = vcat(xiv[aux], xiv)
+    hv      = vcat(um[aux,1], um[:,1])
+    wv      = vcat(um[aux,2], um[:,2])
+    pv      = @. (c0^2*(hv-h0)*h0/hv - 0.5*g*(hv^2-h0^2))/hv
+    Pv      = @. hv*(pv-c^2*log(abs(hv./href)))
+    qv      = @. c0*(hv-h0)
+    q1v     = @. qv*cos(theta)
+    q2v     = @. qv*sin(theta)
+    q3v     = @. hv*wv
+    etav    = hv
     
     figure()
-    plot(xiv, um[:,2])
+    plot(xiv, etav)
+    
+    figure()
+    plot(xiv, wv)
+    
+    figure()
+    plot(xiv, pv)
+    
+    save("Soliton.jld2", "xiv", xiv, "etav", etav, "q1v", q1v, "q2v", q2v, 
+        "q3v", q3v, "Pv", Pv)
+        
+    return xiv, etav, q1v, q2v, q3v, Pv
             
 end    
