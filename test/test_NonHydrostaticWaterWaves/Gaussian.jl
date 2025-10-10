@@ -11,7 +11,7 @@ function Gaussian(hp0::Float64, FesOrder::Int;
     #
     TolT::Float64=1e-4, Deltat0::Float64=1e-3, TimeAdapt::Bool=true,
     #
-    PlotFig::Bool=false, wFig::Float64=9.50, hFig::Float64=6.50,
+    PlotFig::Bool=false, wFig::Float64=9.50, hFig::Float64=9.50,
     PlotVars::Vector{String}=String[],
     SaveFig::Bool=false, Nt_SaveFig::Int=5, Deltat_SaveFig::Float64=Inf,
     mFig::Int=max(1,length(PlotVars)), nFig::Int=Int(ceil(length(PlotVars)/mFig)), cmap::String="jet",
@@ -126,7 +126,7 @@ function Gaussian(hp0::Float64, FesOrder::Int;
     figv                = Vector{Figure}(undef,2)
     if PlotFig
         figv[1]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
-        figv[2]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
+        figv[2]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=1.5, right=0.4, bottom=1.1, top=1.0)
     end
     t_lastFig           = 0.0
     ct_SaveFig          = 0

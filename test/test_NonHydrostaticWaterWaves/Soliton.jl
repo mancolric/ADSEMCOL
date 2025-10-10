@@ -11,7 +11,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
     #
     TolT::Float64=1e-4, Deltat0::Float64=1e-3, TimeAdapt::Bool=true,
     #
-    PlotFig::Bool=false, wFig::Float64=9.50, hFig::Float64=6.50,
+    PlotFig::Bool=false, wFig::Float64=9.50, hFig::Float64=9.50,
     PlotVars::Vector{String}=String[],
     SaveFig::Bool=false, Nt_SaveFig::Int=5, Deltat_SaveFig::Float64=Inf,
     mFig::Int=max(1,length(PlotVars)), nFig::Int=Int(ceil(length(PlotVars)/mFig)), cmap::String="jet",
@@ -67,16 +67,16 @@ function Soliton(hp0::Float64, FesOrder::Int;
         q1              = @tturbo @. 0.0*x[1]
         q2              = @tturbo @. 0.0*x[1]
         q3              = @tturbo @. 0.0*x[1]
-        p               = @tturbo @. 0.0*x[1]
-        return [q1, q2, q3, p]
+        P               = @tturbo @. 0.0*x[1] + 1.0
+        return [q1, q2, q3, P]
 
     end
     BC_left         = SubsonicInlet1(FWt11((t,x)->uLeft(t,x)))
     function uRight(t::Float64, x::Vector{Matrix{Float64}})
         h               = @tturbo @. 0.0*x[1] + h0
         eta             = h
-        p               = @tturbo @. 0.0*x[1]
-        return [eta, p]
+        P               = @tturbo @. 0.0*x[1] + 1.0
+        return [eta, P]
     end
     BC_right        = SubsonicOutlet1(FWt11((t,x)->uRight(t,x)))
 #     BC_right        = DoNothing1()
@@ -111,13 +111,13 @@ function Soliton(hp0::Float64, FesOrder::Int;
     solver.TimeAdapt        = TimeAdapt
 
     #Set initial and boundary conditions:
-#     solver.u0fun        = FW11((x) -> u0fun(x))
-#     BC_walls            = SlipAdiabatic()
-#     solver.BC           = [BCW(BC_walls), BCW(BC_walls), BCW(BC_walls), BCW(BC_walls)]
+    solver.u0fun        = FW11((x) -> u0fun(x))
+    BC_walls            = SlipAdiabatic()
+    solver.BC           = [BCW(BC_walls), BCW(BC_walls), BCW(BC_walls), BCW(BC_walls)]
 
     #Set initial and boundary conditions:
-    solver.u0fun        = FW11((x) -> u0fun(x))
-    solver.BC           = [BCW(BC_horiz), BCW(BC_right), BCW(BC_horiz), BCW(BC_left)]
+#     solver.u0fun        = FW11((x) -> u0fun(x))
+#     solver.BC           = [BCW(BC_horiz), BCW(BC_right), BCW(BC_horiz), BCW(BC_left)]
 
     #-----------------------------------------------------------------------------
     #INITIAL CONDITION:
@@ -144,7 +144,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
 #         figv[1]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
 #         figv[1]         = figure()
         for ii=1:length(figv)
-            figv[ii]    = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
+            figv[ii]    = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=1.5, right=0.4, bottom=1.1, top=1.0)
         end
     end
     t_lastFig           = 0.0
@@ -179,6 +179,8 @@ function Soliton(hp0::Float64, FesOrder::Int;
             l0      = h0*sqrt((A+h0)/h0)
             x11     = c0*solver.t-10*l0
             x12     = c0*solver.t+10*l0
+#             x11     = -20.0
+#             x12     = xend
             #Interpolate exact solution:
             x1v     = linspace(x11, x12, 500)
             x2v     = zeros(size(x1v))
@@ -302,7 +304,7 @@ function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=3/2,
     q       = @. c0*(h-h0)
     q1      = @. q*cos(theta)
     q2      = @. q*sin(theta)
-    q3      = @. -A*c0*h0/l0*phi*dphi
+    q3      = @. -A*c0*h0/l0*2*phi*dphi
     P       = @. h*h
     eta     = h
     

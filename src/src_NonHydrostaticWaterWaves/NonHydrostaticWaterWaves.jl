@@ -28,22 +28,22 @@ mutable struct SlipAdiabatic <: BoundConds
 
 end
 
-#Subsonic inlet. 5 conditions (3 Dirichlet):
+#Subsonic inlet. 5 conditions (4 Dirichlet):
 #   normal diff flux for eta    = 0
 #   q1                          = q1_BC
 #   q2                          = q2_BC
 #   q3                          = q3_BC
-#   normal diff flux for P      = p_BC
+#   P                           = P_BC
 mutable struct SubsonicInlet1 <: BoundConds
-    fun             ::FWt11     #must return [q_1, q_2]
+    fun             ::FWt11     #must return [q_1, q_2, q_3, P]
 end
 
-#Subsonic outlet. 5 conditions (2 Dirichlet):
+#Subsonic outlet. 5 conditions (1 Dirichlet):
 #   eta                     = eta_BC
 #   normal diff flux for q1 = 0
 #   normal diff flux for q2 = 0
 #   normal diff flux for q3 = 0
-#   P                       = P_BC
+#   normal diff flux for P  = 0
 mutable struct SubsonicOutlet1 <: BoundConds
     fun             ::FWt11     #must return [h]
 end
