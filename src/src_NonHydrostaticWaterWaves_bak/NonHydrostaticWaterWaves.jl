@@ -7,8 +7,10 @@ Base.@kwdef mutable struct NHWW <: ConstModels
 
     #Model's characteristic fields:
     epsilon         ::Float64           = 0.0   #Rusanov-type viscosity
-    g               ::Float64           = 9.81  #Gravity acceleration in -z direction
+    gamma           ::Float64           = 2.0   #Parameter
+    g               ::Float64           = 9.8   #Gravity force in -z direction
     c               ::Float64           = 5*sqrt(10*10)
+    h0              ::Float64           = 1.0
     CSS             ::Float64           = 0.1   #Subgrid stabilization
     CW              ::Float64           = 50.0  #Boundary penalty (50.0-200.0 for IIPG)
     b               ::FW1               = FW1( (x)-> zeros(size(x[1])) )
@@ -23,7 +25,7 @@ end
 #   normal diff flux for h      = 0
 #   normal diff flux for q_t    = 0
 #   normal diff flux for q_3    = 0
-#   normal diff flux for P      = 0
+#   normal diff flux for p      = 0
 mutable struct SlipAdiabatic <: BoundConds
 
 end
@@ -33,7 +35,7 @@ end
 #   q1                          = q1_BC
 #   q2                          = q2_BC
 #   q3                          = q3_BC
-#   normal diff flux for P      = p_BC
+#   normal diff flux for p      = p_BC
 mutable struct SubsonicInlet1 <: BoundConds
     fun             ::FWt11     #must return [q_1, q_2]
 end
@@ -43,7 +45,7 @@ end
 #   normal diff flux for q1 = 0
 #   normal diff flux for q2 = 0
 #   normal diff flux for q3 = 0
-#   P                       = P_BC
+#   p                       = p_BC
 mutable struct SubsonicOutlet1 <: BoundConds
     fun             ::FWt11     #must return [h]
 end
@@ -93,8 +95,7 @@ function DepVars(model::NHWW, t::Float64, x::Vector{<:AMF64},
         elseif vble=="P"
             xout[ivar]      = [P]
         elseif vble=="p"
-            xi_h            = @tturbo @. P/(h*h)
-            xout[ivar]      = [@tturbo @. (c*c)/3.0*xi_h*(1.0-xi_h)]
+            xout[ivar]      = [@tturbo @. P/h + c*c*log(h/model.h0)]
         elseif vble=="b"
             xout[ivar]      = [b]
         elseif vble=="v1"
@@ -109,8 +110,6 @@ function DepVars(model::NHWW, t::Float64, x::Vector{<:AMF64},
             xout[ivar]      = [fill(model.epsilon, size(u[1]))]
         elseif vble=="h"
             xout[ivar]      = [h]
-        elseif vble=="xi_h"
-            xout[ivar]      = [@tturbo @. P/(h*h)]
         elseif vble=="D_penalty"
             D_penalty       = max(model.epsilon)
             xout[ivar]      = [fill(D_penalty, size(u[1]))]
@@ -126,21 +125,19 @@ end
 #-------------------------------------------------------------------------------
 #MANDATORY FUNCTIONS:
 
+
 include("NonHydrostaticWaterWaves_fluxes.jl")
 include("NonHydrostaticWaterWaves_BC.jl")
 
 # #Compute normalization factors from solution. Mass matrix has already been computed.
 function nFactsCompute!(solver::SolverData{NHWW})
     
-    #Reference height:
-    h                       = solver.u[1]-solver.u[6]
-    h0                      = sqrt( dot(h, solver.MII, h)/solver.Omega )
-    
     #Normalization factors:
+    h0                      = solver.model.h0
     solver.nFacts[1]        = h0
     solver.nFacts[2:4]      .= h0*sqrt(solver.model.g*h0)
-#     solver.nFacts[5]        = h0*h0             #~ h*h
-    solver.nFacts[5]        = h0^2*(solver.model.g*h0)/(solver.model.c)^2     #~ h^2 \Delta (xi/h) ~ h^2 p / c^2
+    solver.nFacts[5]        = h0*solver.model.g*h0          #~ h u^2
+#     solver.nFacts[5]        = h0*(solver.model.c)^2
     solver.nFacts[6]        = h0
 #     solver.nFacts           .= 1.0
     
@@ -165,6 +162,7 @@ function FluxSource!(model::NHWW, _qp::TrIntVars, ComputeJ::Bool)
     #Get variables:
     g               = model.g
     c               = model.c
+    h0              = model.h0
     eta             = u[1]
     q1              = u[2]
     q2              = u[3]
@@ -172,8 +170,7 @@ function FluxSource!(model::NHWW, _qp::TrIntVars, ComputeJ::Bool)
     P               = u[5]
     b               = u[6]
     h               = eta-b
-    xi_h            = @tturbo @. P/(h*h)
-    p               = @tturbo @. (c*c)/3.0 * xi_h * (1.0-xi_h)
+    p               = @tturbo @. P/h + (c*c)*log(h/h0)
     v1              = @tturbo @. q1/h
     v2              = @tturbo @. q2/h
     v3              = @tturbo @. q3/h
@@ -187,14 +184,14 @@ function FluxSource!(model::NHWW, _qp::TrIntVars, ComputeJ::Bool)
     #Characteristic velocities (original system and relaxed one)
     #   lambdac is used for subgrid stabilization and tau_char 
     #   lambda0 for definition of CFL
-#     lambda0             = @tturbo @. v1 + sqrt(g*h + 1/3*c*c*P^2/h^4)
-    lambdac             = @tturbo @. v1 + sqrt(g*h + 1/3*c*c*P^2/h^4)
+    lambda0             = @tturbo @. sqrt(v1*v1 + v2*v2 + v3*v3) + sqrt(g*h + p)
+    lambdac             = @tturbo @. sqrt(v1*v1 + v2*v2 + v3*v3) + sqrt(g*h + p + c*c)
     
     #CFL number:
-#     Deltat_CFL_lambda0  = @tturbo @. $minimum(hp_min/(lambda0+1e-12))
+    Deltat_CFL_lambda0  = @tturbo @. $minimum(hp_min/(lambda0+1e-12))
     Deltat_CFL_lambdac  = @tturbo @. $minimum(hp_min/(lambdac+1e-12))
     Deltat_CFL_epsilon  = @tturbo @. $minimum(hp_min*hp_min/(model.epsilon+1e-12))
-    _qp.Deltat_CFL      = min(Deltat_CFL_lambdac, Deltat_CFL_epsilon)
+    _qp.Deltat_CFL      = min(Deltat_CFL_lambda0, Deltat_CFL_epsilon)
     
     #Compute fluxes and source term:
     HyperbolicFlux!(model, u, ComputeJ, f, df_du)

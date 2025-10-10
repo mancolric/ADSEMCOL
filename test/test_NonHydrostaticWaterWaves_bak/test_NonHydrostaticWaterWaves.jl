@@ -26,9 +26,7 @@ function LatexString(vble::String)
     elseif vble=="p"
         return "p"
     elseif vble=="P"
-        return "h\\xi"
-    elseif vble=="xi_h"
-        return "\\xi/h"
+        return "P"
     else 
         @warn "Variable $(vble) not supported"
         return vble

@@ -4,7 +4,7 @@ include("test_NonHydrostaticWaterWaves.jl")
 function Soliton(hp0::Float64, FesOrder::Int;
     tf::Float64=10.0, RKMethod::String="BPR3",
     epsilon::Float64=0e-3, alpha::Float64=5.0, g::Float64=9.8, A::Float64=0.2, 
-    h0::Float64=1.0, xend::Float64=100.0, 
+    h0::Float64=1.0, gamma::Float64=2.0, xend::Float64=100.0, 
     #
     TolS::Float64=1e-4, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
     SpaceAdapt::Bool=true, 
@@ -28,34 +28,35 @@ function Soliton(hp0::Float64, FesOrder::Int;
     ##Define model:
     model               = NHWW()
     model.epsilon       = epsilon
+    model.gamma         = gamma
     model.g             = g
     c                   = alpha*sqrt(g*h0)
     model.c             = c
+    model.h0            = h0
     model.CSS           = CSS
 
+#     function utheorfun(t::Float64, x::Vector{Matrix{Float64}}) 
+# 
+#         h, q1, q2, q3, p        = SolitonExact(t, x[1], A=A, gamma=gamma, 
+#                                                 h0=h0, x0=0.0, g=g) + 
+#                                     SolitonExact(t, x[2], A=A, gamma=gamma, 
+#                                                 h0=h0, x0=0.0, g=g, theta=pi/2)
+#         b                       = @. sin(x[1])+cos(x[2])
+#         eta                     = @. h+b
+#         P                       = @. h*(p-c*c*log(h/h0))
+#         return [eta, q1, q2, q3, P, b]
+# 
+#     end
     function utheorfun(t::Float64, x::Vector{Matrix{Float64}}) 
 
-        h, q1, q2, q3, p        = SolitonExact(t, x[1], A=A, gamma=1.5, 
-                                                h0=h0, x0=0.0, g=g) + 
-                                    SolitonExact(t, x[2], A=A, gamma=1.5, 
-                                                h0=h0, x0=0.0, g=g, theta=pi/2)
-        b                       = @. sin(x[1])+cos(x[2])
-        eta                     = @. h+b
+        h, q1, q2, q3, p        = SolitonExact(t, x[1], A=A, gamma=gamma, 
+                                                h0=h0, x0=0.0, g=g)
+        b                       = @. 0.0*x[1]
+        eta                     = h
         P                       = @. h*(p-c*c*log(h/h0))
         return [eta, q1, q2, q3, P, b]
 
     end
-#     function utheorfun(t::Float64, x::Vector{Matrix{Float64}}) 
-# 
-#         h, q1, q2, q3, p        = SolitonExact(t, x[1], A=A, gamma=3/2, 
-#                                                 h0=h0, x0=0.0, g=g)
-#         b                       = @. 0.0*x[1]
-#         eta                     = h
-#         xi_h                    = @. 0.5+sqrt(0.25-3*p/(c*c))
-#         P                       = @. h^2*xi_h
-#         return [eta, q1, q2, q3, P, b]
-# 
-#     end
     
     function u0fun(x::Vector{Matrix{Float64}})
 
@@ -90,8 +91,8 @@ function Soliton(hp0::Float64, FesOrder::Int;
     MeshFile                = "../temp/Soliton$(SC).geo"
     NX                      = Int(ceil((xend+20.0)/(hp0*FesOrder)))
     NY                      = 2
-    TrMesh_Rectangle_Create!(MeshFile, -5.0, 5.0, NX, -5.0, 5.0, NY)
-#     TrMesh_Rectangle_Create!(MeshFile, -20.0, xend, NX, -5.0, 5.0, NY)
+#     TrMesh_Rectangle_Create!(MeshFile, -5.0, 5.0, NX, -5.0, 5.0, NY)
+    TrMesh_Rectangle_Create!(MeshFile, -20.0, xend, NX, -5.0, 5.0, NY)
 
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
     solver                  = LIRKHyp_Start(model)
@@ -128,11 +129,11 @@ function Soliton(hp0::Float64, FesOrder::Int;
     ConvFlag            = LIRKHyp_InitialCondition!(solver, AMA_RefineFactor=0.9, 
                             DEq_MaxIter=0)
 #     CheckJacobian(solver, Plot_df_du=true, Plot_df_dgradu=true)
-    CheckJacobian(solver, Plot_dQ_du=true, Plot_dQ_dgradu=true)
+#     CheckJacobian(solver, Plot_dQ_du=true, Plot_dQ_dgradu=true)
 #     for ii = 4
 #         BC_CheckJacobian(solver, ii, Plot_df_du=true, Plot_df_dgradu=true)
 #     end
-    return
+#     return
     
     #Change TolT:
     if TolT==0.0
@@ -287,7 +288,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
 
 end
 
-function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=3/2, 
+function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=2.0, 
     h0::Float64=1.0, x0::Float64=0.0, g::Float64=9.8, theta::Float64=0.0)
 
     #Soliton velocity and length:
@@ -311,7 +312,7 @@ function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=3/2,
     
 end
 
-function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=3/2, 
+function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0, 
     h0::Float64=1.0, href::Float64=h0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), 
     Deltaxi::Float64=1e-6, xif::Float64=10.0, theta::Float64=0.0)
 

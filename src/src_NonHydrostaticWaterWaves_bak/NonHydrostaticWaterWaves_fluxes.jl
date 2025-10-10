@@ -41,7 +41,9 @@ function HyperbolicFlux1!(model::NHWW,
 
     #Get variables:
     g               = model.g
+    gamma           = model.gamma
     c               = model.c
+    h0              = model.h0
     eta             = u[1]
     q1              = u[2]
     q2              = u[3]
@@ -49,8 +51,7 @@ function HyperbolicFlux1!(model::NHWW,
     P               = u[5]
     b               = u[6]
     h               = eta-b
-    xi_h            = @tturbo @. P/(h*h)
-    p               = @tturbo @. (c*c)/3.0 * xi_h * (1.0-xi_h)
+    p               = @tturbo @. P/h + (c*c)*log(h/h0)
     
     #Hyperbolic fluxes:
     @tturbo @. f[1,1]           += q1
@@ -65,25 +66,25 @@ function HyperbolicFlux1!(model::NHWW,
     @tturbo @. f[5,2]           += P*q2/h
 
     #Get Jacobian, if necessary. Note that
-    #   h       = eta - b
-    #   xi_h    = P/h^2
-    #   p       = 1/3 c^2 (xi_h - (xi_h)^2)
+    #   h = eta - b
+    #   p = P/h + c^2 ln(h/h0)
     #Therefore, terms containing "h" have to be derived w.r.t. eta and b, and terms
     #containing "p" have to be derived w.r.t. h (and therefore eta and b) and P.
     #In particular:
     #   dh/deta     = 1
     #   dh/db       = -1
-    #   dp/deta     = dp/d(xi_h) * dxi_h/dh * 1     = 1/3 c^2 (1 - 2 xi_h) * (-2P)/h^3
-    #   dp/db       = dp/d(xi_h) * dxi_h/dh * (-1)  = 1/3 c^2 (1 - 2 xi_h) * (+2P)/h^3
-    #   dp/dP       = dp/d(xi_h) * dxi_h/dP         = 1/3 c^2 (1 - 2 xi_h) * 1/h^2
+    #   dp/deta     = dp/dh * 1     = -P/h^2 + c^2/h
+    #   dp/db       = dp/dh * (-1)  = P/h^2 - c^2/h
+    #   dp/dP       = 1/h
+    
     if ComputeJ
 
         #Auxiliary derivatives:
         dh_deta                     = 1.0
         dh_db                       = -1.0
-        dp_deta                     = @tturbo @. (c*c)/3*(1-2*xi_h)*(-2*P)/(h*h*h)
-        dp_db                       = @tturbo @. -dp_deta
-        dp_dP                       = @tturbo @. (c*c)/3*(1-2*xi_h)/(h*h)
+        dp_deta                     = @tturbo @. -P/(h*h) + (c*c)/h
+        dp_db                       = @tturbo @. P/(h*h) - (c*c)/h
+        dp_dP                       = @tturbo @. 1.0/h
         
         #Derivatives of f(1,1)
         @tturbo @. df_du[1,1,2]     += 1.0
@@ -152,7 +153,9 @@ function Source1!(model::NHWW, x::Vector{MFloat}, tau_char::Float64,
 
     #Get variables:
     g               = model.g
+    gamma           = model.gamma
     c               = model.c
+    h0              = model.h0
     eta             = u[1]
     q1              = u[2]
     q2              = u[3]
@@ -160,69 +163,64 @@ function Source1!(model::NHWW, x::Vector{MFloat}, tau_char::Float64,
     P               = u[5]
     b               = u[6]
     h               = eta-b
-    xi_h            = @tturbo @. P/(h*h)
-    p               = @tturbo @. (c*c)/3.0 * xi_h * (1.0-xi_h)
+    p               = @tturbo @. P/h + (c*c)*log(h/h0)
     b_exact         = model.b(x)
     db_dx           = du_dx[6,1]
     db_dy           = du_dx[6,2]
 
     #Source terms:
-    @tturbo @. Q[2]             += - g*eta*db_dx - 3/2*p/xi_h*db_dx
-    @tturbo @. Q[3]             += - g*eta*db_dy - 3/2*p/xi_h*db_dy
-    @tturbo @. Q[4]             += (c*c)*(1.0-xi_h)
-    @tturbo @. Q[5]             += q3 - 3/2*q1*db_dx - 3/2*q2*db_dy
+    @tturbo @. Q[2]             += - g*eta*db_dx - gamma*p*db_dx
+    @tturbo @. Q[3]             += - g*eta*db_dy - gamma*p*db_dy
+    @tturbo @. Q[4]             += gamma*p
+    @tturbo @. Q[5]             += 2*(c*c)*(-q3 + q1*db_dx + q2*db_dy)/h
     @tturbo @. Q[6]             += -1.0/tau_char*(b-b_exact)
 
     #Get Jacobian, if necessary. Note that
-    #   h       = eta - b
-    #   xi_h    = P/h^2
-    #   p       = 1/3 c^2 (xi_h - (xi_h)^2)
-    #Therefore, terms containing "h" have to be derived w.r.t. eta and b,
-    #and terms containing "xi_h" or "p" have to be derived w.r.t. eta, b and P.
+    #   h = eta - b
+    #   p = P/h + c^2 ln(h/h0)
+    #Therefore, terms containing "h" have to be derived w.r.t. eta and b, and terms
+    #containing "p" have to be derived w.r.t. h (and therefore eta and b) and P.
     #In particular:
     #   dh/deta     = 1
     #   dh/db       = -1
-    #   dxi_h/deta  = dxi_h/dh * 1      = -2P/h^3
-    #   dxi_h/db    = dxi_h/dh * (-1)   = 2P/h^3
-    #   dxi_h/dP    = 1/h^2
-    #   dp/deta     = dp/d(xi_h) * dxi_h/dh * 1     = 1/3 c^2 (1 - 2 xi_h) * (-2P)/h^3
-    #   dp/db       = dp/d(xi_h) * dxi_h/dh * (-1)  = 1/3 c^2 (1 - 2 xi_h) * (+2P)/h^3
-    #   dp/dP       = dp/d(xi_h) * dxi_h/dP         = 1/3 c^2 (1 - 2 xi_h) * 1/h^2
+    #   dp/deta     = dp/dh * 1     = -P/h^2 + c^2/h
+    #   dp/db       = dp/dh * (-1)  = P/h^2 - c^2/h
+    #   dp/dP       = 1/h
     if ComputeJ
 
         #Auxiliary derivatives:
         dh_deta                     = 1.0
         dh_db                       = -1.0
-        dxih_deta                   = @tturbo @. -2*P/(h*h*h)
-        dxih_db                     = @tturbo @. -dxih_deta
-        dxih_dP                     = @tturbo @. 1.0/(h*h)
-        dp_deta                     = @tturbo @. (c*c)/3*(1-2*xi_h)*(-2*P)/(h*h*h)
-        dp_db                       = @tturbo @. -dp_deta
-        dp_dP                       = @tturbo @. (c*c)/3*(1-2*xi_h)/(h*h)
+        dp_deta                     = @tturbo @. -P/(h*h) + (c*c)/h
+        dp_db                       = @tturbo @. P/(h*h) - (c*c)/h
+        dp_dP                       = @tturbo @. 1.0/h
         
         #Derivatives of Q(2)
-        @tturbo @. dQ_du[2,1]       += -g*db_dx - 3/2*dp_deta/xi_h*db_dx + 3/2*p/xi_h^2*dxih_deta*db_dx
-        @tturbo @. dQ_du[2,5]       += - 3/2*dp_dP/xi_h*db_dx + 3/2*p/xi_h^2*dxih_dP*db_dx
-        @tturbo @. dQ_du[2,6]       += - 3/2*dp_db/xi_h*db_dx + 3/2*p/xi_h^2*dxih_db*db_dx
-        @tturbo @. dQ_du_dx[2,6,1]  += -g*eta - 3/2*p/xi_h
+        @tturbo @. dQ_du[2,1]       += -g*db_dx - gamma*dp_deta*db_dx
+        @tturbo @. dQ_du[2,5]       += -gamma*dp_dP*db_dx
+        @tturbo @. dQ_du[2,6]       += -gamma*dp_db*db_dx
+        @tturbo @. dQ_du_dx[2,6,1]  += -g*eta - gamma*p
 
         #Derivatives of Q(3)
-        @tturbo @. dQ_du[3,1]       += -g*db_dy - 3/2*dp_deta/xi_h*db_dy + 3/2*p/xi_h^2*dxih_deta*db_dy
-        @tturbo @. dQ_du[3,5]       += - 3/2*dp_dP/xi_h*db_dy + 3/2*p/xi_h^2*dxih_dP*db_dy
-        @tturbo @. dQ_du[3,6]       += - 3/2*dp_db/xi_h*db_dy + 3/2*p/xi_h^2*dxih_db*db_dy
-        @tturbo @. dQ_du_dx[3,6,2]  += -g*eta - 3/2*p/xi_h
+        @tturbo @. dQ_du[3,1]       += -g*db_dy - gamma*dp_deta*db_dy
+        @tturbo @. dQ_du[3,5]       += -gamma*dp_dP*db_dy
+        @tturbo @. dQ_du[3,6]       += -gamma*dp_db*db_dy
+        @tturbo @. dQ_du_dx[3,6,2]  += -g*eta - gamma*p
         
         #Derivatives of Q(4)
-        @tturbo @. dQ_du[4,1]       += -(c*c)*dxih_deta
-        @tturbo @. dQ_du[4,5]       += -(c*c)*dxih_dP
-        @tturbo @. dQ_du[4,6]       += -(c*c)*dxih_db
+        @tturbo @. dQ_du[4,1]       += gamma*dp_deta
+        @tturbo @. dQ_du[4,5]       += gamma*dp_dP
+        @tturbo @. dQ_du[4,6]       += gamma*dp_db
         
         #Derivatives of Q(5)
-        @tturbo @. dQ_du[5,2]       += -3/2*db_dx
-        @tturbo @. dQ_du[5,3]       += -3/2*db_dy
-        @tturbo @. dQ_du[5,4]       += 1.0
-        @tturbo @. dQ_du_dx[5,6,1]  += -3/2*q1
-        @tturbo @. dQ_du_dx[5,6,2]  += -3/2*q2
+        @tturbo @. dQ_du[5,1]       += 2*(c*c)*(-q3 + q1*db_dx + q2*db_dy)*(-1.0)/h^2*dh_deta
+        @tturbo @. dQ_du[5,2]       += 2*(c*c)*db_dx/h
+        @tturbo @. dQ_du[5,3]       += 2*(c*c)*db_dy/h
+        @tturbo @. dQ_du[5,4]       += 2*(c*c)*(-1.0)/h
+        @tturbo @. dQ_du[5,5]       += 0.0
+        @tturbo @. dQ_du[5,6]       += 2*(c*c)*(-q3 + q1*db_dx + q2*db_dy)*(-1.0)/h^2*dh_db
+        @tturbo @. dQ_du_dx[5,6,1]  += 2*(c*c)*q1/h
+        @tturbo @. dQ_du_dx[5,6,2]  += 2*(c*c)*q2/h
         
         #Derivatives of Q(6)
         @tturbo @. dQ_du[6,6]       += -1.0/tau_char
