@@ -33,29 +33,27 @@ function Soliton(hp0::Float64, FesOrder::Int;
     model.c             = c
     model.CSS           = CSS
 
-    function utheorfun(t::Float64, x::Vector{Matrix{Float64}}) 
-
-        h, q1, q2, q3, p        = SolitonExact(t, x[1], A=A, gamma=1.5, 
-                                                h0=h0, x0=0.0, g=g) + 
-                                    SolitonExact(t, x[2], A=A, gamma=1.5, 
-                                                h0=h0, x0=0.0, g=g, theta=pi/2)
-        b                       = @. sin(x[1])+cos(x[2])
-        eta                     = @. h+b
-        P                       = @. h*(p-c*c*log(h/h0))
-        return [eta, q1, q2, q3, P, b]
-
-    end
 #     function utheorfun(t::Float64, x::Vector{Matrix{Float64}}) 
 # 
-#         h, q1, q2, q3, p        = SolitonExact(t, x[1], A=A, gamma=3/2, 
-#                                                 h0=h0, x0=0.0, g=g)
-#         b                       = @. 0.0*x[1]
-#         eta                     = h
-#         xi_h                    = @. 0.5+sqrt(0.25-3*p/(c*c))
-#         P                       = @. h^2*xi_h
+#         h, q1, q2, q3, p        = SolitonExact(t, x[1], A=A, gamma=1.5, 
+#                                                 h0=h0, x0=0.0, g=g) + 
+#                                     SolitonExact(t, x[2], A=A, gamma=1.5, 
+#                                                 h0=h0, x0=0.0, g=g, theta=pi/2)
+#         b                       = @. sin(x[1])+cos(x[2])
+#         eta                     = @. h+b
+#         P                       = @. h*(p-c*c*log(h/h0))
 #         return [eta, q1, q2, q3, P, b]
 # 
 #     end
+    function utheorfun(t::Float64, x::Vector{Matrix{Float64}}) 
+
+        h, q1, q2, q3, P        = SolitonExact(t, x[1], A=A, gamma=3/2, 
+                                                h0=h0, x0=0.0, g=g)
+        b                       = @. 0.0*x[1]
+        eta                     = h
+        return [eta, q1, q2, q3, P, b]
+
+    end
     
     function u0fun(x::Vector{Matrix{Float64}})
 
@@ -90,8 +88,8 @@ function Soliton(hp0::Float64, FesOrder::Int;
     MeshFile                = "../temp/Soliton$(SC).geo"
     NX                      = Int(ceil((xend+20.0)/(hp0*FesOrder)))
     NY                      = 2
-    TrMesh_Rectangle_Create!(MeshFile, -5.0, 5.0, NX, -5.0, 5.0, NY)
-#     TrMesh_Rectangle_Create!(MeshFile, -20.0, xend, NX, -5.0, 5.0, NY)
+#     TrMesh_Rectangle_Create!(MeshFile, -5.0, 5.0, NX, -5.0, 5.0, NY)
+    TrMesh_Rectangle_Create!(MeshFile, -20.0, xend, NX, -5.0, 5.0, NY)
 
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
     solver                  = LIRKHyp_Start(model)
@@ -128,11 +126,11 @@ function Soliton(hp0::Float64, FesOrder::Int;
     ConvFlag            = LIRKHyp_InitialCondition!(solver, AMA_RefineFactor=0.9, 
                             DEq_MaxIter=0)
 #     CheckJacobian(solver, Plot_df_du=true, Plot_df_dgradu=true)
-    CheckJacobian(solver, Plot_dQ_du=true, Plot_dQ_dgradu=true)
+#     CheckJacobian(solver, Plot_dQ_du=true, Plot_dQ_dgradu=true)
 #     for ii = 4
 #         BC_CheckJacobian(solver, ii, Plot_df_du=true, Plot_df_dgradu=true)
 #     end
-    return
+#     return
     
     #Change TolT:
     if TolT==0.0
@@ -143,9 +141,10 @@ function Soliton(hp0::Float64, FesOrder::Int;
     #Function to plot solution:
     figv                = Vector{Figure}(undef,2)
     if PlotFig
-        figv[1]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
-        for ii=2:length(figv)
-            figv[ii]    = figure()
+#         figv[1]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
+#         figv[1]         = figure()
+        for ii=1:length(figv)
+            figv[ii]    = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
         end
     end
     t_lastFig           = 0.0
@@ -304,10 +303,10 @@ function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=3/2,
     q1      = @. q*cos(theta)
     q2      = @. q*sin(theta)
     q3      = @. -A*c0*h0/l0*phi*dphi
-    p       = @. A*c0^2*h0^2/(2*l0^2*h^2)*( (2*h0-h)*dphi^2 + h*phi*d2phi )
+    P       = @. h*h
     eta     = h
     
-    return [ eta, q1, q2, q3, p ]
+    return [ eta, q1, q2, q3, P ]
     
 end
 

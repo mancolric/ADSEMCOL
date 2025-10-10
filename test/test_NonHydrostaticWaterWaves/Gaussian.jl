@@ -126,9 +126,7 @@ function Gaussian(hp0::Float64, FesOrder::Int;
     figv                = Vector{Figure}(undef,2)
     if PlotFig
         figv[1]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
-        for ii=2:length(figv)
-            figv[ii]    = figure()
-        end
+        figv[2]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
     end
     t_lastFig           = 0.0
     ct_SaveFig          = 0
