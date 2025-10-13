@@ -25,7 +25,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
     #---------------------------------------------------------------------
     #PROBLEM DATA:
 
-    ##Define model:
+    #Define model:
     model               = NHWW()
     model.epsilon       = epsilon
     model.g             = g
@@ -47,10 +47,11 @@ function Soliton(hp0::Float64, FesOrder::Int;
 #     end
     function utheorfun(t::Float64, x::Vector{Matrix{Float64}}) 
 
-        h, q1, q2, q3, P        = SolitonExact(t, x[1], A=A, gamma=3/2, 
+        h, q1, q2, q3, p        = SolitonExact(t, x[1], A=A, gamma=3/2, 
                                                 h0=h0, x0=0.0, g=g)
         b                       = @. 0.0*x[1]
         eta                     = h
+        P                       = @. 0.5*h*h*(1.0+sqrt(1.0-12*p/(c*c)))
         return [eta, q1, q2, q3, P, b]
 
     end
@@ -58,7 +59,7 @@ function Soliton(hp0::Float64, FesOrder::Int;
     function u0fun(x::Vector{Matrix{Float64}})
 
         return utheorfun(0.0, x)
-
+        
     end
 
     #Boundary conditions:
@@ -305,24 +306,31 @@ function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=3/2,
     q1      = @. q*cos(theta)
     q2      = @. q*sin(theta)
     q3      = @. -A*c0*h0/l0*2*phi*dphi
-    P       = @. h*h
+    p       = @. A*c0^2*h0^2/(2*l0^2*h^2)*( (2*h0-h)*dphi^2 + h*phi*d2phi )
     eta     = h
-    
-    return [ eta, q1, q2, q3, P ]
+    #In principle, P should be obtained from
+    #   p = 1/3 c^2 P/h^2 (1 - P/h^2)
+    #In the limit c->Inf, P/h->1 (physically acceptable solution) or P/h->0.
+    #We return p instead of P so it is possible to recover p:
+    return [ eta, q1, q2, q3, p ]
     
 end
 
 function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=3/2, 
-    h0::Float64=1.0, href::Float64=h0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), 
+    h0::Float64=1.0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), 
     Deltaxi::Float64=1e-6, xif::Float64=10.0, theta::Float64=0.0)
 
+    #Define model:
+    model               = NHWW()
+    model.g             = g
+    model.c             = c
+    
     #Initial and final values for xi:
     xi0         = 0.0       #symmetry is applied later
     
     #Soliton velocity and length:
     c0          = sqrt(g*(A+h0))
-    l0          = h0*sqrt((A+h0)/h0)
-#     l0          = h0*sqrt((A+h0)/(A*gamma/2))
+    l0          = h0*sqrt((A+h0)/(A*gamma/2))
     
     #Load coefficients:
     RKCoeffs    = RK_Coefficients("BPR3")
@@ -331,31 +339,61 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=3/2,
     cv          = RKCoeffs.c
     ss          = RKCoeffs.stages
     
-    #Initial condition for u=[h,w]:
-    un0         = [ h0+A, 0.0 ]
+    #Initial condition for u=[eta, q1, q2, q3, P, b] (q2=0):
+    un0         = [ h0, 0.0, 0.0, 0.0, h0^2 - 1e-10, 0.0 ]
+#     un0         = SolitonRelaxedPeak(A=A, gamma=gamma, h0=h0, g=g, c=c, theta=theta)
     
     #Function to march in time:
     function SolitonFun(u::Vector{Float64}, ComputeJ::Bool)
-        h           = u[1]
-        w           = u[2]
-        p           = (c0^2*(h-h0)*h0/h - 0.5*g*(h^2-h0^2))/h
-        hprime      = -2*l0*c^2*h/(c0*h0)*(c^2 + c0^2*h0/h + 
-                            - 2*c0*h0^2/h^2 + 0.5*g*h0^2/h + 0.5*g*h)^(-1) * w
-        wprime      = -2*l0/(c0*h0)*p
-        f           = [hprime, wprime]
-#         f           = [ 1.0, 1.0 ]
-        J           = zeros(0,0)
+        
+        #Reshape solution:
+        usol            = Vector{Matrix{Float64}}(undef, model.nVars)
+        dusol_dx        = Matrix{Matrix{Float64}}(undef, model.nVars, 2)
+        for II=1:model.nVars
+            usol[II]    = reshape([u[II]],1,1)
+        end
+        alloc!(dusol_dx, (1,1))     #we set du_dx=0 because this term is only needed to compute db/dx in source term
+        
+        #Compute fluxes and Jacobian:
+        fsol            = Matrix{Matrix{Float64}}(undef, model.nVars, 2)
+        dfsol_dusol     = Array{Matrix{Float64},3}(undef, model.nVars, 2, model.nVars)
+        alloc!(fsol, (1,1))
+        alloc!(dfsol_dusol, (1,1))
+        HyperbolicFlux!(model, usol, true, fsol, dfsol_dusol)
+        
+        #Compute source terms:
+        Qsol            = Vector{Matrix{Float64}}(undef, model.nVars)
+        dQsol_dusol     = Matrix{Matrix{Float64}}(undef, model.nVars, model.nVars)
+        dQsol_dusol_dx  = Array{Matrix{Float64},3}(undef, model.nVars, model.nVars, 2)
+        alloc!(Qsol, (1,1))
+        Source!(model, [zeros(1,1), zeros(1,1)], Inf, usol, dusol_dx, false, 
+                Qsol, dQsol_dusol, dQsol_dusol_dx)
+                
+        #Extract terms:
+        df_du           = Matrix{Float64}(undef, model.nVars, model.nVars)
+        Q               = Vector{Float64}(undef, model.nVars)
+        for II=1:model.nVars, JJ=1:model.nVars
+            df_du[II,JJ]    = dfsol_dusol[II,1,JJ][1,1]
+        end
+        for II=1:model.nVars
+            Q[II]           = Qsol[II][1,1]
+        end
+            
+        #Solve system:
+        du_dxi          = l0*((df_du-c0*eye(model.nVars))\Q)
+        J               = zeros(0,0)
         if ComputeJ
-            J       = zeros(2,2)
+            J       = zeros(model.nVars, model.nVars)
             delta   = 1e-6
             for jj=1:size(J,2)
                 upert       = copy(u)
                 upert[jj]   += delta
                 fpert       = SolitonFun(upert, false)[1]
-                J[:,jj]     = (fpert-f)/(delta)
+                J[:,jj]     = (fpert-du_dxi)/(delta)
             end
         end
-        return f, J
+        return du_dxi, J
+        
     end
     
     #Loop:
@@ -372,7 +410,7 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=3/2,
         xinp1           = xin
         fm[:,1],Jn      = SolitonFun(un, true)
         Jum[:,1]        = Jn*un
-        LSm             = eye(2) - Deltaxi*ABm[2,2]*Jn
+        LSm             = eye(model.nVars) - Deltaxi*ABm[2,2]*Jn
         LSm_F           = factorize(LSm)
         
         #Loop stages:
@@ -389,6 +427,11 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=3/2,
             
         end
         
+        #Exit if h<0
+        if unp1[1]<0.0
+            break
+        end
+        
         #Update solution:
         xin         = xinp1
         un          .= unp1
@@ -400,30 +443,268 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=3/2,
     end
     
     #Extract solution:
-    aux     = length(xiv):-1:1
+#     aux     = length(xiv):-1:1
+    aux     = zeros(Int,0)
     xiv     = vcat(xiv[aux], xiv)
     hv      = vcat(um[aux,1], um[:,1])
-    wv      = vcat(um[aux,2], um[:,2])
-    pv      = @. (c0^2*(hv-h0)*h0/hv - 0.5*g*(hv^2-h0^2))/hv
-    Pv      = @. hv*(pv-c^2*log(abs(hv./href)))
-    qv      = @. c0*(hv-h0)
+    qv      = vcat(um[aux,2], um[:,2])
+    uv      = @. qv/hv
     q1v     = @. qv*cos(theta)
     q2v     = @. qv*sin(theta)
-    q3v     = @. hv*wv
-    etav    = hv
+    q3v     = vcat(um[aux,4], um[:,4])
+    wv      = @. q3v/hv
+    Pv      = vcat(um[aux,5], um[:,5])
+    xi_h    = @. Pv/(hv*hv)
+    pv      = @. (c*c)/3.0 * xi_h * (1.0-xi_h)
+    etav    = hv    
+    bv      = vcat(um[aux,6], um[:,6])
+    
+    #Compute peak:
+#     zpeak   = SolitonRelaxedPeak(A=A, gamma=gamma, h0=h0, g=g, c=c, theta=theta)
+    _,ipeak  = findmax(etav)
+    xiv     = xiv .- xiv[ipeak]
+    
+    #Compute exact solution:
+    zexact  = SolitonExact(0.0, reshape(l0*xiv,:,1), A=A, gamma=gamma, h0=h0, g=g, theta=theta)
     
     figure()
-    plot(xiv, etav)
+    plot(xiv, etav, "b")
+    plot(xiv, zexact[1], "r")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("\\eta"), rotation=0)
+#     plot(xiv[ipeak], zpeak[1], "ok")
+    legend(["Relaxed", "Exact"])
     
     figure()
-    plot(xiv, wv)
+    plot(xiv, q1v)
+    plot(xiv, zexact[2], "r")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("q_1"), rotation=0)
+#     plot(xiv[ipeak], zpeak[2], "ok")
     
     figure()
-    plot(xiv, pv)
+    plot(xiv, q3v, "b")
+    plot(xiv, zexact[4], "r")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("q_3"), rotation=0)
+#     plot(xiv[ipeak], zpeak[4], "ok")
     
-    save("Soliton.jld2", "xiv", xiv, "etav", etav, "q1v", q1v, "q2v", q2v, 
-        "q3v", q3v, "Pv", Pv)
+#     figure()
+#     plot(xiv, Pv)
+#     xlabel(latexstring("\\xi"))
+#     ylabel(latexstring("P"), rotation=0)
+#     #plot(xiv[ipeak], zpeak[5], "ok")
+    
+    figure()
+    plot(xiv, pv, "b")
+    plot(xiv, zexact[5], "r")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("p"), rotation=0)
+    legend(["Relaxed", "Exact"])
+    
+    figure()
+    plot(xiv, zexact[5]./pv, "r")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("p"), rotation=0)
+    
+#     save("Soliton.jld2", "xiv#=", xiv, "etav", etav, "q1v", q1v, "q2v", q2v, 
+#         "q3v", q3v, "Pv", Pv)
         
     return xiv, etav, q1v, q2v, q3v, Pv
             
 end    
+
+function SolitonRelaxedPeak(; A::Float64=0.2, gamma::Float64=3/2, 
+    h0::Float64=1.0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), 
+    theta::Float64=0.0)
+
+    #Define model:
+    model       = NHWW()
+    model.g     = g
+    model.c     = c
+    
+    #Initial and final values for xi:
+    xi0         = 0.0       #symmetry is applied later
+    
+    #Soliton velocity and length:
+    c0          = sqrt(g*(A+h0))
+    l0          = h0*sqrt((A+h0)/(A*gamma/2))
+    
+    #Function to solve peak. We impose
+    #   1/l*(A - c0*I)*du/dxi = Q
+    #with A the Jacobian flux matrix in x direction, df_x/du, and symmetry conditions
+    #   hw = hv = b = 0
+    #   h = h0+A
+    #   d_xi (hu) = d_xi P = 0
+    #This provides 2*nVars equations for 2*nVars variables (the values of h,...,b and 
+    #their derivatives.)
+    function SolitonResidual!(z::Vector{Float64}, g::Vector{Float64})
+        
+        #Extract solution and derivatives w.r.t. xi:
+        u               = z[1:model.nVars]
+        du_dxi          = z[model.nVars+1:2*model.nVars]
+        
+        #Reshape solution:
+        usol            = Vector{Matrix{Float64}}(undef, model.nVars)
+        dusol_dx        = Matrix{Matrix{Float64}}(undef, model.nVars, 2)
+        for II=1:model.nVars
+            usol[II]    = reshape([u[II]],1,1)
+        end
+        alloc!(dusol_dx, (1,1))     #we set du_dx=0 because this term is only needed to compute db/dx in source term
+        
+        #Compute fluxes and Jacobian:
+        fsol            = Matrix{Matrix{Float64}}(undef, model.nVars, 2)
+        dfsol_dusol     = Array{Matrix{Float64},3}(undef, model.nVars, 2, model.nVars)
+        alloc!(fsol, (1,1))
+        alloc!(dfsol_dusol, (1,1))
+        HyperbolicFlux!(model, usol, true, fsol, dfsol_dusol)
+        
+        #Compute source terms:
+        Qsol            = Vector{Matrix{Float64}}(undef, model.nVars)
+        dQsol_dusol     = Matrix{Matrix{Float64}}(undef, model.nVars, model.nVars)
+        dQsol_dusol_dx  = Array{Matrix{Float64},3}(undef, model.nVars, model.nVars, 2)
+        alloc!(Qsol, (1,1))
+        alloc!(dQsol_dusol, (1,1))
+        alloc!(dQsol_dusol_dx, (1,1))
+        tau_char        = 1e-2
+        Source!(model, [zeros(1,1), zeros(1,1)], tau_char, usol, dusol_dx, true, 
+                Qsol, dQsol_dusol, dQsol_dusol_dx)
+                
+        #Extract terms:
+        df_du           = Matrix{Float64}(undef, model.nVars, model.nVars)
+        Q               = Vector{Float64}(undef, model.nVars)
+        dQ_du           = Matrix{Float64}(undef, model.nVars, model.nVars)
+        for II=1:model.nVars, JJ=1:model.nVars
+            df_du[II,JJ]    = dfsol_dusol[II,1,JJ][1,1]
+            dQ_du[II,JJ]    = dQsol_dusol[II,JJ][1,1]
+        end
+        for II=1:model.nVars
+            Q[II]           = Qsol[II][1,1]
+        end
+        
+        #Preconditioned residual for first nVars equations:
+        J1              = 1.0/l0*(df_du-c0*eye(model.nVars)) - dQ_du
+        f1              = 1.0/l0*(df_du-c0*eye(model.nVars))*du_dxi - Q
+        g[1:model.nVars].= J1\f1
+        
+        #Preconditioned residual for last nVars equations:
+        g[model.nVars+1:2*model.nVars]  .= vcat( u[1]-(h0+A), u[4], u[3], u[6], du_dxi[2], du_dxi[5] )
+        
+        return 1
+        
+    end
+    
+    #Call Anderson:
+    z0              = vcat( [h0+A, (h0+A)*c0, 0.0, 0.0, (h0+A)^2, 0.0], 
+                            [0.0, 0.0, 0.0, 1.0, 0.0, 0.0] )
+    solver_output   = Anderson(FW_NLS((z,g)->SolitonResidual!(z,g)), 
+                                    z0,
+                                    memory=100, MaxIter=100, 
+                                    AbsTolG=1e-10, RelTolG=0.0,
+                                    Display="iter", history=false)
+    zpeak           = solver_output[1][1:model.nVars]
+    
+    return zpeak
+            
+end  
+
+#=
+function SolitonRelaxedPeak2(; A::Float64=0.2, gamma::Float64=3/2, 
+    h0::Float64=1.0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), 
+    theta::Float64=0.0)
+
+    #Define model:
+    model       = NHWW()
+    model.g     = g
+    model.c     = c
+    
+    #Initial and final values for xi:
+    xi0         = 0.0       #symmetry is applied later
+    
+    #Soliton velocity is unknown:
+    l0          = 1.0
+    
+    #Function to solve peak. We impose
+    #   1/l*(A - c0*I)*du/dxi = Q
+    #with A the Jacobian flux matrix in x direction, df_x/du, and symmetry conditions
+    #   hw = hv = b = 0
+    #   h = h0+A
+    #   d_xi (hu) = d_xi P = 0
+    #This provides 2*nVars equations for 2*nVars variables (the values of h,...,b and 
+    #their derivatives.)
+    function SolitonResidual!(z::Vector{Float64}, g::Vector{Float64})
+        
+        #Extract solution and derivatives w.r.t. xi:
+        u               = z[1:model.nVars]
+        du_dxi          = z[model.nVars+1:2*model.nVars]
+        c0              = z[2*model.nVars+1]
+        
+        #Reshape solution:
+        usol            = Vector{Matrix{Float64}}(undef, model.nVars)
+        dusol_dx        = Matrix{Matrix{Float64}}(undef, model.nVars, 2)
+        for II=1:model.nVars
+            usol[II]    = reshape([u[II]],1,1)
+        end
+        alloc!(dusol_dx, (1,1))     #we set du_dx=0 because this term is only needed to compute db/dx in source term
+        
+        #Compute fluxes and Jacobian:
+        fsol            = Matrix{Matrix{Float64}}(undef, model.nVars, 2)
+        dfsol_dusol     = Array{Matrix{Float64},3}(undef, model.nVars, 2, model.nVars)
+        alloc!(fsol, (1,1))
+        alloc!(dfsol_dusol, (1,1))
+        HyperbolicFlux!(model, usol, true, fsol, dfsol_dusol)
+        
+        #Compute source terms:
+        Qsol            = Vector{Matrix{Float64}}(undef, model.nVars)
+        dQsol_dusol     = Matrix{Matrix{Float64}}(undef, model.nVars, model.nVars)
+        dQsol_dusol_dx  = Array{Matrix{Float64},3}(undef, model.nVars, model.nVars, 2)
+        alloc!(Qsol, (1,1))
+        alloc!(dQsol_dusol, (1,1))
+        alloc!(dQsol_dusol_dx, (1,1))
+        tau_char        = 1e-2
+        Source!(model, [zeros(1,1), zeros(1,1)], tau_char, usol, dusol_dx, true, 
+                Qsol, dQsol_dusol, dQsol_dusol_dx)
+                
+        #Extract terms:
+        df_du           = Matrix{Float64}(undef, model.nVars, model.nVars)
+        Q               = Vector{Float64}(undef, model.nVars)
+        dQ_du           = Matrix{Float64}(undef, model.nVars, model.nVars)
+        for II=1:model.nVars, JJ=1:model.nVars
+            df_du[II,JJ]    = dfsol_dusol[II,1,JJ][1,1]
+            dQ_du[II,JJ]    = dQsol_dusol[II,JJ][1,1]
+        end
+        for II=1:model.nVars
+            Q[II]           = Qsol[II][1,1]
+        end
+        
+        #Preconditioned residual for first nVars equations:
+        J1              = 1.0/l0*(df_du-c0*eye(model.nVars)) - dQ_du
+        f1              = 1.0/l0*(df_du-c0*eye(model.nVars))*du_dxi - Q
+        g[1:model.nVars].= J1\f1
+        
+        #Preconditioned residual for last nVars equations:
+        g[model.nVars+1:2*model.nVars]  .= vcat( u[1]-(h0+A), u[4], u[3], u[6], du_dxi[2], du_dxi[5] )
+        
+        #Impose u=c0:
+        g[2*model.nVars+1]              = u[2]-u[1]*c0
+        
+        return 1
+        
+    end
+    
+    #Call Anderson:
+    c00             = sqrt(g*(A+h0))
+    z0              = vcat( [h0+A, (h0+A)*c00, 0.0, 0.0, (h0+A)^2, 0.0], 
+                            [0.0, 0.0, 0.0, 1.0, 0.0, 0.0], 
+                            c00 )
+    solver_output   = Anderson(FW_NLS((z,g)->SolitonResidual!(z,g)), 
+                                    z0,
+                                    memory=100, MaxIter=100, 
+                                    AbsTolG=1e-10, RelTolG=0.0,
+                                    Display="iter", history=false)
+    zpeak           = solver_output[1][1:model.nVars]
+    
+    return zpeak
+            
+end  
+=#

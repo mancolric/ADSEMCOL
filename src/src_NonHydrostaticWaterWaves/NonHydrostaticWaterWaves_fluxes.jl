@@ -1,6 +1,6 @@
 function HyperbolicFlux!(model::NHWW,
     u::Vector{MFloat},
-    ComputeJ::Bool, f::Matrix{MFloat}, df_du::Array{MFloat,3})where MFloat<:AbstractMatrix{Float64}
+    ComputeJ::Bool, f::Matrix{MFloat}, df_du::Array{MFloat,3}) where MFloat<:AbstractMatrix{Float64}
 
     return HyperbolicFlux1!(model, u, ComputeJ, f, df_du)
 
