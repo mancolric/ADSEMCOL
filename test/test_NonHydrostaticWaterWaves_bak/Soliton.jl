@@ -312,7 +312,7 @@ function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=2.0,
     
 end
 
-function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0, 
+function SolitonRelaxed_old(; A::Float64=0.2, gamma::Float64=2.0, 
     h0::Float64=1.0, href::Float64=h0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), 
     Deltaxi::Float64=1e-6, xif::Float64=10.0, theta::Float64=0.0)
 
@@ -321,8 +321,8 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0,
     
     #Soliton velocity and length:
     c0          = sqrt(g*(A+h0))
-    l0          = h0*sqrt((A+h0)/h0)
-#     l0          = h0*sqrt((A+h0)/(A*gamma/2))
+#     l0          = h0*sqrt((A+h0)/h0)
+    l0          = h0*sqrt((A+h0)/(A*gamma/2))
     
     #Load coefficients:
     RKCoeffs    = RK_Coefficients("BPR3")
@@ -401,9 +401,9 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0,
     
     #Extract solution:
     aux     = length(xiv):-1:1
-    xiv     = vcat(xiv[aux], xiv)
+    xiv     = vcat(-xiv[aux], xiv)
     hv      = vcat(um[aux,1], um[:,1])
-    wv      = vcat(um[aux,2], um[:,2])
+    wv      = vcat(-um[aux,2], um[:,2])
     pv      = @. (c0^2*(hv-h0)*h0/hv - 0.5*g*(hv^2-h0^2))/hv
     Pv      = @. hv*(pv-c^2*log(abs(hv./href)))
     qv      = @. c0*(hv-h0)
@@ -412,14 +412,33 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0,
     q3v     = @. hv*wv
     etav    = hv
     
+    #Exact solution:
+    zexact  = SolitonExact(0.0, l0*reshape(xiv,:,1), A=A, gamma=gamma, 
+                                h0=h0, g=g, theta=theta)
+    
     figure()
     plot(xiv, etav)
+    plot(xiv, zexact[1], "r")
+    xlabel("xi")
+    ylabel("eta")
+    
+    figure()
+    plot(xiv, q1v./hv)
+    plot(xiv, zexact[2]./zexact[1], "r")
+    xlabel("xi")
+    ylabel("w")
     
     figure()
     plot(xiv, wv)
+    plot(xiv, zexact[4]./zexact[1], "r")
+    xlabel("xi")
+    ylabel("w")
     
     figure()
     plot(xiv, pv)
+    plot(xiv, zexact[5], "r")
+    xlabel("xi")
+    ylabel("p")
     
     save("Soliton.jld2", "xiv", xiv, "etav", etav, "q1v", q1v, "q2v", q2v, 
         "q3v", q3v, "Pv", Pv)
@@ -427,3 +446,217 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0,
     return xiv, etav, q1v, q2v, q3v, Pv
             
 end    
+
+function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=2.0, 
+    h0::Float64=1.0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), 
+    Deltaxi::Float64=1e-6, xif::Float64=10.0, theta::Float64=0.0)
+
+    #Define model:
+    model               = NHWW()
+    model.g             = g
+    model.c             = c
+    model.gamma         = gamma
+    model.h0            = h0
+    
+    #Initial and final values for xi:
+    xi0         = 0.0       #symmetry is applied later
+    
+    #Soliton velocity and length:
+    c0          = sqrt(g*(A+h0))
+    l0          = h0*sqrt((A+h0)/(A*gamma/2))
+    
+    #Load coefficients:
+    RKCoeffs    = RK_Coefficients("BPR3")
+    Bm          = RKCoeffs.AE
+    ABm         = RKCoeffs.AI-RKCoeffs.AE
+    cv          = RKCoeffs.c
+    ss          = RKCoeffs.stages
+    
+    #Initial condition for u=[eta, q1, q2, q3, P, b] (q2=0):
+    un0         = [ h0, 0.0, 0.0, 0.0, h0*(0.0-c*c*log(h0/h0))+1e-5, 0.0 ]
+#     un0         = SolitonRelaxedPeak(A=A, gamma=gamma, h0=h0, g=g, c=c, theta=theta)
+    
+    #Function to march in time:
+    function SolitonFun(u::Vector{Float64}, ComputeJ::Bool)
+        
+        #Reshape solution:
+        usol            = Vector{Matrix{Float64}}(undef, model.nVars)
+        dusol_dx        = Matrix{Matrix{Float64}}(undef, model.nVars, 2)
+        for II=1:model.nVars
+            usol[II]    = reshape([u[II]],1,1)
+        end
+        alloc!(dusol_dx, (1,1))     #we set du_dx=0 because this term is only needed to compute db/dx in source term
+        
+        #Compute fluxes and Jacobian:
+        fsol            = Matrix{Matrix{Float64}}(undef, model.nVars, 2)
+        dfsol_dusol     = Array{Matrix{Float64},3}(undef, model.nVars, 2, model.nVars)
+        alloc!(fsol, (1,1))
+        alloc!(dfsol_dusol, (1,1))
+        HyperbolicFlux!(model, usol, true, fsol, dfsol_dusol)
+        
+        #Compute source terms:
+        Qsol            = Vector{Matrix{Float64}}(undef, model.nVars)
+        dQsol_dusol     = Matrix{Matrix{Float64}}(undef, model.nVars, model.nVars)
+        dQsol_dusol_dx  = Array{Matrix{Float64},3}(undef, model.nVars, model.nVars, 2)
+        alloc!(Qsol, (1,1))
+        Source!(model, [zeros(1,1), zeros(1,1)], Inf, usol, dusol_dx, false, 
+                Qsol, dQsol_dusol, dQsol_dusol_dx)
+                
+        #Extract terms:
+        df_du           = Matrix{Float64}(undef, model.nVars, model.nVars)
+        Q               = Vector{Float64}(undef, model.nVars)
+        for II=1:model.nVars, JJ=1:model.nVars
+            df_du[II,JJ]    = dfsol_dusol[II,1,JJ][1,1]
+        end
+        for II=1:model.nVars
+            Q[II]           = Qsol[II][1,1]
+        end
+            
+        #Solve system:
+        du_dxi          = l0*((df_du-c0*eye(model.nVars))\Q)
+        J               = zeros(0,0)
+        if ComputeJ
+            J       = zeros(model.nVars, model.nVars)
+            delta   = 1e-6
+            for jj=1:size(J,2)
+                upert       = copy(u)
+                upert[jj]   += delta
+                fpert       = SolitonFun(upert, false)[1]
+                J[:,jj]     = (fpert-du_dxi)/(delta)
+            end
+        end
+        return du_dxi, J
+        
+    end
+    
+    #Loop:
+    xin         = xi0
+    un          = un0
+    xiv         = [xi0]
+    um          = permutedims(un)
+    fm          = zeros(length(un), ss)
+    Jum         = zeros(length(un), ss)
+    while xin<=xif
+    
+        #First stage:
+        unp1            = copy(un)
+        xinp1           = xin
+        fm[:,1],Jn      = SolitonFun(un, true)
+        Jum[:,1]        = Jn*un
+        LSm             = eye(model.nVars) - Deltaxi*ABm[2,2]*Jn
+        LSm_F           = factorize(LSm)
+        
+        #Loop stages:
+        for kk=2:ss
+        
+            xinp1       = xin + cv[kk]*Deltaxi
+            zn          = 1.0*un
+            for ll=1:kk-1
+                zn      .+= Deltaxi*(Bm[kk,ll]*fm[:,ll] + ABm[kk,ll]*Jum[:,ll])
+            end
+            unp1        .= LSm_F\zn
+            fm[:,kk]    = SolitonFun(unp1, false)[1]
+            Jum[:,kk]   = Jn*unp1
+            
+        end
+        
+        #Exit if h<0
+        if unp1[1]<0.0
+            break
+        end
+        
+        #Update solution:
+        xin         = xinp1
+        un          .= unp1
+        xiv         = vcat(xiv, xin)
+        um          = vcat(um, permutedims(un))
+        
+        println("xi=", xin)
+        
+    end
+    
+    #Extract solution:
+#     aux     = length(xiv):-1:1
+    aux     = zeros(Int,0)
+    xiv     = vcat(xiv[aux], xiv)
+    hv      = vcat(um[aux,1], um[:,1])
+    qv      = vcat(um[aux,2], um[:,2])
+    uv      = @. qv/hv
+    q1v     = @. qv*cos(theta)
+    q2v     = @. qv*sin(theta)
+    q3v     = vcat(um[aux,4], um[:,4])
+    wv      = @. q3v/hv
+    Pv      = vcat(um[aux,5], um[:,5])
+    pv      = @. Pv/hv + c*c*log(hv/h0)
+    etav    = hv    
+    bv      = vcat(um[aux,6], um[:,6])
+    
+    #Compute peak:
+    _,ipeak  = findmax(etav)
+    xiv     = xiv .- xiv[ipeak]
+    
+    #Compute exact solution:
+    zexact  = SolitonExact(0.0, reshape(l0*xiv,:,1), A=A, gamma=gamma, h0=h0, g=g, theta=theta)
+    
+    figure()
+    plot(xiv, etav, "b")
+    plot(xiv, zexact[1], "r")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("\\eta"), rotation=0)
+#     plot(xiv[ipeak], zpeak[1], "ok")
+    legend(["Relaxed", "Exact"])
+    
+    figure()
+#     plot(xiv, q1v, "b")
+#     plot(xiv, zexact[2], "r")
+    plot(xiv, uv, "b")
+    plot(xiv, zexact[2]./zexact[1], "r")
+    xlabel(latexstring("\\xi"))
+#     ylabel(latexstring("q_1"), rotation=0)
+    ylabel(latexstring("u_1"), rotation=0)
+#     plot(xiv[ipeak], zpeak[2], "ok")
+    
+    figure()
+#     plot(xiv, q3v, "b")
+#     plot(xiv, zexact[4], "r")
+    plot(xiv, wv, "b")
+    plot(xiv, zexact[4]./zexact[1], "r")
+    xlabel(latexstring("\\xi"))
+#     ylabel(latexstring("q_3"), rotation=0)
+    ylabel(latexstring("u_3"), rotation=0)
+#     plot(xiv[ipeak], zpeak[4], "ok")
+    
+#     figure()
+#     plot(xiv, Pv)
+#     xlabel(latexstring("\\xi"))
+#     ylabel(latexstring("P"), rotation=0)
+#     #plot(xiv[ipeak], zpeak[5], "ok")
+    
+    figure()
+    plot(xiv, pv, "-xb")
+    plot(xiv, zexact[5], "r")
+    pv2     = @. c0^2*(zexact[1]-h0)*h0/zexact[1]^2 + 0.5*g*(h0^2-zexact[1]^2)/zexact[1]
+    plot(xiv, pv2, "c")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("p"), rotation=0)
+    legend(["Relaxed", "Exact", "Ec. (30) JCP"])
+    
+    figure()
+    plot(xiv, Pv, "b")
+    plot(xiv, zexact[1].*(zexact[5]-c*c*log.(zexact[1]/h0)), "r")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("P"), rotation=0)
+    legend(["Relaxed", "Exact"])
+    
+#     figure()
+#     plot(xiv, zexact[5]./pv, "r")
+#     xlabel(latexstring("\\xi"))
+#     ylabel(latexstring("p"), rotation=0)
+    
+#     save("Soliton.jld2", "xiv#=", xiv, "etav", etav, "q1v", q1v, "q2v", q2v, 
+#         "q3v", q3v, "Pv", Pv)
+        
+    return xiv, etav, q1v, q2v, q3v, Pv
+            
+end    
+
