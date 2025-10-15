@@ -20,7 +20,6 @@ mutable struct SCD <: ScalarConvectionDiffusion
     #Stabilization variables:
     CSS             ::Float64   #Subgrid stabilization
     CW              ::Float64   #Boundary penalty (50.0-200.0 for IIPG)
-    CDC             ::Float64   #Discontinuity capturing
     
     #Mandatory fields:
     nVars           ::Int                 
@@ -41,9 +40,8 @@ function SCD(a::FWt21, epsilon::FWt21, Q::FWt21,
     PD.dQ_du        = dQ_du
     PD.CSS          = 0.1
     PD.CW           = 50.0
-    PD.CDC          = 0.0
     PD.nVars        = 1
-#     PD.DepVars  = String[]
+
     return PD
     
 end
@@ -121,34 +119,6 @@ function FluxSource!(model::SCD, _qp::TrIntVars, ComputeJ::Bool)
     if ComputeJ
         da_du               = model.da_du(t,x,u)
         depsilon_du         = model.depsilon_du(t,x,u)[1]
-    end
-    
-    #Add artificial viscosity:
-    if true
-        delta               = 1e-3
-        C1                  = 0.0
-        C2                  = 1.0
-        hp_min              = _hmin(_qp.Integ2D.mesh) ./_qp.FesOrder * ones(1, _qp.nqp)
-        S                   = @tturbo @. SmoothHeaviside(log10(hp_min/delta), C2, 1.0, 0.0)
-#         S                   = @tturbo @. SmoothHeaviside(hp_min-delta, C2*delta, 1.0, 0.0)
-#         @tturbo @. epsilon  += C1*lambda_max*delta*S
-        @tturbo @. epsilon  += C1*1.0*delta*1.0
-    end
-    if false
-        #Impossible model!!
-        #   epsilon= C1*a*delta * min((C2|grad u|/(u0/delta))^m, 1.0) 
-        delta               = 1e-3
-        C1                  = 2.0
-        C2                  = 5.0
-        m                   = 2.0
-        u0                  = 1.0
-        #|grad u|:
-        du_norm             = @tturbo @. sqrt(du[1]*du[1]+du[2]*du[2])
-        #Shock sensor:
-        S                   = @tturbo @. min( (C2*du_norm/(u0/delta))^m, 1.0)
-        #Viscosity:
-        @tturbo @. epsilon  += C1*lambda_max*delta*S
-        
     end
     
     #Convective and diffusive fluxes:
