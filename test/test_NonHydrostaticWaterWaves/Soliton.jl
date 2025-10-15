@@ -306,7 +306,7 @@ function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=3/2,
     q1      = @. q*cos(theta)
     q2      = @. q*sin(theta)
     q3      = @. -A*c0*h0/l0*2*phi*dphi
-    p       = @. A*c0^2*h0^2/(2*l0^2*h^2)*( (2*h0-h)*dphi^2 + h*phi*d2phi )
+    p       = @. A*c0^2*h0^2/(gamma*l0^2*h^2)*( (2*h0-h)*dphi^2 + h*phi*d2phi )
     eta     = h
     #In principle, P should be obtained from
     #   p = 1/3 c^2 P/h^2 (1 - P/h^2)
@@ -502,7 +502,7 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=3/2,
 #     #plot(xiv[ipeak], zpeak[5], "ok")
     
     figure()
-    plot(xiv, pv, "b")
+    plot(xiv, pv, "-xb")
     plot(xiv, zexact[5], "r")
     xlabel(latexstring("\\xi"))
     ylabel(latexstring("p"), rotation=0)
@@ -538,6 +538,7 @@ function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=3/2,
             
 end    
 
+#=
 function SolitonRelaxedPeak(; A::Float64=0.2, gamma::Float64=3/2, 
     h0::Float64=1.0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), 
     theta::Float64=0.0)
@@ -631,6 +632,7 @@ function SolitonRelaxedPeak(; A::Float64=0.2, gamma::Float64=3/2,
     return zpeak
             
 end  
+=#
 
 #=
 function SolitonRelaxedPeak2(; A::Float64=0.2, gamma::Float64=3/2, 

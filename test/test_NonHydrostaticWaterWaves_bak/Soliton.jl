@@ -305,7 +305,7 @@ function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=2.0,
     q1      = @. q*cos(theta)
     q2      = @. q*sin(theta)
     q3      = @. -A*c0*h0/l0*phi*dphi
-    p       = @. A*c0^2*h0^2/(2*l0^2*h^2)*( (2*h0-h)*dphi^2 + h*phi*d2phi )
+    p       = @. A*c0^2*h0^2/(gamma*l0^2*h^2)*( (2*h0-h)*dphi^2 + h*phi*d2phi )
     eta     = h
     
     return [ eta, q1, q2, q3, p ]
