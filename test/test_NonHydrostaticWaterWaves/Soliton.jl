@@ -317,12 +317,13 @@ function SolitonExact(t::Float64, x::AMF64; A::Float64=0.2, gamma::Float64=3/2,
 end
 
 function SolitonRelaxed(; A::Float64=0.2, gamma::Float64=3/2, 
-    h0::Float64=1.0, g::Float64=9.8, c::Float64=10*sqrt(g*h0), 
+    h0::Float64=1.0, g::Float64=9.8, alpha::Float64=10.0, 
     Deltaxi::Float64=1e-6, xif::Float64=10.0, theta::Float64=0.0)
 
     #Define model:
     model               = NHWW()
     model.g             = g
+    c                   = alpha*sqrt(g*h0)
     model.c             = c
     
     #Initial and final values for xi:
