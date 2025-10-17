@@ -298,7 +298,7 @@ function PolyLeg(xv::Vector{Float64}, N::Int; a::Float64=-1.0, b::Float64=1.0)
 end
 
 "
-    dTm  = dPolyLeg(xv, N; a, b)
+    dTm  = dPolyLeg(xv, N; a=-1, b=1)
 
 Return a matrix such that dTm[ii,jj+1] is the value of the derivative of the Legendre polynomial
 dT_jj (traslated to the interval [a,b]) at xv[ii]. 
