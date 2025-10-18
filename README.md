@@ -62,6 +62,6 @@ TriplePoint(0.02, 5, TolS=1e-5, TolT=1e-3, epsilon=1e-3, tf=2.0, SaveRes=true, D
 
 Above, `SC` is the _study case_, i.e., a number associated with the problem. In this case, `SC=10`. The results are saved in the directory specified in the `ResUbi.jl` file (generated during the installation) with the names `SC10_0.jld2` ($t=0$), `SC10_1.jld2` ($t=0.2$), `SC10_2.jld2` ($t=0.4$), ...
 
-There are some useful functions to plot the results of each test in the folder `ADSEMCOL/test/results/`.
+There are some useful functions to plot the results of each test in the folder `ADSEMCOL/test/PlotResults/`.
 
 Detailed documentation will be uploaded in the future.
