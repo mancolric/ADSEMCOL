@@ -1,5 +1,5 @@
 include("../../src/src_NonHydrostaticWaterWaves_bak/NonHydrostaticWaterWaves.jl")
-include("ResUbi.jl")
+include("../ResUbi.jl")
 
 function LatexString(vble::String)
 
