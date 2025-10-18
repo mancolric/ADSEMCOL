@@ -556,9 +556,12 @@ function SolitonRelaxedFun(t::Float64, x::Vector{<:AMF64}, SolitonData::Matrix{F
     #Get xi in vector format:
     xiv         = (x[1][:].-c0*t)/l0
     
+    #Clip xi:
+    xiv         = max.(xi0, min.(xiv, -xi0))
+    
     #Flag elements with xi>0
     xiv_flag    = -sign.(xiv)    #1: xi<0, -1:xi>0
-
+    
     #Interpolate from the data at the left of xi=0:
     Tm          = PolyLeg(xiv_flag.*xiv, nPoly, a=xi0, b=xif)
     um          = Tm*SolitonCoeffs
