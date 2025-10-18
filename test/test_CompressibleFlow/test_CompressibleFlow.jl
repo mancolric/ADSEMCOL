@@ -1,6 +1,6 @@
 include("../../src/src_CompressibleFlow/CompressibleFlow.jl")
 include("InputData/CompressibleFlow_SC.jl")
-include("ResUbi.jl")
+include("../ResUbi.jl")
 
 function LatexString(vble::String)
 
