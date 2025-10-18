@@ -15,7 +15,7 @@ Under development (to be included in future updates):
 
 The code is currently under development, i.e., it is not optimized and it can sometimes fail due to incorrect settings and not sufficiently robust implementation.
 
-![](/test/figures/TriplePoint.png)
+![](/results/figures/TriplePoint.png)
 
 ### Authors and contact
 
