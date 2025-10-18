@@ -48,7 +48,7 @@ for folder in folders
     #Open file and write ResUbi:
     filename    = "$(CurrentDir)/test/$(folder)/ResUbi.jl"
     ResUbiFile  = open(filename, "w")
-    DefFolder   = "$(CurrentDir)/results/"
+    DefFolder   = "$(CurrentDir)/results/datafiles/"
     write(ResUbiFile, "#Path to folder where results are to be saved. Please include final slash (/) character:\n")
     write(ResUbiFile, "ResUbi \t= \"$(DefFolder)\"")
     close(ResUbiFile)
@@ -66,9 +66,9 @@ for folder in folders
 end
 
 #Create files to save figures and videos:
-filename    = "$(CurrentDir)/test/results/ResUbi.jl"
+filename    = "$(CurrentDir)/test/PlotResults/ResUbi.jl"
 ResUbiFile  = open(filename, "w")
-DefFolder   = "$(CurrentDir)/test/figures/"
+DefFolder   = "$(CurrentDir)/results/figures/"
 write(ResUbiFile, "#Path to folder where figures are to be saved. Please include final slash (/) character:\n")
 write(ResUbiFile, "FigUbi \t= \"$(DefFolder)\"\n")
 write(ResUbiFile, "#Path to folder where videos are to be saved. Please include final slash (/) character:\n")

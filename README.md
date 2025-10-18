@@ -14,7 +14,7 @@ Under development (to be included in future updates):
 
 The code is currently under development, i.e., it is not optimized and it can sometimes fail due to incorrect settings and not sufficiently robust implementation.
 
-![](/test/figures/TriplePoint.png)
+![](/results/figures/TriplePoint.png)
 
 ### Authors, collaborators and contact
 
@@ -31,7 +31,7 @@ m.colera@upm.es
 
 M. Colera, V. Dolejší, 2025: [An adaptive spectral element method for systems of conservation laws](https://doi.org/10.1016/j.jcp.2025.114322). Journal of Computational Physics 541, 114322.
 
-M. Colera, V. Dolejší, 2025: [ADSEMCOL - Adaptive Spectral Element Method for Systems of Conservation Laws](https://github.com/mancolric/ADSEMCOL/).
+M. Colera, V. Dolejší, 2025: ADSEMCOL - Adaptive Spectral Element Method for Systems of Conservation Laws, [https://github.com/mancolric/ADSEMCOL/](https://github.com/mancolric/ADSEMCOL/).
 
 ### Installation
 
@@ -63,6 +63,6 @@ TriplePoint(0.02, 5, TolS=1e-5, TolT=1e-3, epsilon=1e-3, tf=2.0, SaveRes=true, D
 
 Above, `SC` is the _study case_, i.e., a number associated with the problem. In this case, `SC=10`. The results are saved in the directory specified in the `ResUbi.jl` file (generated during the installation) with the names `SC10_0.jld2` ($t=0$), `SC10_1.jld2` ($t=0.2$), `SC10_2.jld2` ($t=0.4$), ...
 
-There are some useful functions to plot the results of each test in the folder `ADSEMCOL/test/results/`.
+There are some useful functions to plot the results of each test in the folder `ADSEMCOL/test/PlotResults/`.
 
 Detailed documentation will be uploaded in the future.

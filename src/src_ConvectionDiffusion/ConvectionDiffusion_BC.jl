@@ -78,21 +78,11 @@ function bflux!(model::SCD, BC::Dirichlet, _bqp::TrBintVars, ComputeJ::Bool)
     epsilon, depsilon_du, 
         depsilon_dgradu                 = ViscosityAllocate(1, size(u[1]), ComputeJ)
     
-    #Natural+artificial viscosity:
+    #Natural viscosity:
     epsilon                             = model.epsilon(t,x,u)[1]
     depsilon_du                         = zeros(0,0)
     if ComputeJ
         depsilon_du                     = model.depsilon_du(t,x,u)[1]
-    end
-    if true
-        delta               = 1e-3
-        C1                  = 0.0
-        C2                  = 1.0
-#         hp_min              = _hmin(_qp.Integ2D.mesh) ./_qp.FesOrder * ones(1, _qp.nqp)
-#         S                   = @tturbo @. SmoothHeaviside(log10(hp_min/delta), C2, 1.0, 0.0)
-#         S                   = @tturbo @. SmoothHeaviside(hp_min-delta, C2*delta, 1.0, 0.0)
-#         @tturbo @. epsilon  += C1*lambda_max*delta*S
-        @tturbo @. epsilon  += C1*1.0*delta*1.0
     end
     
     #Extrapolate natural viscous flux:
