@@ -30,7 +30,7 @@ m.colera@upm.es
 
 M. Colera, V. Dolejší, 2025: [An adaptive spectral element method for systems of conservation laws](https://doi.org/10.1016/j.jcp.2025.114322). Journal of Computational Physics 541, 114322.
 
-M. Colera, V. Dolejší, 2025: [ADSEMCOL - Adaptive Spectral Element Method for Systems of Conservation Laws](https://github.com/mancolric/ADSEMCOL/).
+M. Colera, V. Dolejší, 2025: ADSEMCOL - Adaptive Spectral Element Method for Systems of Conservation Laws, [https://github.com/mancolric/ADSEMCOL/](https://github.com/mancolric/ADSEMCOL/).
 
 ### Installation
 
