@@ -1,3 +1,4 @@
+#=
 println("Installing packages")
 import Pkg
 Pkg.add("Conda")
@@ -35,12 +36,42 @@ Pkg.add("FunctionWrappers")
 Pkg.add("JET")
 Pkg.add("PProf")
 # println("WARN: using Format.jl instead of Formatting.jl")
+=#
 
 #Add temp folder:
 println("Adding temp folder\n")
 CurrentDir  = @__DIR__
 mkpath("$(CurrentDir)/test/temp") #no problem if directory already exists
 
+#Create file to save data, figures and videos:
+filename    = "$(CurrentDir)/test/ResUbi.jl"
+ResUbiFile  = open(filename, "w")
+DefFolders  = [ "datafiles", "figures", "videos" ]
+Items       = [ "numerical results", "figures", "videos" ]
+Labels      = [ "ResUbi", "FigUbi", "VideosUbi" ]
+for ii=1:length(Items)
+    DefFolder   = "$(CurrentDir)/results/$(DefFolders[ii])/"
+    Item        = Items[ii]
+    write(ResUbiFile, "#Path to folder where $(Item) are to be saved. Please include final slash (/) character:\n")
+    write(ResUbiFile, "$(Labels[ii]) \t= \"$(DefFolder)\"\n")
+end
+close(ResUbiFile)
+
+printstyled("File ")
+printstyled(filename, color=:blue, bold=true)
+printstyled(" created. ")
+printstyled("Please change in the file", color=:yellow)
+printstyled(" the directories at which ")
+printstyled("numerical results, figures and videos", color=:blue, bold=true)
+printstyled(" are to be saved. Default folders are \n")
+for ii=1:length(Items)
+    DefFolder   = "$(CurrentDir)/results/$(DefFolders[ii])/\n"
+    printstyled(DefFolder, color=:blue, bold=true)
+end
+    
+printstyled("Installation finished\n", color=:light_green)
+
+#=
 #Create files to save results:
 folders     = [ "test_ConvectionDiffusion", "test_CompressibleFlow" ]
 for folder in folders
@@ -86,3 +117,4 @@ printstyled(DefFolder, color=:blue, bold=true)
 printstyled(".\n\n")
     
 printstyled("Installation finished\n", color=:light_green)
+=#
