@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("test_NonHydrostaticWaterWaves.jl")
 include("SolitonExact.jl") #load exact soliton
 
@@ -17,7 +16,7 @@ function SolitonRelaxed(hp0::Float64, FesOrder::Int;
     SaveFig::Bool=false, Nt_SaveFig::Int=5, Deltat_SaveFig::Float64=Inf,
     mFig::Int=max(1,length(PlotVars)), nFig::Int=Int(ceil(length(PlotVars)/mFig)), cmap::String="jet",
     #
-    SaveRes::Bool=false, Nt_SaveRes::Int=typemax(Int), Deltat_SaveRes::Float64=0.1,
+    SaveRes::Bool=false, Nt_SaveRes::Int=typemax(Int), Deltat_SaveRes::Float64=Inf,
     #
     CSS::Float64=0.1,
     #
@@ -91,7 +90,7 @@ function SolitonRelaxed(hp0::Float64, FesOrder::Int;
     #PRE-PROCESS STAGE:
 
     #Mesh:
-    MeshFile                = "../temp/SolitonRelaxed$(SC).geo"
+    MeshFile                = "$(@__DIR__)/../../temp/SolitonRelaxed$(SC).geo"
     NX                      = Int(ceil((xend+20.0)/(hp0*FesOrder)))
     NY                      = 2
 #     TrMesh_Rectangle_Create!(MeshFile, -5.0, 5.0, NX, -5.0, 5.0, NY)
@@ -252,7 +251,7 @@ function SolitonRelaxed(hp0::Float64, FesOrder::Int;
                         ct_SaveRes==Nt_SaveRes || solver.t==tf || solver.t==0.0 )
             save("$(ResUbi)LIRKHyp_SC$(SC)_$(nb_SaveRes).jld2", "StudyCase", "SolitonRelaxed",
                 "ConvFlag", ConvFlag, "solver", save(solver),
-                 "TolS", TolS, "TolT", TolT)
+                 "TolS", TolS, "TolT", TolT, "SolitonId", SolitonId, "alpha", alpha)
             t_lastRes   += Deltat_SaveRes
             ct_SaveRes  = 0
             nb_SaveRes  += 1
@@ -295,7 +294,7 @@ function SolitonRelaxed(hp0::Float64, FesOrder::Int;
 end
 
 #Find relaxed solution: RK + high-order interpolation
-function SolitonRelaxedCompute(; A::Float64=0.2, gamma::Float64=3/2, 
+function SolitonRelaxedCompute_LIRK(; A::Float64=0.2, gamma::Float64=3/2, 
     h0::Float64=1.0, g::Float64=9.8, alpha::Float64=10.0, 
     Deltaxi::Float64=1e-4, xif::Float64=10.0, 
     nPoly::Int=50, SolitonId::Int=0)
@@ -428,6 +427,237 @@ function SolitonRelaxedCompute(; A::Float64=0.2, gamma::Float64=3/2,
         println("xi=", xin)
         
     end
+    
+    #---------------------------------------------------------------------------
+    #INTERPOLATE:
+    
+    #Find Chebyshev interpolation:
+    xi0         = xiv[1]
+    xif         = xiv[length(xiv)]
+    Tm          = PolyLeg(xiv, nPoly, a=xi0, b=xif)
+    Tm_QR       = qr(Tm)
+    am          = Tm_QR\um
+    
+#     figure()
+#     plot(xiv, um[:,1], "-xb")
+#     plot(xiv, Tm*am[:,1], "r")
+    
+    #Find maximum h:
+    function hprimeResidual!(xistar::Vector{Float64}, gres::Vector{Float64})
+    
+        #Evaluate derivative at xistar:
+        dTm     = dPolyLeg(xistar, nPoly, a=xi0, b=xif)
+        fres    = dTm*am[:,1]
+        gres    .= fres
+        
+        return 1
+        
+    end
+    
+    #Call Anderson:
+    solver_output   = Anderson(FW_NLS((xi,gres)->hprimeResidual!(xi,gres)), 
+                                    [xif], 
+                                    memory=100, MaxIter=100, 
+                                    AbsTolG=1e-10, RelTolG=0.0,
+                                    Display="final", history=false)
+                                    
+    #Center xi axis at maximum height point:
+    xistar          = solver_output[1][1]
+    xiv             = xiv.-xistar
+    xi0             = xiv[1]
+    xif             = xiv[length(xiv)]
+    xistar          = 0.0
+    
+    #Save results:
+    filename    = string("SolitonRelaxed", sprintf1("%d", SolitonId), "_coefficients.txt")
+    writedlm(filename, am)
+    filename    = string("SolitonRelaxed", sprintf1("%d", SolitonId), "_data.txt")
+    writedlm(filename, [alpha, g, h0, A, xi0, xif])
+    
+    #---------------------------------------------------------------------------
+    #PLOT RESULTS:
+    
+    #Refine mesh and overwrite um in the new mesh:
+    xiv     = linspace(xi0, xif, 10*length(xiv))
+    um      = PolyLeg(xiv, nPoly, a=xi0, b=xif)*am
+    hv      = um[:,1]
+    qv      = um[:,2]
+    uv      = @. qv/hv
+    q3v     = um[:,4]
+    wv      = @. q3v/hv
+    Pv      = um[:,5]
+    xi_h    = @. Pv/(hv*hv)
+    pv      = @. (c*c)/3.0 * xi_h * (1.0-xi_h)
+    etav    = hv    
+    bv      = um[:,6]
+    
+    #Compute exact solution:
+    zexact  = SolitonExactFun(0.0, reshape(l0*xiv,:,1), A=A, gamma=gamma, h0=h0, g=g)
+
+    #eta:
+    figure()
+    plot(xiv, um[:,1], "b")
+    plot(xiv, zexact[1], "r")
+    plot(xistar, PolyLeg([0.0], nPoly, a=xi0, b=xif)*am[:,1], "+k")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("\\eta"))
+    
+    #u:
+    figure()
+    plot(xiv, uv, "b")
+    plot(xiv, zexact[2]./zexact[1], "r")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("u_2"))
+    
+    #u:
+    figure()
+    plot(xiv, wv, "b")
+    plot(xiv, zexact[4]./zexact[1], "r")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("w"))
+    
+    #u:
+    figure()
+    plot(xiv, pv, "b")
+    plot(xiv, zexact[5], "r")
+    xlabel(latexstring("\\xi"))
+    ylabel(latexstring("w"))
+    
+    #Display values at the left:
+    u_left      = PolyLeg([xi0], nPoly, a=xi0, b=xif)*am
+    uex_left    = reshape([h0, 0.0, 0.0, 0.0, h0^2, 0.0],1,:)
+    display(PolyLeg([xi0], nPoly, a=xi0, b=xif))
+    display(am)
+    println("errors at left boundary=", abs.(u_left-uex_left))
+
+    return
+    
+end
+
+##Find relaxed solution: RK + high-order interpolation
+function SolitonRelaxedCompute_ERK(; A::Float64=0.2, gamma::Float64=3/2, 
+    h0::Float64=1.0, g::Float64=9.8, alpha::Float64=10.0, 
+    Deltaxi::Float64=1e-4, xif::Float64=10.0, 
+    nPoly::Int=50, SolitonId::Int=0)
+
+    #Define model:
+    model               = NHWW()
+    model.g             = g
+    c                   = alpha*sqrt(g*h0)
+    model.c             = c
+    
+    #Initial and final values for xi:
+    xi0         = 0.0       #symmetry is applied later
+    
+    #Soliton velocity and length:
+    c0          = sqrt(g*(A+h0))
+    l0          = h0*sqrt((A+h0)/(A*gamma/2))
+    
+    #---------------------------------------------------------------------------
+    #MARCH WITH RK METHOD:
+    
+    #Load coefficients:
+    RKCoeffs    = RK_Coefficients("KC4B")
+    Bm          = RKCoeffs.AE
+    ABm         = RKCoeffs.AI-RKCoeffs.AE
+    cv          = RKCoeffs.c
+    ss          = RKCoeffs.stages
+    
+    #Initial condition for u=[eta, q1, q2, q3, P, b] (q2=0):
+    un0         = [ h0, 0.0, 0.0, 0.0, h0^2 - 1e-10, 0.0 ]
+    
+    #Function to march in time:
+    function SolitonFun(u::Vector{Float64})
+        
+        #Reshape solution:
+        usol            = Vector{Matrix{Float64}}(undef, model.nVars)
+        dusol_dx        = Matrix{Matrix{Float64}}(undef, model.nVars, 2)
+        for II=1:model.nVars
+            usol[II]    = reshape([u[II]],1,1)
+        end
+        alloc!(dusol_dx, (1,1))     #we set du_dx=0 because this term is only needed to compute db/dx in source term
+        
+        #Compute fluxes and Jacobian:
+        fsol            = Matrix{Matrix{Float64}}(undef, model.nVars, 2)
+        dfsol_dusol     = Array{Matrix{Float64},3}(undef, model.nVars, 2, model.nVars)
+        alloc!(fsol, (1,1))
+        alloc!(dfsol_dusol, (1,1))
+        HyperbolicFlux!(model, usol, true, fsol, dfsol_dusol)
+        
+        #Compute source terms:
+        Qsol            = Vector{Matrix{Float64}}(undef, model.nVars)
+        dQsol_dusol     = Matrix{Matrix{Float64}}(undef, model.nVars, model.nVars)
+        dQsol_dusol_dx  = Array{Matrix{Float64},3}(undef, model.nVars, model.nVars, 2)
+        alloc!(Qsol, (1,1))
+        Source!(model, [zeros(1,1), zeros(1,1)], Inf, usol, dusol_dx, false, 
+                Qsol, dQsol_dusol, dQsol_dusol_dx)
+                
+        #Extract terms:
+        df_du           = Matrix{Float64}(undef, model.nVars, model.nVars)
+        Q               = Vector{Float64}(undef, model.nVars)
+        for II=1:model.nVars, JJ=1:model.nVars
+            df_du[II,JJ]    = dfsol_dusol[II,1,JJ][1,1]
+        end
+        for II=1:model.nVars
+            Q[II]           = Qsol[II][1,1]
+        end
+            
+        #Solve system:
+        du_dxi          = l0*((df_du-c0*eye(model.nVars))\Q)
+        
+        return du_dxi
+        
+    end
+    
+    #Loop:
+    xin         = xi0
+    un          = un0
+    xiv         = [xi0]
+    um          = 1.0*un
+    fm          = zeros(length(un), ss)
+    Jum         = zeros(length(un), ss)
+    t_ini       = time()
+    while xin<=xif
+    
+        #First stage:
+        unp1            = copy(un)
+        xinp1           = xin
+        fm[:,1]         = SolitonFun(un)
+        
+        #Loop stages:
+        for kk=2:ss
+        
+            xinp1       = xin + cv[kk]*Deltaxi
+            zn          = 1.0*un
+            for ll=1:kk-1
+                zn      .+= Deltaxi*(Bm[kk,ll]*fm[:,ll])
+            end
+            unp1        .= zn
+            fm[:,kk]    = SolitonFun(unp1)
+            
+        end
+        
+        #Save solution:
+        push!(xiv, xinp1)
+        append!(um, unp1)
+        
+        #Exit if h is decreasing or xi>xif
+        if unp1[1]-un[1]<0.0
+            break
+        elseif xinp1>=xif
+            break
+        end
+        
+        #Update solution:
+        xin         = xinp1
+        un          .= unp1
+        
+        println("xi=", xin)
+        
+    end
+    um              = reshape(um, model.nVars, :)
+    um              = permutedims(um)
+    println("Time for solving ODE = ", time()-t_ini," s")
     
     #---------------------------------------------------------------------------
     #INTERPOLATE:
