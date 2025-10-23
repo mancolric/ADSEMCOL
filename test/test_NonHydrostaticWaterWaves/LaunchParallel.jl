@@ -1,18 +1,3 @@
-# global computer     = "manu-laptop"
-# global nProcs       = 2
-
-# global computer     = "manu-upm"
-# global nProcs       = 3
-# global nThreads     = 2
-
-# global computer     = "blasc"
-# global nProcs       = 4
-# global nThreads     = 6
-
-# global computer     = "epyc"
-# global nProcs       = 4
-# global nThreads     = 4
-
 cd(@__DIR__)
 include("../../AuxiliaryFunctions/Distributed.jl")
 
