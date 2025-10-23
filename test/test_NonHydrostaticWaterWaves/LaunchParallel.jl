@@ -70,7 +70,7 @@ end
             TolS        = Float64(ProblemTable[iCase,5])
             TolT        = Float64(ProblemTable[iCase,6])
             SC          = Int(ProblemTable[iCase,7])
-            SmoothVortex(hp0, FesOrder, tf=tf, Deltat0=1e-6, xend=xend, 
+            SolitonReslaxed(hp0, FesOrder, tf=tf, Deltat0=1e-6, xend=xend, 
                 SolitonId=SolitonId, 
                 SpaceAdapt=true, TolS=TolS, 
                 TimeAdapt=true, TolT=TolT, 
@@ -81,7 +81,7 @@ end
         
     catch err
     
-        PrintToFile("LaunchParallel_$(ProblemName)_$(iCase).err", 
+        PrintToFile("../../temp/LaunchParallel_$(ProblemName)_$(iCase).err", 
             string(Error2String(err), "\n\n"))
         
     end
