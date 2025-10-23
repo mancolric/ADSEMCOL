@@ -1,6 +1,9 @@
 cd(@__DIR__)
 include("../../src/AuxiliaryFunctions/Distributed.jl")
 
+global nProcs       = 5
+global nThreads     = 4
+
 #-------------------------------------------------------------------------------
 #Load cases:
 
