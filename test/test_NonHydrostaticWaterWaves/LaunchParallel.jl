@@ -1,5 +1,5 @@
 cd(@__DIR__)
-include("../../AuxiliaryFunctions/Distributed.jl")
+include("../../src/AuxiliaryFunctions/Distributed.jl")
 
 #-------------------------------------------------------------------------------
 #Load cases:
