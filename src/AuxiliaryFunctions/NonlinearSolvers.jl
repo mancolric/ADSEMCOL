@@ -111,9 +111,9 @@ The residual g(x) should be preconditioned iin such a way that
 
     --memory[100]: maximum of solutions considered
 
-    --RelTolX[0e-6], AbsTolX[1e-6]: the method stops when norm(Delta x) < norm(x)*RelTolX + AbsTolX
+    --RelTolX[0e-8], AbsTolX[0e-8]: the method stops when norm(Delta x) < norm(x)*RelTolX + AbsTolX
 
-    --RelTolG[0e-6], AbsTolG[0e-6]: the method stops when norm(g) < norm(g0)*RelTolG + AbsTolG
+    --RelTolG[0e-8], AbsTolG[1e-8]: the method stops when norm(g) < norm(g0)*RelTolG + AbsTolG
     
     --MaxIter[length(x0)]: maximum of iterations.
 
@@ -321,9 +321,9 @@ In particular, we apply an acceleration method to the quasi-Newton iteration
 
     --memory[100]: maximum of solutions considered
 
-    --RelTolX[0e-6], AbsTolX[1e-6]: the method stops when norm(Delta x) < norm(x)*RelTolX + AbsTolX
+    --RelTolX[0e-8], AbsTolX[0e-8]: the method stops when norm(Delta x) < norm(x)*RelTolX + AbsTolX
 
-    --RelTolG[0e-6], AbsTolG[0e-6]: the method stops when norm(g) < norm(g0)*RelTolG + AbsTolG
+    --RelTolG[0e-8], AbsTolG[1e-8]: the method stops when norm(g) < norm(g0)*RelTolG + AbsTolG
     
     --MaxIter[length(x0)]: maximum of iterations.
 
