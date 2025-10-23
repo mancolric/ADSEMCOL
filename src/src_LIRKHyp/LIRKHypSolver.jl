@@ -94,7 +94,7 @@ end
 function ReadMesh!(solver::SolverData)
 
     #Read linear mesh:
-    solver.mesh         = TrMesh_Read("../temp/BamgSC$(solver.SC).db", 1, solver.nBounds)
+    solver.mesh         = TrMesh_Read("$(@__DIR__)/../../temp/BamgSC$(solver.SC).db", 1, solver.nBounds)
     
     #Create finite element space, matrices, integrals, auxiliary vectors:
     solver.fes          = TrPBSpace(solver.mesh, solver.FesOrder)
@@ -183,8 +183,8 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
     
     #Copy db file or create from geo. The input is solver.MeshFile.
     #The output (copied db file or new db file from geo) is solver.MeshFileSC.
-    MeshFileGeo         = "../temp/BamgSC$(solver.SC).geo"
-    MeshFileDb          = "../temp/BamgSC$(solver.SC).db"
+    MeshFileGeo         = "$(@__DIR__)/../../temp/BamgSC$(solver.SC).geo"
+    MeshFileDb          = "$(@__DIR__)/../../temp/BamgSC$(solver.SC).db"
     MeshFileExtension   = solver.MeshFile[findlast('.',solver.MeshFile)+1:length(solver.MeshFile)]
     if MeshFileExtension=="db"
         #We need the geo file, because we need to copy it:
@@ -195,7 +195,7 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
         #Generate db file:
         cp(solver.MeshFile, MeshFileGeo, force=true)
         run(pipeline(`bamg -AbsError -NoRescaling -NbJacobi 3 -NbSmooth 5 -hmax 1e9 -hmin 1e-9 -ratio 0 -nbv 1000000 -v 0 -g $(MeshFileGeo) -o $(MeshFileDb)`, 
-            stdout="../temp/BamgSC$(solver.SC).out", stderr="../temp/BamgSC$(solver.SC).err"))
+            stdout="$(@__DIR__)/../../temp/BamgSC$(solver.SC).out", stderr="$(@__DIR__)/../../temp/BamgSC$(solver.SC).err"))
     else
         error("Unknown mesh file extension $(MeshFileExtension)")
     end
@@ -775,7 +775,7 @@ function AdaptMesh!(solver::SolverData,
     AMA_TolS        = solver.etaS#*solver.AMA_TolS_etaS
     AMA_Strategy    = 0         #0:Coarse mesh, 1: Refine mesh
     AMA_factor      = AMA_CoarseFactor
-    MeshFileDb      = "../temp/BamgSC$(solver.SC).db"
+    MeshFileDb      = "$(@__DIR__)/../../temp/BamgSC$(solver.SC).db"
     
     #Print info of initial mesh:
     printstyled(
@@ -889,7 +889,7 @@ function AdaptMesh!(solver::SolverData,
             #GENERATE NEW MESH:
             
             #Generate metric tensor for Bamg:
-            MetricFile              = "../temp/BamgSC$(solver.SC).mtr"
+            MetricFile              = "$(@__DIR__)/../../temp/BamgSC$(solver.SC).mtr"
             Bamg_MetricFile!(solver.mesh, metric, MetricFile)
             
             #The optimal (theoretical) mesh defined above may not be 
@@ -898,8 +898,8 @@ function AdaptMesh!(solver::SolverData,
             #then overwritten in the solver.MeshFile:
             #previous ratio 2.7
             run(pipeline(`bamg -AbsError -NoRescaling -NbJacobi 3 -NbSmooth 5 -ratio 2.7 -nbv $(1000000) -v 0 -M $(MetricFile) -b $(MeshFileDb) -o $(MeshFileDb).new`, 
-                stdout="../temp/BamgSC$(solver.SC).out", 
-                stderr="../temp/BamgSC$(solver.SC).err"))  
+                stdout="$(@__DIR__)/../../temp/BamgSC$(solver.SC).out", 
+                stderr="$(@__DIR__)/../../temp/BamgSC$(solver.SC).err"))  
             mv(string(MeshFileDb,".new"), MeshFileDb, force=true)
             
 #             println("BAMG=", time()-t_ini2)
@@ -1545,12 +1545,12 @@ function LIRKHyp_Step_Post_Dolejsi!(solver::SolverData)
                     metric      = AMA_MetricIntersection(AMA_metric[[1,solver.RK.stages]])
                     
                     #Call BAMG:
-                    MetricFile  = "../temp/BamgSC$(solver.SC).mtr"
-                    MeshFileDb  = "../temp/BamgSC$(solver.SC).db"
+                    MetricFile  = "$(@__DIR__)/../../temp/BamgSC$(solver.SC).mtr"
+                    MeshFileDb  = "$(@__DIR__)/../../temp/BamgSC$(solver.SC).db"
                     Bamg_MetricFile!(solver.mesh, metric, MetricFile)
                     run(pipeline(`bamg -AbsError -NoRescaling -NbJacobi 3 -NbSmooth 5 -ratio 2.7 -nbv $(1000000) -v 0 -M $(MetricFile) -b $(MeshFileDb) -o $(MeshFileDb).new`, 
-                        stdout="../temp/BamgSC$(solver.SC).out", 
-                        stderr="../temp/BamgSC$(solver.SC).err"))  
+                        stdout="$(@__DIR__)/../../temp/BamgSC$(solver.SC).out", 
+                        stderr="$(@__DIR__)/../../temp/BamgSC$(solver.SC).err"))  
                     mv(string(MeshFileDb,".new"), MeshFileDb, force=true)
                     ReadMesh!(solver)
                     println("BAMG called")
