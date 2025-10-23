@@ -478,7 +478,7 @@ function SolitonRelaxedCompute_LIRK(; A::Float64=0.2, gamma::Float64=3/2,
     #PLOT RESULTS:
     
     #Refine mesh and overwrite um in the new mesh:
-    xiv     = linspace(xi0, xif, 10*length(xiv))
+    xiv     = linspace(xi0, xif, 100)
     um      = PolyLeg(xiv, nPoly, a=xi0, b=xif)*am
     hv      = um[:,1]
     qv      = um[:,2]
@@ -709,7 +709,7 @@ function SolitonRelaxedCompute_ERK(; A::Float64=0.2, gamma::Float64=3/2,
     #PLOT RESULTS:
     
     #Refine mesh and overwrite um in the new mesh:
-    xiv     = linspace(xi0, xif, 10*length(xiv))
+    xiv     = linspace(xi0, xif, 100)
     um      = PolyLeg(xiv, nPoly, a=xi0, b=xif)*am
     hv      = um[:,1]
     qv      = um[:,2]
