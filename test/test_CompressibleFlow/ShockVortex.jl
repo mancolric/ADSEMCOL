@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("test_CompressibleFlow.jl")
 
 function ShockVortex(MeshCase::Int, FesOrder::Int, tfv::Array{Float64,1};

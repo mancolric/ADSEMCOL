@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("test_CompressibleFlow.jl")
 
 function SmoothVortex(hp::Float64, FesOrder::Int, tfv::Array{Float64,1};
@@ -73,7 +72,7 @@ function SmoothVortex(hp::Float64, FesOrder::Int, tfv::Array{Float64,1};
     GasModel.CSS            = CSS
     
     #Mesh:
-    MeshFile                = "../temp/SmoothVortex_SC$(SC).geo"
+    MeshFile                = "$(@__DIR__)/../../temp/SmoothVortex_SC$(SC).geo"
     NX                      = Int(ceil(24.0/(hp*FesOrder)))
     NY                      = Int(ceil(14.0/(hp*FesOrder)))
     TrMesh_Rectangle_Create!(MeshFile, -7.0, 17.0, NX, -7.0, 7.0, NY)

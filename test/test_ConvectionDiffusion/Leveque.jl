@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("test_ConvectionDiffusion.jl")
 
 function Leveque(hp0::Float64, FesOrder::Int;
@@ -117,7 +116,7 @@ function Leveque(hp0::Float64, FesOrder::Int;
                             FWt21((t,x,u)->dQfun(t,x,u)) )
     
     #Mesh:
-    MeshFile            = "../temp/Leveque_SC$(SC).geo"
+    MeshFile            = "$(@__DIR__)/../../temp/Leveque_SC$(SC).geo"
     NX                  = Int(ceil(2.0/(hp0*FesOrder)))
     TrMesh_Rectangle_Create!(MeshFile, -1.0, 1.0, NX, -1.0, 1.0, NX)
     
@@ -199,7 +198,7 @@ function Leveque(hp0::Float64, FesOrder::Int;
 #             PlotContour(solver.u[1], solver.fes)
 #             axis("equal")
 #             if SaveFig
-#                 savefig("$(ResUbi)SC$(SC)_Contour_$(nb_SaveFig).png", dpi=800, pad_inches=0)
+#                 savefig("$(VideosUbi)SC$(SC)_Contour_$(nb_SaveFig).png", dpi=800, pad_inches=0)
 #             end
 #             
 #             figure(figv[2].number)
@@ -208,7 +207,7 @@ function Leveque(hp0::Float64, FesOrder::Int;
 #             PlotMesh!(solver.mesh, color="k")
 #             axis("equal")
 #             if SaveFig
-#                 savefig("$(ResUbi)SC$(SC)_Mesh_$(nb_SaveFig).png", dpi=800, pad_inches=0)
+#                 savefig("$(VideosUbi)SC$(SC)_Mesh_$(nb_SaveFig).png", dpi=800, pad_inches=0)
 #             end
             
             figure(figv[3].number)
