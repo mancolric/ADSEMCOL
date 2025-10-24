@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("test_ConvectionDiffusion.jl")
 
 function KPP(hp0::Float64, FesOrder::Int;
@@ -97,7 +96,7 @@ function KPP(hp0::Float64, FesOrder::Int;
                             FWt21((t,x,u)->dQfun(t,x,u)) )
     
     #Mesh:
-    MeshFile            = "../temp/KPP_SC$(SC).geo"
+    MeshFile            = "$(@__DIR__)/../../temp/KPP_SC$(SC).geo"
     NX                  = Int(ceil(4.0/(hp0*FesOrder)))
     TrMesh_Rectangle_Create!(MeshFile, -2.0, 2.0, NX, -2.5, 1.5, NX)
     

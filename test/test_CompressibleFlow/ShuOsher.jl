@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("test_CompressibleFlow.jl")
 
 function ShuOsher(hp0::Float64, FesOrder::Int;
@@ -77,7 +76,7 @@ function ShuOsher(hp0::Float64, FesOrder::Int;
     #PRE-PROCESS STAGE:
     
     #Mesh:
-    MeshFile                = "../temp/ShuOsher_SC$(SC).geo"
+    MeshFile                = "$(@__DIR__)/../../temp/ShuOsher_SC$(SC).geo"
     NX                      = Int(ceil(10.0/(hp0*FesOrder)))
     NY                      = Int(ceil(1.0/(hp0*FesOrder)))
     TrMesh_Rectangle_Create!(MeshFile, -5.0, 5.0, NX, -0.5, 0.5, NY)

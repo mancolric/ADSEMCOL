@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("test_CompressibleFlow.jl")
 
 #NOTE: This is a diffusion-dominated problem. Hence, delta = sqrt(epsilon*tf)
@@ -59,7 +58,7 @@ function RayleighTaylor(hp0::Float64, FesOrder::Int;
     #PRE-PROCESS STAGE:
     
     #Mesh:
-    MeshFile                = "../temp/RayleighTaylor_SC$(SC).geo"
+    MeshFile                = "$(@__DIR__)/../../temp/RayleighTaylor_SC$(SC).geo"
     NX                      = Int(ceil(0.25/(hp0*FesOrder)))
     NY                      = Int(ceil(1.0/(hp0*FesOrder)))
     TrMesh_Rectangle_Create!(MeshFile, -0.125, 0.125, NX, -0.5, 0.5, NY)

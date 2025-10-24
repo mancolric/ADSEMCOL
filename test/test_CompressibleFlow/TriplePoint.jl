@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("test_CompressibleFlow.jl")
 
 function TriplePoint(hp0::Float64, FesOrder::Int;
@@ -59,7 +58,7 @@ function TriplePoint(hp0::Float64, FesOrder::Int;
     #PRE-PROCESS STAGE:
     
     #Mesh:
-    MeshFile                = "../temp/TriplePoint_SC$(SC).geo"
+    MeshFile                = "$(@__DIR__)/../../temp/TriplePoint_SC$(SC).geo"
     NX                      = Int(ceil(7.0/(hp0*FesOrder)))
     NY                      = Int(ceil(3.0/(hp0*FesOrder)))
     TrMesh_Rectangle_Create!(MeshFile, -1.0, 6.0, NX, -1.5, 1.5, NY)

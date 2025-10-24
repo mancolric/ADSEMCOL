@@ -1,11 +1,6 @@
-cd(@__DIR__)
 include("test_ConvectionDiffusion.jl")
 
 #Exponential boundary layer in space, tanh in time.
-#
-#Constant Dirichlet conditions.
-#
-#For nonconstant Dirichlet and Neumann conditions, test2.
 
 function ExponentialBoundaryLayer(hp0::Float64, FesOrder::Int;
     deltax::Float64=2e-2, deltat::Float64=0.2, epsilon::Float64=deltax,
@@ -164,7 +159,7 @@ function ExponentialBoundaryLayer(hp0::Float64, FesOrder::Int;
                             FWt21((t,x,u)->dQfun(t,x,u)) )
     
     #Mesh:
-    MeshFile            = "../temp/ExponentialBoundaryLayer_SC$(SC).geo"
+    MeshFile            = "$(@__DIR__)/../../temp/ExponentialBoundaryLayer_SC$(SC).geo"
     NX                  = Int(ceil(2.0/(hp0*FesOrder)))
     TrMesh_Rectangle_Create!(MeshFile, 0.0, 1.0, NX, 0.0, 1.0, NX)
     
@@ -248,7 +243,7 @@ function ExponentialBoundaryLayer(hp0::Float64, FesOrder::Int;
 #             PlotMesh!(solver.mesh, color="k")
             axis("equal")
             if SaveFig
-                savefig("$(ResUbi)SC$(SC)_Contour_$(nb_SaveFig).png", dpi=800, pad_inches=0)
+                savefig("$(VideosUbi)SC$(SC)_Contour_$(nb_SaveFig).png", dpi=800, pad_inches=0)
             end
             
             figure(figv[2].number)
@@ -257,7 +252,7 @@ function ExponentialBoundaryLayer(hp0::Float64, FesOrder::Int;
             PlotMesh!(solver.mesh, color="w")
             axis("equal")
             if SaveFig
-                savefig("$(ResUbi)SC$(SC)_Mesh_$(nb_SaveFig).png", dpi=800, pad_inches=0)
+                savefig("$(VideosUbi)SC$(SC)_Mesh_$(nb_SaveFig).png", dpi=800, pad_inches=0)
             end
             
             figure(figv[3].number)

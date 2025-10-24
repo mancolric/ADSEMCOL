@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("test_CompressibleFlow.jl")
 
 function Sedov(hp0::Float64, FesOrder::Int;
@@ -87,7 +86,7 @@ function Sedov(hp0::Float64, FesOrder::Int;
     #PRE-PROCESS STAGE:
     
     #Mesh:
-    MeshFile                = "../temp/Sedov_SC$(SC).geo"
+    MeshFile                = "$(@__DIR__)/../../temp/Sedov_SC$(SC).geo"
     NX                      = Int(ceil(2.4/(hp0*FesOrder)))
     NY                      = Int(ceil(2.4/(hp0*FesOrder)))
     TrMesh_Rectangle_Create!(MeshFile, -1.2, 1.2, NX, -1.2, 1.2, NY)

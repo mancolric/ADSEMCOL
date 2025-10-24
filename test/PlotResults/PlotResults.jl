@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("../ResUbi.jl")
 include("../test_ConvectionDiffusion/test_ConvectionDiffusion.jl")
 include("../test_CompressibleFlow/test_CompressibleFlow.jl")

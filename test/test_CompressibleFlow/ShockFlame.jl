@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("test_CompressibleFlow.jl")
 
 function ShockFlame(FesOrder::Int;
@@ -75,7 +74,7 @@ function ShockFlame(FesOrder::Int;
     y2                  = 1.0*delta_flame
     x0_flame            = 10.0*delta_flame
     x0_shock            = 20.0*delta_flame
-    MeshFile            = "../temp/ShockFlame_SC$(SC).geo"
+    MeshFile            = "$(@__DIR__)/../../temp/ShockFlame_SC$(SC).geo"
     TrMesh_Rectangle_Create!(MeshFile, 0.0, x2, 5, 0.0, y2, 2)
     
     #Initial conditions:
