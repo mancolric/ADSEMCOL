@@ -1,4 +1,5 @@
 include("test_NonHydrostaticWaterWaves.jl")
+# include("../../../CLGMethod/DAEs/SEM_XRK.jl")
 
 function SolitonExact(hp0::Float64, FesOrder::Int;
     tf::Float64=10.0, RKMethod::String="BPR3",
@@ -176,6 +177,7 @@ function SolitonExact(hp0::Float64, FesOrder::Int;
             figure(figv[2].number)
             #Domain limits:
             c0      = sqrt(g*(A+h0))
+            gamma   = 1.5
             l0      = h0*sqrt((A+h0)/(A*gamma/2))
             x11     = c0*solver.t-10*l0
             x12     = c0*solver.t+10*l0
@@ -262,6 +264,7 @@ function SolitonExact(hp0::Float64, FesOrder::Int;
     while solver.t<tf
 
         ConvFlag    = LIRKHyp_Step!(solver)
+#         ConvFlag    = IRK_Step!(solver, solver.nVars)
 
         if ConvFlag<=0
             break

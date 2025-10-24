@@ -283,7 +283,7 @@ function bflux!(model::NHWW, BC::SlipAdiabatic,
 
 end
 
-#Subsonic inlet. 5 conditions (3 Dirichlet):
+#Subsonic inlet. 5 conditions (4 Dirichlet):
 #   normal diff flux for eta    = 0
 #   q1                          = q1_BC
 #   q2                          = q2_BC
