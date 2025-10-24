@@ -181,7 +181,7 @@ function SolitonRelaxed(hp0::Float64, FesOrder::Int;
             figure(figv[2].number)
             #Domain limits:
             c0      = sqrt(g*(A+h0))
-            l0      = h0*sqrt((A+h0)/h0)
+            l0      = h0*sqrt((A+h0)/(A*gamma/2))
             x11     = c0*solver.t-10*l0
             x12     = c0*solver.t+10*l0
 #             x11     = -20.0
@@ -286,7 +286,10 @@ function SolitonRelaxed(hp0::Float64, FesOrder::Int;
     #Save results:
     if SaveRes
         save("$(ResUbi)LIRKHyp_SC$(SC)_1000.jld2", "StudyCase", "SolitonRelaxed",
-            "ConvFlag", ConvFlag, "solver", save(solver), "hmean", hmean, "e_Lq", errLq, "Deltat_mean", Deltat_mean)
+            "ConvFlag", ConvFlag, "solver", save(solver), 
+            "TolS", TolS, "TolT", TolT, "SolitonId", SolitonId, "alpha", alpha, 
+            "hmean", hmean, "e_Lq", errLq, "Deltat_mean", Deltat_mean )
+        
     end
 
     return solver

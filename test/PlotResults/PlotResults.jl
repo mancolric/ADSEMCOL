@@ -1,7 +1,7 @@
-cd(@__DIR__)
-include("../ResUbi.jl")
-include("../test_ConvectionDiffusion/test_ConvectionDiffusion.jl")
-include("../test_CompressibleFlow/test_CompressibleFlow.jl")
+include("$(@__DIR__)/../ResUbi.jl")
+include("$(@__DIR__)/../test_ConvectionDiffusion/test_ConvectionDiffusion.jl")
+include("$(@__DIR__)/../test_CompressibleFlow/test_CompressibleFlow.jl")
+include("$(@__DIR__)/../test_NonHydrostaticWaterWaves/test_NonHydrostaticWaterWaves.jl")
 
 PyPlot.using3D()
 

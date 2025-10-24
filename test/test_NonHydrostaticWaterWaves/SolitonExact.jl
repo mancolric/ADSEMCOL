@@ -177,7 +177,7 @@ function SolitonExact(hp0::Float64, FesOrder::Int;
             figure(figv[2].number)
             #Domain limits:
             c0      = sqrt(g*(A+h0))
-            l0      = h0*sqrt((A+h0)/h0)
+            l0      = h0*sqrt((A+h0)/(A*gamma/2))
             x11     = c0*solver.t-10*l0
             x12     = c0*solver.t+10*l0
 #             x11     = -20.0
