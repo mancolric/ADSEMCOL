@@ -48,6 +48,8 @@ function GetVbles(SC::Int, nb::Int, vbles::Vector{String})
             xout[ii]    = load(FileName, "etaL2L2")
         elseif vble=="errLqv"
             xout[ii]    = load(FileName, "errLqv")
+        elseif vble=="e_Lq"
+            xout[ii]    = load(FileName, "e_Lq")
         elseif vble=="etaST"
             xout[ii]    = solver.etaST
         elseif vble=="errLinf_Leveque"

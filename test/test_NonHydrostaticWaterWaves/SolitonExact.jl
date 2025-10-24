@@ -1,4 +1,3 @@
-cd(@__DIR__)
 include("test_NonHydrostaticWaterWaves.jl")
 
 function SolitonExact(hp0::Float64, FesOrder::Int;
@@ -86,7 +85,7 @@ function SolitonExact(hp0::Float64, FesOrder::Int;
     #PRE-PROCESS STAGE:
 
     #Mesh:
-    MeshFile                = "../temp/SolitonExact$(SC).geo"
+    MeshFile                = "$(@__DIR__)/../../temp/SolitonExact$(SC).geo"
     NX                      = Int(ceil((xend+20.0)/(hp0*FesOrder)))
     NY                      = 2
 #     TrMesh_Rectangle_Create!(MeshFile, -5.0, 5.0, NX, -5.0, 5.0, NY)

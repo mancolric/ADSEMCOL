@@ -1,5 +1,5 @@
-include("$(@__DIR__)/PlotResults.jl")
-include("$(@__DIR__)/../test_NonHydrostaticWaterWaves/SolitonRelaxed.jl")
+include("PlotResults.jl")
+include("../test_NonHydrostaticWaterWaves/SolitonRelaxed.jl")
 
 function Nodes_SolitonRelaxed(SC::Int, nb::Int; 
     SaveFig::Bool=false, w::Float64=9.50, h::Float64=6.50,
@@ -71,11 +71,9 @@ function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1,
 
                         
         SCvv1       = [ 110000:110004, 
-                        110005:110009,
-                        110010:110014
+#                         110005:110009,
+#                         110010:110014
                         ]
-                        
-        nb          = 1
         
         
     end
@@ -83,7 +81,7 @@ function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1,
     #------------------------------------------------------------
     
     hpvv1, errvv1, etavv1, 
-        tCPUvv1, pvv1       = GetVbles(SCvv1, ["hp", "errLq", "etaL2L2", "tCPU", "FesOrder"], nb=nb)
+        tCPUvv1, pvv1       = GetVbles(SCvv1, ["hp", "e_Lq", "etaST", "tCPU", "FesOrder"], nb=nb)
     EOCvv1                  = ExpOrderConv(hpvv1, errvv1)
     
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.7)
