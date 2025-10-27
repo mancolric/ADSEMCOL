@@ -142,7 +142,8 @@ function GetVbles(SC::Int, nb::Int, vbles::Vector{String})
             II          = parse(Int, vble[9])
             xout[ii]    = errmassv[II]
         else
-            xout[ii]    = getfield(solver, Symbol(vble))
+            xout[ii]    = load(FileName, vble)
+#             xout[ii]    = getfield(solver, Symbol(vble))
 #             error("Variable $(vble) not supported")
         end
     end
@@ -266,7 +267,7 @@ function PlotXY(xvv::Vector{Vector{Float64}}, yvv::Vector{Vector{Float64}};
     
 end
 
-function Legend(xvv::Vector{Vector{Float64}}, LegNameLatex::String;
+function Legend(xvv::Vector{Vector{Float64}}, LegNameLatex::Union{String,LaTeXString};
     format::String="%.2e",
     linestyle::String="solid", linewidth=0.5, marker::String="", 
     markersize::Float64=3.5, 

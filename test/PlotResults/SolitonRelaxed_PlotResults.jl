@@ -57,7 +57,7 @@ function Nodes_SolitonRelaxed(SC::Int, nb::Int;
     
 end
 
-function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1, 
+function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1000, 
     SaveFig::Bool=false, w::Float64=8.50, h::Float64=8.50)
 
     #------------------------------------------------------------
@@ -71,8 +71,8 @@ function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1,
 
                         
         SCvv1       = [ 110000:110004, 
-#                         110005:110009,
-#                         110010:110014
+                        110005:110009,
+                        110010:110012
                         ]
         
         
@@ -81,17 +81,18 @@ function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1,
     #------------------------------------------------------------
     
     hpvv1, errvv1, etavv1, 
-        tCPUvv1, pvv1       = GetVbles(SCvv1, ["hp", "e_Lq", "etaST", "tCPU", "FesOrder"], nb=nb)
+        tCPUvv1, pvv1       = GetVbles(SCvv1, ["hp", "e_Lq", "etaST", "tCPU", "alpha"], nb=nb)
     EOCvv1                  = ExpOrderConv(hpvv1, errvv1)
     
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.7)
-    leg                     = Legend(pvv1, "p", format="%d")
-    loglog(NaN,NaN, "-k", linewidth=0.5)
-    loglog(NaN,NaN, "--k", linewidth=0.5)
-    leg                     = vcat(leg, L"e_{ST}", latexstring("\\mathcal{E}_{ST}"))
+    leg                     = Legend(pvv1, latexstring("\\alpha"), format="%d")
+#     loglog(NaN,NaN, "-k", linewidth=0.5)
+#     loglog(NaN,NaN, "--k", linewidth=0.5)
+#     leg                     = vcat(leg, L"e_{ST}", latexstring("\\mathcal{E}_{ST}"))
     PlotXY(hpvv1, errvv1, linestyle="solid", marker="s")
-    PlotXY(hpvv1, etavv1, linestyle="dashed", marker="s")
+#     PlotXY(hpvv1, etavv1, linestyle="dashed", marker="s")
     xlabel(L"h/p", fontsize=LabelSize)
+    ylabel(latexstring(GetString("errL2L2")), rotation=0, fontsize=LabelSize, labelpad=10.0)
     tick_params(axis="both", which="both", labelsize=TickSize)
     legend(leg, fontsize=TickSize)
     grid("on")
@@ -122,7 +123,6 @@ function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1,
     
 end
 
-#=
 function CompareTimeAdaptation_SolitonRelaxed(StudyCase::String; 
     SaveFig::Bool=false, w::Float64=8.50, h::Float64=8.50)
 
@@ -133,46 +133,54 @@ function CompareTimeAdaptation_SolitonRelaxed(StudyCase::String;
     if StudyCase=="normal"
     
         #TimeAdapt:
-        SCvv1       = [ 50016:50019 ]
+        SCvv1       = [ 110015:110019, 
+                        110020:110023, 
+                        110025:110026 ]
                         
-        nb          = 1
+        nb          = 1000
         
     end
     
     #------------------------------------------------------------
     
     Deltatvv1, errvv1, etavv1, 
-        tCPUvv1, CFLvv1         = GetVbles(SCvv1, ["Deltat", "errL2L2", "etaL2L2", 
-                                                    "tCPU", "CFLmax"], nb=nb)
+        tCPUvv1, CFLvv1, 
+        alphavv11               = GetVbles(SCvv1, ["Deltat", "e_Lq", "etaST", 
+                                                    "tCPU", "CFLmax", "alpha"], nb=nb)
     EOCvv1                      = ExpOrderConv(Deltatvv1, errvv1)
     
-    PyPlotFigure(w=w, h=h, bottom=1.5)
-    loglog(Deltatvv1[1], errvv1[1], color="b", linewidth=0.5, linestyle="solid", marker="s", markersize=3.5)
-    loglog(Deltatvv1[1], etavv1[1], color="b", linewidth=0.5, linestyle="dashed", marker="s", markersize=3.5)
-    xlabel(latexstring("\\tau"))
-    leg     = vcat(L"e_{ST}", latexstring("\\mathcal{E}_{ST}"))
-    legend(leg)
+    PyPlotFigure(w=w, h=h, bottom=1.5, left=1.7)
+    leg                     = Legend(alphavv11, latexstring("\\alpha"), format="%d")
+    PlotXY(Deltatvv1, errvv1, linestyle="solid", marker="s")
+    PlotXY(Deltatvv1, etavv1, linestyle="dashed", marker="s")
+    xlabel(latexstring("\\tau"), fontsize=LabelSize)
+    ylabel(latexstring(GetString("errL2L2")), rotation=0, fontsize=LabelSize, labelpad=10.0)
     tick_params(axis="both", which="both", labelsize=TickSize)
+    legend(leg, fontsize=TickSize)
     grid("on")
     if SaveFig
         savefig("$(FigUbi)SolitonRelaxed_TimeAdapt1.png", dpi=800, pad_inches=0)
     end
-               
+            
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.5)
-    loglog(tCPUvv1[1], errvv1[1], color="b", linewidth=0.5, linestyle="solid", marker="s", markersize=3.5)
+    leg                     = Legend(alphavv11, "p", format="%d")
+    PlotXY(tCPUvv1, errvv1, linestyle="solid", marker="s")
     grid("on")
-    xlabel(latexstring(GetString("tCPU")))
-    ylabel(latexstring(GetString("errL2L2")), rotation=0)
+    xlabel(latexstring(GetString("tCPU")), fontsize=LabelSize)
+    ylabel(latexstring(GetString("errL2L2")), rotation=0, fontsize=LabelSize, labelpad=10.0)
+    legend(leg, fontsize=TickSize)
     tick_params(axis="both", which="both", labelsize=TickSize)
     if SaveFig
         savefig("$(FigUbi)SolitonRelaxed_TimeAdapt2.png", dpi=800, pad_inches=0)
     end
     
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.5)
-    loglog(CFLvv1[1], errvv1[1], color="b", linewidth=0.5, linestyle="solid", marker="s", markersize=3.5)
+    leg                     = Legend(alphavv11, "p", format="%d")
+    PlotXY(CFLvv1, errvv1, linestyle="solid", marker="s")
     grid("on")
-    xlabel(latexstring(GetString("CFLmax")))
-    ylabel(latexstring(GetString("errL2L2")), rotation=0)
+    xlabel(latexstring(GetString("CFLmax")), fontsize=LabelSize)
+    ylabel(latexstring(GetString("errL2L2")), rotation=0, fontsize=LabelSize, labelpad=10.0)
+    legend(leg, fontsize=TickSize)
     tick_params(axis="both", which="both", labelsize=TickSize)
     if SaveFig
         savefig("$(FigUbi)SolitonRelaxed_TimeAdapt3.png", dpi=800, pad_inches=0)
@@ -184,6 +192,7 @@ function CompareTimeAdaptation_SolitonRelaxed(StudyCase::String;
     
 end
 
+#=
 function TableResults_SpaceAdapt_SolitonRelaxed(StudyCase::String)
 
     vbles       = [ "FesOrder", "TolS_max", 
