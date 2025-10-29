@@ -10,8 +10,8 @@ function Nodes_SolitonRelaxed(SC::Int, nb::Int;
     SolitonId   = load(FileName, "SolitonId")
     
     #Load data:
-    SolitonData         = readdlm("SolitonRelaxed$(SolitonId)_data.txt")
-    SolitonCoeffs       = readdlm("SolitonRelaxed$(SolitonId)_coefficients.txt")
+    SolitonData         = readdlm("$(@__DIR__)/../test_NonHydrostaticWaterWaves/SolitonRelaxed$(SolitonId)_data.txt")
+    SolitonCoeffs       = readdlm("$(@__DIR__)/../test_NonHydrostaticWaterWaves/SolitonRelaxed$(SolitonId)_coefficients.txt")
     alpha               = SolitonData[1]
     g                   = SolitonData[2]
     h0                  = SolitonData[3]
@@ -47,6 +47,7 @@ function Nodes_SolitonRelaxed(SC::Int, nb::Int;
         title(latexstring(LatexString(PlotVars[ii]),
                             "; t^n=", sprintf1("%.2e", solver.t)),
                 fontsize=10)
+        tick_params(axis="both", which="both", labelsize=TickSize)
         xlim([x11, x12])
     end
     if SaveFig
@@ -72,7 +73,7 @@ function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1000,
                         
         SCvv1       = [ 110000:110004, 
                         110005:110009,
-                        110010:110012
+                        110010:110013
                         ]
         
         
@@ -134,7 +135,7 @@ function CompareTimeAdaptation_SolitonRelaxed(StudyCase::String;
     
         #TimeAdapt:
         SCvv1       = [ 110015:110019, 
-                        110020:110023, 
+                        110020:110024, 
                         110025:110026 ]
                         
         nb          = 1000
@@ -152,7 +153,7 @@ function CompareTimeAdaptation_SolitonRelaxed(StudyCase::String;
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.7)
     leg                     = Legend(alphavv11, latexstring("\\alpha"), format="%d")
     PlotXY(Deltatvv1, errvv1, linestyle="solid", marker="s")
-    PlotXY(Deltatvv1, etavv1, linestyle="dashed", marker="s")
+#     PlotXY(Deltatvv1, etavv1, linestyle="dashed", marker="s")
     xlabel(latexstring("\\tau"), fontsize=LabelSize)
     ylabel(latexstring(GetString("errL2L2")), rotation=0, fontsize=LabelSize, labelpad=10.0)
     tick_params(axis="both", which="both", labelsize=TickSize)
