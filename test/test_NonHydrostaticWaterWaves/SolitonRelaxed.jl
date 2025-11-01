@@ -26,12 +26,13 @@ function SolitonRelaxed(hp0::Float64, FesOrder::Int;
     #PROBLEM DATA:
 
     #Load data:
-    SolitonData         = readdlm("SolitonRelaxed$(SolitonId)_data.txt")
-    SolitonCoeffs       = readdlm("SolitonRelaxed$(SolitonId)_coefficients.txt")
+    SolitonData         = readdlm("$(@__DIR__)/SolitonRelaxed$(SolitonId)_data.txt")
+    SolitonCoeffs       = readdlm("$(@__DIR__)/SolitonRelaxed$(SolitonId)_coefficients.txt")
     alpha               = SolitonData[1]
     g                   = SolitonData[2]
     h0                  = SolitonData[3]
     A                   = SolitonData[4]
+    gamma               = 1.5
     
     #Define model:
     model               = NHWW()
@@ -266,8 +267,8 @@ function SolitonRelaxed(hp0::Float64, FesOrder::Int;
 
     while solver.t<tf
 
-        ConvFlag    = LIRKHyp_Step!(solver)
-
+#         ConvFlag    = LIRKHyp_Step!(solver)
+        ConvFlag    = IRK_Step!(solver)
         if ConvFlag<=0
             break
         end

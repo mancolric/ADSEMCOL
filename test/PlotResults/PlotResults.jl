@@ -141,9 +141,11 @@ function GetVbles(SC::Int, nb::Int, vbles::Vector{String})
             errmassv    = GetMass(SC, nb)-GetMass(SC, 0)
             II          = parse(Int, vble[9])
             xout[ii]    = errmassv[II]
+        elseif vble=="Soliton_alpha"
+            xout[ii]    = load(FileName, "alpha")
         else
-            xout[ii]    = load(FileName, vble)
-#             xout[ii]    = getfield(solver, Symbol(vble))
+            xout[ii]    = getfield(solver, Symbol(vble))
+#             xout[ii]    = load(FileName, vble)
 #             error("Variable $(vble) not supported")
         end
     end

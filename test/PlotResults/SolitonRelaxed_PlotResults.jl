@@ -73,7 +73,7 @@ function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1000,
                         
         SCvv1       = [ 110000:110004, 
                         110005:110009,
-                        110010:110013
+                        110010:110014
                         ]
         
         
@@ -82,11 +82,11 @@ function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1000,
     #------------------------------------------------------------
     
     hpvv1, errvv1, etavv1, 
-        tCPUvv1, pvv1       = GetVbles(SCvv1, ["hp", "e_Lq", "etaST", "tCPU", "alpha"], nb=nb)
+        tCPUvv1, alphavv1   = GetVbles(SCvv1, ["hp", "e_Lq", "etaST", "tCPU", "Soliton_alpha"], nb=nb)
     EOCvv1                  = ExpOrderConv(hpvv1, errvv1)
     
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.7)
-    leg                     = Legend(pvv1, latexstring("\\alpha"), format="%d")
+    leg                     = Legend(alphavv1, latexstring("\\alpha"), format="%d")
 #     loglog(NaN,NaN, "-k", linewidth=0.5)
 #     loglog(NaN,NaN, "--k", linewidth=0.5)
 #     leg                     = vcat(leg, L"e_{ST}", latexstring("\\mathcal{E}_{ST}"))
@@ -102,7 +102,7 @@ function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1000,
     end
     
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.5)
-    leg                     = Legend(pvv1, "p", format="%d")
+    leg                     = Legend(alphavv1, latexstring("\\alpha"), format="%d")
     PlotXY(tCPUvv1, errvv1, linestyle="solid", marker="s")
     grid("on")
     xlabel(latexstring(GetString("tCPU")), fontsize=LabelSize)
@@ -146,12 +146,12 @@ function CompareTimeAdaptation_SolitonRelaxed(StudyCase::String;
     
     Deltatvv1, errvv1, etavv1, 
         tCPUvv1, CFLvv1, 
-        alphavv11               = GetVbles(SCvv1, ["Deltat", "e_Lq", "etaST", 
-                                                    "tCPU", "CFLmax", "alpha"], nb=nb)
+        alphavv1                = GetVbles(SCvv1, ["Deltat", "e_Lq", "etaST", 
+                                                    "tCPU", "CFLmax", "Soliton_alpha"], nb=nb)
     EOCvv1                      = ExpOrderConv(Deltatvv1, errvv1)
     
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.7)
-    leg                     = Legend(alphavv11, latexstring("\\alpha"), format="%d")
+    leg                     = Legend(alphavv1, latexstring("\\alpha"), format="%d")
     PlotXY(Deltatvv1, errvv1, linestyle="solid", marker="s")
 #     PlotXY(Deltatvv1, etavv1, linestyle="dashed", marker="s")
     xlabel(latexstring("\\tau"), fontsize=LabelSize)
@@ -164,7 +164,7 @@ function CompareTimeAdaptation_SolitonRelaxed(StudyCase::String;
     end
             
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.5)
-    leg                     = Legend(alphavv11, "p", format="%d")
+    leg                     = Legend(alphavv1, latexstring("\\alpha"), format="%d")
     PlotXY(tCPUvv1, errvv1, linestyle="solid", marker="s")
     grid("on")
     xlabel(latexstring(GetString("tCPU")), fontsize=LabelSize)
@@ -176,7 +176,7 @@ function CompareTimeAdaptation_SolitonRelaxed(StudyCase::String;
     end
     
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.5)
-    leg                     = Legend(alphavv11, "p", format="%d")
+    leg                     = Legend(alphavv1, latexstring("\\alpha"), format="%d")
     PlotXY(CFLvv1, errvv1, linestyle="solid", marker="s")
     grid("on")
     xlabel(latexstring(GetString("CFLmax")), fontsize=LabelSize)
