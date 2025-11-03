@@ -76,6 +76,13 @@ function CompareSpaceAdaptation_SolitonRelaxed(StudyCase::String; nb::Int=1000,
                         110010:110014
                         ]
         
+    elseif StudyCase=="IRK"
+                        
+        SCvv1       = [ 110000:110004, 
+                        110005:110009,
+                        110040:110044,
+                        110045:110049 
+                        ]
         
     end
         
@@ -137,6 +144,16 @@ function CompareTimeAdaptation_SolitonRelaxed(StudyCase::String;
         SCvv1       = [ 110015:110019, 
                         110020:110024, 
                         110025:110026 ]
+                        
+        nb          = 1000
+        
+    elseif StudyCase=="IRK"
+    
+        #TimeAdapt:
+        SCvv1       = [ 110015:110019, 
+                        110020:110024, 
+                        110030:110034, 
+                        110035:110039 ]
                         
         nb          = 1000
         

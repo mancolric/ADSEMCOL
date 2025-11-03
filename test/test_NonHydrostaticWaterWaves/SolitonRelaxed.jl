@@ -267,8 +267,8 @@ function SolitonRelaxed(hp0::Float64, FesOrder::Int;
 
     while solver.t<tf
 
-#         ConvFlag    = LIRKHyp_Step!(solver)
-        ConvFlag    = IRK_Step!(solver)
+        ConvFlag    = LIRKHyp_Step!(solver)
+#         ConvFlag    = IRK_Step!(solver)
         if ConvFlag<=0
             break
         end

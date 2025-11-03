@@ -1941,9 +1941,9 @@ function IRK_Step!(solver::SolverData)
             function QNResidual1!(u::Vector{Float64}, gres::Vector{Float64})
                 
                 #Compute flux and save derivatives:
-                t_ini                   = time()
+#                 t_ini                   = time()
                 Rhs!(solver, t_k, u, false, view(solver.f_RK,:,kk), solver.Jm)
-                solver.tRhs             += time()-t_ini
+#                 solver.tRhs             += time()-t_ini
                 
                 #Compute residual f:
                 #   f = D*(M*(Du) - b - Deltat*a_kk*f_k(Du))
