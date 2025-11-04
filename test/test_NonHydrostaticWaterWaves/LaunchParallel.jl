@@ -75,6 +75,22 @@ end
                 SpaceAdapt=true, TolS=TolS, 
                 TimeAdapt=true, TolT=TolT, 
                 SC=SC, SaveRes=true, Deltat_SaveRes=Inf)
+                
+        elseif ProblemName=="SolitonExact"
+            hp0         = 0.1
+            FesOrder    = Int(ProblemTable[iCase,1])
+            tf          = Float64(ProblemTable[iCase,2])
+            xend        = Float64(ProblemTable[iCase,3])
+            alpha       = Float64(ProblemTable[iCase,4])
+            TolS        = Float64(ProblemTable[iCase,5])
+            TolT        = Float64(ProblemTable[iCase,6])
+            SC          = Int(ProblemTable[iCase,7])
+            SolitonRelaxed(hp0, FesOrder, tf=tf, Deltat0=1e-6, xend=xend, 
+                alpha=alpha, 
+                SpaceAdapt=true, TolS=TolS, 
+                TimeAdapt=true, TolT=TolT, 
+                SC=SC, SaveRes=true, Deltat_SaveRes=Inf)
+                
         else
             error("Undefined problem $(ProblemName)")
         end
@@ -94,4 +110,3 @@ end
 t0              = time()
 pmap(LaunchCase, problems, casesv)
 println("$(TotalCases) cases computed in $(time()-t0) seconds")
-
