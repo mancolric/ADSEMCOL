@@ -85,7 +85,7 @@ end
             TolS        = Float64(ProblemTable[iCase,5])
             TolT        = Float64(ProblemTable[iCase,6])
             SC          = Int(ProblemTable[iCase,7])
-            SolitonRelaxed(hp0, FesOrder, tf=tf, Deltat0=1e-6, xend=xend, 
+            SolitonExact(hp0, FesOrder, tf=tf, Deltat0=1e-6, xend=xend, 
                 alpha=alpha, 
                 SpaceAdapt=true, TolS=TolS, 
                 TimeAdapt=true, TolT=TolT, 
