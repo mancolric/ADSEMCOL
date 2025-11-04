@@ -1770,3 +1770,457 @@ end
 function LIRKHyp_Step!(solver::SolverData)
     return LIRKHyp_Step_Pre!(solver)
 end
+
+#-----------------------------------------------------------------
+#Implicit RK solver:
+function IRK_Step!(solver::SolverData)
+    
+    println()
+    t_start     = time()
+    
+    #flag=1: solver succeeded.
+    ConvFlag    = 0
+    
+    #Get current solution:
+    t_n         = solver.t
+    u_n         = solver.uv
+    u_n_views   = solver.u
+    etaS_n      = solver.etaS
+    etaT_n      = solver.etaT
+    etaA_n      = solver.etaA
+    Deltat_nm1  = solver.Deltat #previous time step
+    
+    #Reset RK matrices f_RK and Ju_RK:
+    @mlv solver.f_RK        = 0.0
+    @mlv solver.Ju_RK       = 0.0
+    
+    #Target Deltat and estimated etaT_np1:
+    Deltat_n            = 0.0
+    etaT_np1_est        = 0.0   #this is estimated value. It is necessary to set TolA:
+    if solver.t==0.0 #first step
+        Deltat_n        = solver.Deltat0    #initial/prescribed Deltat 
+    elseif !solver.TimeAdapt
+        Deltat_n        = min(solver.Deltat0, 1.8*Deltat_nm1) 
+    else
+        Deltat_n        = Deltat_nm1 * min(
+                            max(0.15, (solver.SfT*solver.TolT/etaT_n)^(1.0/solver.RK.order)),
+                            2.0,
+                            (solver.LS_iters_target/solver.LS_iters)^0.5)
+    end
+    
+    #Clip Deltat if necessary:
+    t_np1                   = t_n+Deltat_n
+    if t_np1>solver.tf
+        Deltat_n            = solver.tf-t_n
+        t_np1               = solver.tf
+        etaT_np1_est        = etaT_n * (Deltat_n/Deltat_nm1)^(solver.RK.order)
+    end
+    
+    #Estimate next etaS and etaT:
+    etaS_np1_est            = etaS_n * exp(solver.dlogetaS_dt*Deltat_n)
+    etaT_np1_est            = etaT_n * (Deltat_n/Deltat_nm1)^(solver.RK.order)
+    
+    #Adapt mesh before time step:
+    TolS_req                = max(solver.SfS*solver.TolS_max * exp(-solver.dlogetaS_dt*Deltat_n),
+                                    0.1*solver.SfS*solver.TolS_max)
+    t_ini                   = time()
+    AMA_flag, AMA_iters     = AdaptMesh!(solver, (solver.u, solver.fes), 
+                                solver.TolS_min, min(solver.TolS_max, TolS_req) )
+#     AMA_flag, AMA_iters     = AdaptMesh!(solver, (solver.u, solver.fes), 
+#                                 solver.TolS_min, min(solver.TolS_max, TolS_req), 
+#                                 AMA_RefineFactor=0.5, DEq_MaxIter=10)
+    solver.tAMA             += time()-t_ini
+    if AMA_flag<0
+        printstyled("AMA algorithm failed. Aborting\n", 
+                        color=:magenta)
+        ConvFlag            = -2+AMA_flag
+        return ConvFlag
+    end
+    
+    #Redefine some variables if mesh has changed:
+    t_ini                   = time()
+    if AMA_iters>0
+        
+        #Change decrease Deltat by a factor:
+        #(eta_n remains unchanged)
+        Deltat_n        *= solver.AMA_rDeltat
+        t_np1           = t_n + Deltat_n
+        etaT_np1_est    = etaT_n * (Deltat_n/Deltat_nm1)^(solver.RK.order)
+        
+        #Solution and space errors:
+        u_n             = solver.uv
+        u_n_views       = solver.u
+        etaS_n          = solver.etaS
+        etaS_np1_est    = etaS_n * exp(solver.dlogetaS_dt*Deltat_n)
+        
+        #RK variables:
+        RKAlloc!(solver)
+        
+    end
+    if t_n==0.0
+        etaT_np1_est    = solver.TolT
+    end
+    
+    solver.tAlloc       += time()-t_ini
+    
+    #Set algebraic tolerance:
+    TolA            = max(solver.TolA_min, solver.CA*min(etaS_np1_est, etaT_np1_est, etaS_n))
+    
+    #Flux and Jacobian for first stage:
+    t_ini                   = time()
+    println("Computing Jacobian")
+    Deltat_CFL              = Rhs!(solver, t_n, u_n, true, 
+                                view(solver.f_RK,:,1), solver.Jm)
+    solver.tJm              += time()-t_ini
+    printstyled("Jacobian computed in ", time()-t_ini, " seconds, nnz=", 
+        solver.Jm.colptr[solver.Jm.n+1], " \n", color=:cyan)
+    
+    #---------------------------------------------------------
+    #Stages 2,...,s:
+    
+    #Allocate variables:
+    u_k                 = zeros(size(u_n))
+    etaS_np1            = 0.0
+    etaS_elems_np1      = zeros(0)
+    urec_np1            = Vector{VectorView{Float64}}(undef,solver.nVars)
+    etaT_np1            = 0.0
+    etaA_np1            = 0.0
+    
+    #Save M*u[1]:
+    b1                  = solver.Mm*u_n
+
+    #Loop stages until algebraic and time tolerances are met:
+    RepeatTA            = true
+    LSFailed_iters      = 0
+    DCFailed_iters      = 0
+    Am_F                = nothing
+    while RepeatTA #before this loop, Deltat_n, t_np1, TolA must be computed
+    
+        #First stage:
+        @mlv u_k        = u_n
+        
+        #Loop stages (solution for stage kk is overwritten in solver.t and solver.u):
+        LSFlag          = 0
+        solver.LS_iters = 0
+        for kk=2:solver.RK.stages
+        
+            #Set time:
+            t_k         = t_n + solver.RK.c[kk]*Deltat_n
+            
+            #Compute system matrix and set up linear system, if necessary.
+            if kk==2 || solver.RK.AI[kk,kk]!=solver.RK.AI[kk-1,kk-1]
+                println("Setting up linear system")
+                t_ini                   = time()
+                @mlv solver.Am.nzval    = solver.Mm.nzval - 
+                                            (Deltat_n*solver.RK.AI[kk,kk])*solver.Jm.nzval
+                LinearSystem!(solver.Am_LS)                
+                solver.tSCILU           += time()-t_ini
+                printstyled("Linear system set up in ", time()-t_ini, " seconds \n", color=:cyan)
+#                 PlotLSPermutations(solver.Am_LS, solver.MII, solver.nVars)
+            end
+            
+            #Compute r.h.s.:
+            t_ini                   = time()
+            @mlv solver.bv          = 0.0
+            solver.bv               .= b1
+            for ll=1:kk-1
+                @mlv solver.bv      += (Deltat_n*solver.RK.AI[kk,ll])*$view(solver.f_RK,:,ll)
+            end
+            if any(isnan.(solver.bv))
+                display(kk)
+                display(norm(b_1))
+                display(norm(solver.f_RK))
+                display(norm(solver.Ju_RK))
+                error("NaNs in solver.bv")
+            end
+            solver.tb               += time()-t_ini
+            
+            #Define preconditioned residual:
+            etaA_np1        = NaN
+            function QNResidual1!(u::Vector{Float64}, gres::Vector{Float64})
+                
+                #Compute flux and save derivatives:
+#                 t_ini                   = time()
+                Rhs!(solver, t_k, u, false, view(solver.f_RK,:,kk), solver.Jm)
+#                 solver.tRhs             += time()-t_ini
+                
+                #Compute residual f:
+                #   f = D*(M*(Du) - b - Deltat*a_kk*f_k(Du))
+                fres        = solver.Mm*u - solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
+                                    view(solver.f_RK,:,kk)
+                
+                #Compute preconditioned residual:
+                LSOutput    = LS_gmres!(solver.Am_LS, gres, fres, 
+#                                 RelTol=1e-2, AbsTol=0.0, 
+                                RelTol=0.0, AbsTol=TolA, 
+                                Display="notify", MaxIter=solver.LS_iters_max)
+                #Returns flag, nIters, etaA
+                flag        = LSOutput[1]
+                etaA_np1    = LSOutput[3]
+                
+                return flag
+                
+            end
+            
+            #Solve:
+            t_ini       = time()
+            LSOutput    = Anderson(FW_NLS((u,gres)->QNResidual1!(u,gres)), 
+                            u_k, 
+                            AbsTolX=1.0*sqrt(length(u_k))*TolA, RelTolX=0.0, 
+                            AbsTolG=0.0*sqrt(length(u_k))*TolA, RelTolG=0.0, 
+                            memory=100, MaxIter=solver.LS_iters_max, Display="final")
+            solver.tLS  += time()-t_ini
+            u_k         .= LSOutput[1]
+            LSFlag      = LSOutput[2].flag
+            if LSFlag<=0
+                @warn "LSFlag"
+                LSFlag      = 1
+                etaA_np1    = 0.0 
+            end
+            LSIter      = LSOutput[2].nIter
+            #etaA_np1 is computed in the last call to QNResidual1
+            if LSFlag<=0
+#                 printstyled("Linear solver did not converge\n", color=:light_yellow)
+                break #loop for kk=1:nStages
+            else
+#                 println("Stage $kk, linear solver converged in $(LSIter) iterations")
+            end
+            solver.LS_iters     += LSIter
+            solver.LS_total     += LSIter
+            #Here, LS in reality is NLS
+            
+#             splot_fun(x1,x2)    = @mlv x1
+#             solver.uv           .= u_k
+#             for var in ["h", "v1", "v3", "p"]
+#                 figure()
+#                 PlotNodes(splot_fun, solver, var)
+#             end
+#             error("")
+            
+        end
+        
+        #If LS converged:
+        if LSFlag>0
+        
+            #Mean number of LS iterations:
+            solver.LS_iters     /= solver.RK.stages-1
+            
+            #Space errors:
+            printstyled("Computing space error\n", color=:white)
+            t_ini               = time()
+            etaS_np1, 
+                etaS_elems_np1,
+                urec_np1        = etaS_reconstruction(solver, GetViews(u_k, solver.nVars, solver.fes.nDof), 
+                                    q=solver.SpaceNorm)
+            solver.dlogetaS_dt  = (log(etaS_np1)-log(etaS_n))/Deltat_n
+            solver.tetaS        += time()-t_ini
+            printstyled("Space error computed in ", time()-t_ini, " seconds\n", color=:cyan)
+                        
+            #Time errors:
+            printstyled("Computing time error\n", color=:white)
+            t_ini               = time()
+            @mlv solver.bv      = 0.0
+            ss                  = solver.RK.stages
+            for ll=1:ss
+                @mlv solver.bv  += Deltat_n*(solver.RK.AI[ss,ll]-solver.RK.bhatI[ll])*
+                                    $view(solver.f_RK,:,ll)
+            end
+            ehat                = 0.0*u_k   #ehat=u-uhat
+            ehat_views          = GetViews(ehat, solver.nVars, solver.fes.nDof)
+            for II=1:solver.nVars
+                flag,           = LS_gmres!(solver.MII_LS, ehat_views[II], solver.b[II], 
+                                    AbsTol=TolA*solver.nFacts[II], Display="notify")
+                if flag<=0
+#                     printstyled("Unable to compute solution for embedded RK. Aborting\n", 
+#                         color=:magenta)
+#                     return -2
+                    printstyled("Unable to compute solution for embedded RK\n", 
+                        color=:light_yellow)
+                end
+            end
+            etaT_np1,           = LqMean(solver.Integ2D, ehat_views, solver.fes, solver.nFacts, 
+                                    q=solver.SpaceNorm)
+            solver.tetaT        += time()-t_ini
+            printstyled("Time error computed in ", time()-t_ini, " seconds\n", color=:cyan)
+                     
+            #Save errors:
+            push!(solver.tv, t_np1)
+            push!(solver.etaSv, etaS_np1)
+            push!(solver.etaTv, etaT_np1)
+            push!(solver.etaAv, etaA_np1)
+            push!(solver.nElemsv, solver.mesh.nElems)
+            push!(solver.nDofv, solver.nVars*solver.fes.nDof)
+            push!(solver.CFLv, Deltat_n/Deltat_CFL)
+            
+            #If algebraic error does not satisfy tolerance, solve again:
+            #NOTE: We should avoid this as much as possible:
+            TolA_required       = max(solver.TolA_min, 
+                                    solver.CA_max*min(etaS_n, etaS_np1, etaT_np1))
+            if etaA_np1>TolA_required
+            
+                printstyled("Algebraic error (", sprintf1("%.2e", etaA_np1), 
+                    ") larger than required (", sprintf1("%.2e", TolA_required),
+                    ") \n", color=:light_yellow)
+                    
+                #Correct target algebraic tolerance:
+                TolA        = max(solver.TolA_min, solver.CA*min(etaS_np1, etaT_np1))
+                
+                #Loop again with same time step and same mesh:
+                RepeatTA    = true
+                
+                #Save iteration:
+                push!(solver.validv, false)
+                
+            elseif solver.TimeAdapt && etaT_np1>solver.TolT
+            
+                printstyled("Time error (", sprintf1("%.2e", etaT_np1), 
+                    ") larger than required (", sprintf1("%.2e", solver.TolT),
+                    ") \n", color=:light_yellow)
+                
+                #Correct time step:
+                Deltat_ratio    = max(0.2, (solver.SfT*solver.TolT/etaT_np1)^(1.0/solver.RK.order))
+                Deltat_n        *= Deltat_ratio
+                t_np1           = t_n + Deltat_n
+                
+                #Next iteration:
+                RepeatTA        = true
+                etaS_np1_est    = etaS_n * exp(solver.dlogetaS_dt * Deltat_n)
+                etaT_np1_est    = etaT_np1 * Deltat_ratio^(solver.RK.order)
+                TolA            = max(solver.TolA_min, solver.CA*min(etaS_np1_est, etaT_np1_est, etaS_n))
+                
+                #Save iteration:
+                push!(solver.validv, false)
+                
+            elseif solver.SpaceAdapt && solver.AMA_MaxIter>0 && etaS_np1>solver.TolS_max
+            
+                printstyled("Space error (", sprintf1("%.2e", etaS_np1), 
+                    ") larger than required (", sprintf1("%.2e", solver.TolS_max),
+                    ") \n", color=:light_yellow)
+                
+                #Correct time step:
+                Deltat_ratio    = max(0.2, log(solver.SfS*solver.TolS_max/etaS_n)/solver.dlogetaS_dt)
+                Deltat_n        *= Deltat_ratio
+                t_np1           = t_n + Deltat_n
+                
+                #Next iteration:
+                RepeatTA        = true
+                etaS_np1_est    = etaS_n * exp(solver.dlogetaS_dt * Deltat_n)
+                etaT_np1_est    = etaT_np1 * Deltat_ratio^(solver.RK.order)
+                TolA            = max(solver.TolA_min, solver.CA*min(etaS_np1_est, etaT_np1_est, etaS_n))
+                
+                #Save iteration:
+                push!(solver.validv, false)
+            
+            #If all the errors satisfy tolerance, terminate iterations:
+            else
+            
+                RepeatTA        = false
+                ConvFlag        = 1
+                push!(solver.validv, true)
+                
+                #Update AMA_rDeltat if there has been AMA:
+                if AMA_iters>0
+                    #Ideal Deltat to have etaT=0.8TolT
+                    Deltat_opt  = Deltat_n*(0.8*solver.TolT/etaT_np1)^(1.0/solver.RK.order)
+                    #etaT_np1<TolT, so Deltat_opt is not going to be much smaller that Deltat_n:
+                    Deltat_opt  = min(Deltat_opt, 1.2*Deltat_n)
+                    #Update rDeltat:
+                    solver.AMA_rDeltat  = min(1.0, Deltat_opt/Deltat_nm1)
+                    printstyled("Update AMA_rDeltat=", sprintf1("%.2f", solver.AMA_rDeltat),", \n", color=:cyan)
+                end
+                
+            end
+            
+        #LS did not converge. Decrease step size or abort.
+        else
+        
+            #Save errors:
+            push!(solver.tv, t_np1)
+            push!(solver.etaSv, NaN)
+            push!(solver.etaTv, NaN)
+            push!(solver.etaAv, etaA_np1)
+            push!(solver.nElemsv, solver.mesh.nElems)
+            push!(solver.nDofv, solver.nVars*solver.fes.nDof)
+            push!(solver.CFLv, Deltat_n/Deltat_CFL)
+            push!(solver.validv, 0)
+            
+            printstyled("Linear solver did not converge. etaA=", sprintf1("%.2e", etaA_np1), 
+                ", TolA=", sprintf1("%.2e", TolA), 
+                ". Decreasing time step\n", color=:light_yellow)
+            if LSFailed_iters==10
+                printstyled("Linear solver unable to converge after ",
+                    LSFailed_iters, " attempts. Aborting\n", color=:magenta)
+                RepeatTA            = false
+                ConvFlag            = -1
+            else
+            
+                #Reduce time step.:
+                LSFailed_iters      += 1
+                rDeltat             = max(0.2, (0.8*TolA/etaA_np1)^(2))
+                Deltat_n            *= rDeltat
+                t_np1               = t_n + Deltat_n
+                
+                #Next iteration:
+                RepeatTA            = true
+                etaS_np1_est        = etaS_n * exp(solver.dlogetaS_dt * Deltat_n)
+                etaT_np1_est        = etaT_n * (Deltat_n/Deltat_nm1)^(solver.RK.order)
+                if t_n==0.0
+                    etaT_np1_est    = solver.TolT
+                end
+                TolA                = max(solver.TolA_min, 
+                                        solver.CA*min(etaS_np1_est, etaT_np1_est, etaS_n))
+                                    
+            end
+            
+        end
+        
+    end
+    
+    #Time-algebraic loop finished. If method has converged...
+    if ConvFlag==1
+        
+        #Save new solution:
+        solver.t            = t_np1
+        solver.Nt           += 1
+        solver.Deltat       = Deltat_n
+        solver.CFL          = Deltat_n/Deltat_CFL
+        solver.uv           .= u_k
+        solver.etaS         = etaS_np1
+        solver.etaS_elems   = etaS_elems_np1
+        solver.urec         = urec_np1
+        solver.etaT         = etaT_np1
+        solver.etaA         = etaA_np1
+        solver.etaST        = sqrt( (solver.etaST^2*t_n + 
+                                 (etaS_np1 + etaT_np1)^2*Deltat_n)
+                                /t_np1 )
+        
+        println("SC=", sprintf1("%d", solver.SC),
+            ", t=", sprintf1("%.2e", solver.t), 
+            ", Deltat=", sprintf1("%.2e", solver.Deltat), 
+            ", CFL=", sprintf1("%.2e", solver.CFL), 
+            ", TotalDof=", sprintf1("%d", solver.nVars*solver.fes.nDof),
+            ", MasterDof=", sprintf1("%d", solver.Am_LS.Pl.nMasters),
+            ", hp_min=", sprintf1("%.2e", minimum(_hmin(solver.mesh))/solver.FesOrder), 
+            ", etaS=", sprintf1("%.2e", solver.etaS), 
+            ", etaT=", sprintf1("%.2e", solver.etaT), 
+            ", etaA=", sprintf1("%.2e", solver.etaA),
+            ", etaST=", sprintf1("%.2e", solver.etaST), 
+            ", tCPU=", sprintf1("%.2e", solver.tCPU+time()-t_start))
+        
+    else
+    
+        printstyled("LIRKHyp method did not converge. Aborting\n", color=:magenta)
+        
+    end
+    
+    #Clear memory:
+    if mod(solver.Nt,500)==0
+        GC.gc()
+    end
+    
+    solver.tCPU         += time()-t_start 
+    
+    return ConvFlag
+    
+end
+
