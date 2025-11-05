@@ -195,8 +195,13 @@ function TriplePoint(hp0::Float64, FesOrder::Int;
         if PostAdapt
             ConvFlag            = LIRKHyp_Step_Post!(solver)
         else
+<<<<<<< HEAD
             ConvFlag            = LIRKHyp_Step_Pre!(solver)
 #             ConvFlag            = IRK_Step!(solver)
+=======
+#             ConvFlag            = LIRKHyp_Step_Pre!(solver)
+            ConvFlag            = IRK_Step!(solver)
+>>>>>>> main
         end
         if ConvFlag<=0
             break
