@@ -1774,6 +1774,7 @@ end
 
 #-----------------------------------------------------------------
 #Implicit RK solver:
+
 function IRK_Step!(solver::SolverData)
     
     println()
@@ -2224,7 +2225,3 @@ function IRK_Step!(solver::SolverData)
     return ConvFlag
     
 end
-<<<<<<< HEAD
-=======
-
->>>>>>> main
