@@ -284,7 +284,8 @@ function SolitonExact(hp0::Float64, FesOrder::Int;
     #Save results:
     if SaveRes
         save("$(ResUbi)LIRKHyp_SC$(SC)_1000.jld2", "StudyCase", "SolitonExact",
-            "ConvFlag", ConvFlag, "solver", save(solver), "hmean", hmean, "e_Lq", errLq, "Deltat_mean", Deltat_mean)
+            "ConvFlag", ConvFlag, "solver", save(solver), "hmean", hmean, "e_Lq", errLq, "Deltat_mean", Deltat_mean, 
+            "A", A, "g", g, "h0", h0, "alpha", alpha, "xend", xend)
     end
 
     return solver
