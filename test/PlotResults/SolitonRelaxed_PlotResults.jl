@@ -1,5 +1,5 @@
-include("PlotResults.jl")
 include("../test_NonHydrostaticWaterWaves/SolitonRelaxed.jl")
+include("PlotResults.jl")
 
 function Nodes_SolitonRelaxed(SC::Int, nb::Int; 
     SaveFig::Bool=false, w::Float64=9.50, h::Float64=6.50,
