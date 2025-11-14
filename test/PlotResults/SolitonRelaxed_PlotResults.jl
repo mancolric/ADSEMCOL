@@ -36,7 +36,8 @@ function Nodes_SolitonRelaxed(SC::Int, nb::Int;
     vm      = DepVars(model, solver.t, Vector{<:AMF64}(xm), um, PlotVars)
     
     #Loop plot variables:
-    fig     = PyPlotSubPlots(mFig, nFig, w=w, h=h, left=0.9, right=0.4, bottom=1.1, top=1.0)
+#     fig     = PyPlotSubPlots(mFig, nFig, w=w, h=h, left=0.9, right=0.4, bottom=1.1, top=1.0)
+    fig     = PyPlotSubPlots(mFig, nFig, w=w, h=h, left=0.9, right=0.4, bottom=1.1, top=1.2)
     for ii=1:length(PlotVars)
         PyPlot.subplot(mFig, nFig, ii)
         PyPlot.cla()
@@ -49,6 +50,7 @@ function Nodes_SolitonRelaxed(SC::Int, nb::Int;
                 fontsize=10)
         tick_params(axis="both", which="both", labelsize=TickSize)
         xlim([x11, x12])
+        suptitle(latexstring("\\mathrm{Relaxed~soliton}, \\alpha=", sprintf1("%d",alpha), ", Tol_S=Tol_T=", sprintf1("%.2e", solver.TolT)), fontsize=10)
     end
     if SaveFig
         savefig("$(FigUbi)SC$(SC)_Nodes.png", dpi=800, pad_inches=0)
