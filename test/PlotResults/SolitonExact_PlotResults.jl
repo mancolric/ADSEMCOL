@@ -9,10 +9,21 @@ function Nodes_SolitonExact(SC::Int, nb::Int;
     solver      = GetSolver(SC, nb)
     
     #Load data:
-    alpha               = 10.0
-    g                   = 9.8
-    h0                  = 1.0
-    A                   = 0.2
+    alpha               = NaN
+    g                   = NaN
+    h0                  = NaN
+    A                   = NaN
+    if SC<=120002
+        alpha           = 10.0
+        g               = 9.8
+        h0              = 1.0
+        A               = 0.2
+    else
+        alpha           = load(FileName, "alpha")
+        g               = load(FileName, "g")
+        h0              = load(FileName, "h0")
+        A               = load(FileName, "A")
+    end
     
     #Define model:
     model               = NHWW()
@@ -36,7 +47,8 @@ function Nodes_SolitonExact(SC::Int, nb::Int;
     vm                  = DepVars(model, solver.t, Vector{<:AMF64}(xm), um, PlotVars)
     
     #Loop plot variables:
-    fig                 = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
+#     fig                 = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
+    fig     = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.2) #for suptitle
     for ii=1:length(PlotVars)
         PyPlot.subplot(mFig, nFig, ii)
         PyPlot.cla()
@@ -49,6 +61,7 @@ function Nodes_SolitonExact(SC::Int, nb::Int;
                 fontsize=10)
         tick_params(axis="both", which="both", labelsize=TickSize)
         xlim([x11, x12])
+        suptitle(latexstring("\\mathrm{Exact~soliton}, \\alpha=", sprintf1("%d",alpha), ", Tol_S=Tol_T=", sprintf1("%.2e", solver.TolT)), fontsize=10)
     end
     if SaveFig
         savefig("$(FigUbi)SC$(SC)_Nodes.png", dpi=800, pad_inches=0)
@@ -57,3 +70,5 @@ function Nodes_SolitonExact(SC::Int, nb::Int;
     return
     
 end
+
+

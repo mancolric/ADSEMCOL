@@ -37,7 +37,7 @@ function Nodes_SolitonRelaxed(SC::Int, nb::Int;
     
     #Loop plot variables:
 #     fig     = PyPlotSubPlots(mFig, nFig, w=w, h=h, left=0.9, right=0.4, bottom=1.1, top=1.0)
-    fig     = PyPlotSubPlots(mFig, nFig, w=w, h=h, left=0.9, right=0.4, bottom=1.1, top=1.2)
+    fig     = PyPlotSubPlots(mFig, nFig, w=w, h=h, left=0.9, right=0.4, bottom=1.1, top=1.2) #for suptitle
     for ii=1:length(PlotVars)
         PyPlot.subplot(mFig, nFig, ii)
         PyPlot.cla()
