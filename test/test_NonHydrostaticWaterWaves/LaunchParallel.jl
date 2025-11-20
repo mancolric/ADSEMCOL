@@ -8,6 +8,7 @@ display(nworkers())
 display(nthreads())
 display(BLAS.get_num_threads())
 
+#=
 error("")
 
 #-------------------------------------------------------------------------------
@@ -111,3 +112,4 @@ end
 t0              = time()
 pmap(LaunchCase, problems, casesv)
 println("$(TotalCases) cases computed in $(time()-t0) seconds")
+=#
