@@ -7,7 +7,7 @@ using LinearAlgebra
 
 display(nworkers())
 display(nthreads())
-display(BLAS.get_num_threads()
+display(BLAS.get_num_threads())
 
 return
 
