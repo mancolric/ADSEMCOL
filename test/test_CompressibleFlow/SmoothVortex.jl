@@ -263,6 +263,7 @@ function SmoothVortex(hp::Float64, FesOrder::Int, tfv::Array{Float64,1};
         etaL2L2             = errL2L2_(solver.t-solver.Deltat, etaL2L2, solver.t, solver.etaS+solver.etaT)
         
         println("hmean=", sprintf1("%.2e", hmean), 
+                ", Deltat_mean=", sprintf1("%.2e", solver.t/solver.Nt), 
                 ", e_L2L2=", sprintf1("%.2e", errL2L2), 
                 ", etaL2L2=", sprintf1("%.2e", etaL2L2))
         
