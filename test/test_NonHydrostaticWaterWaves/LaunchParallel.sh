@@ -22,6 +22,6 @@
 module load julia
 
 # Run julia with desired parameters:
-julia test/test_NonHydrostaticWaterWaves/LaunchParallel.jl
+julia -p 1 -t 2 test/test_NonHydrostaticWaterWaves/LaunchParallel.jl
 
 

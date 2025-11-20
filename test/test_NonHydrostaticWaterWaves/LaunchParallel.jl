@@ -1,10 +1,8 @@
 #Set number of workers and number of threads from command line with options -p and -t, i.e.,
 #   julia -p 4 -t 2 LaunchParallel.jl
 include("../../src/AuxiliaryFunctions/basic.jl")
-
 using Distributed
 using Base.Threads
-using LinearAlgebra
 
 display(nworkers())
 display(nthreads())
