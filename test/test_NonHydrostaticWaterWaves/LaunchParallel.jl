@@ -1,20 +1,27 @@
-cd(@__DIR__)
-include("../../src/AuxiliaryFunctions/Distributed.jl")
+#Set number of workers and number of threads from command line with options -p and -t, i.e.,
+#   julia -p 4 -t 2 LaunchParallel.jl
 
-global nProcs       = 2
-global nThreads     = 4
+using Distributed
+using Base.Threads
+using LinearAlgebra
+
+display(nworkers())
+display(nthreads())
+display(BLAS.get_num_threads()
+
+return
 
 #-------------------------------------------------------------------------------
 #Load cases:
 
 #Read cases:
-ProblemNames    = readdlm("LaunchParallel.txt")
+ProblemNames    = readdlm("$(@__DIR__)/LaunchParallel.txt")
 nProblems       = size(ProblemNames,1)
 
 #For each problem, get number of cases to be solved:
 nCases          = zeros(Int, nProblems)
 for ii=1:nProblems
-    ProblemTable    = readdlm("LaunchParallel_$(ProblemNames[ii]).txt")
+    ProblemTable    = readdlm("$(@__DIR__)/LaunchParallel_$(ProblemNames[ii]).txt")
     nCases[ii]      = size(ProblemTable, 1)
 end
 TotalCases      = sum(nCases)
@@ -32,15 +39,10 @@ end
 #-------------------------------------------------------------------------------
 #Run cases in parallel:
 
-#Add workers:
-println("Adding $nProcs processes")
-rmallprocs()
-addprocs(nProcs)
+#Number of workers is set from the command line.
 
 #Set global variable "computer" in all processors:
 for ii in workers()
-    fetch(@spawnat ii global nProcs=nProcs)
-    fetch(@spawnat ii global nThreads=nThreads)
     fetch(@spawnat ii global ProblemNames=ProblemNames)
 end
 
@@ -49,9 +51,9 @@ end
     using Pkg
     Pkg.activate(".")
     for ProblemName in ProblemNames
-        include("$(ProblemName).jl")
+        include("$(@__DIR__)/$(ProblemName).jl")
     end
-    BLAS.set_num_threads(nThreads)
+    BLAS.set_num_threads(nthreads())
 end
 
 #Function to launch i-th case in the list for problem ProblemName:
@@ -60,7 +62,7 @@ end
     try
         
         #Load table:
-        ProblemTable    = readdlm("LaunchParallel_$(ProblemName).txt")
+        ProblemTable    = readdlm("$(@__DIR__)/LaunchParallel_$(ProblemName).txt")
         if ProblemName=="SolitonRelaxed"
             hp0         = 0.1
             FesOrder    = Int(ProblemTable[iCase,1])
@@ -97,7 +99,7 @@ end
         
     catch err
     
-        PrintToFile("../../temp/LaunchParallel_$(ProblemName)_$(iCase).err", 
+        PrintToFile("$(@__DIR__)/../../temp/LaunchParallel_$(ProblemName)_$(iCase).err", 
             string(Error2String(err), "\n\n"))
         
     end
