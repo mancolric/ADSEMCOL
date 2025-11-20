@@ -1,15 +1,12 @@
-#Set number of workers and number of threads from command line with options -p and -t, i.e.,
-#   julia -p 4 -t 2 LaunchParallel.jl
+#Number of workers and threads is set by SLURM, in particular, by the arguments 
+#   --ntasks_per_nodes, --cpus-per-task
+
+#See https://www.tquelch.com/posts/distributed-julia/
+
 include("../../src/AuxiliaryFunctions/basic.jl")
 using Distributed
+using ClusterManagers
 using Base.Threads
-
-display(nworkers())
-display(nthreads())
-display(BLAS.get_num_threads())
-
-#=
-error("")
 
 #-------------------------------------------------------------------------------
 #Load cases:
@@ -40,10 +37,14 @@ end
 #Run cases in parallel:
 
 #Number of workers is set from the command line.
+# addprocs(2)
+# addprocs_slurm(parse(Int, ENV["SLURM_NTASKS"]))
+#Workers are created with the same nb of threads than master.
 
 #Set global variable "computer" in all processors:
 for ii in workers()
     fetch(@spawnat ii global ProblemNames=ProblemNames)
+#     display("$(ii) $(nthreads()) $(BLAS.get_num_threads())")
 end
 
 #Load libraries in all processes:
@@ -53,7 +54,6 @@ end
     for ProblemName in ProblemNames
         include("$(@__DIR__)/$(ProblemName).jl")
     end
-    BLAS.set_num_threads(nthreads())
 end
 
 #Function to launch i-th case in the list for problem ProblemName:
@@ -110,6 +110,6 @@ end
 
 #Call pmap:
 t0              = time()
-pmap(LaunchCase, problems, casesv)
+# pmap(LaunchCase, problems, casesv)
+# rmprocs(workers())
 println("$(TotalCases) cases computed in $(time()-t0) seconds")
-=#
