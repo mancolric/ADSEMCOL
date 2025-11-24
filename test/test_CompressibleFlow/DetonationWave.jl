@@ -4,7 +4,7 @@ include("test_CompressibleFlow.jl")
 
 function DetonationWave(; FesOrder::Int=5, 
     tf::Float64=20.0, RKMethod::String="Ascher3", #"BPR3"
-    delta::Float64=1e-2,
+    delta::Float64=1e-3,
     epsilon::Float64=1000*delta,
     #
     TolS::Float64=1e-6, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
@@ -13,7 +13,7 @@ function DetonationWave(; FesOrder::Int=5,
     #
     PlotFig::Bool=false, wFig::Float64=9.50, hFig::Float64=6.50,
     PlotVars::Vector{String}=String[], PlotCode::Vector{String}=fill("nodes", length(PlotVars)),
-    SaveFig::Bool=false, Nt_SaveFig::Int=5, Deltat_SaveFig::Float64=Inf,
+    SaveFig::Bool=false, Nt_SaveFig::Int=3, Deltat_SaveFig::Float64=Inf,
     mFig::Int=max(1,length(PlotCode)), nFig::Int=Int(ceil(length(PlotCode)/mFig)), cmap::String="jet",
     #
     SaveRes::Bool=false, Nt_SaveRes::Int=typemax(Int), Deltat_SaveRes::Float64=0.1,
