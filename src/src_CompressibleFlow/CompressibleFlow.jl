@@ -1,22 +1,7 @@
-#TODO:
-#   -Correct Brenner's model for multiple species.
-#   -avxt macro.
-#   -Output JET to text file.
-
-# include("../../AuxiliaryFunctions-v2/basic.jl")
-# import Base
-
-# include("../../FEM/FEM.jl") #this includes basic
-# include("../../AuxiliaryFunctions-v2/ODESolvers.jl")
-# import Base
-# using ILUZero
-# using IterativeSolvers
-# using Formatting
-
 include("../src_LIRKHyp/LIRKHyp.jl")
 
 #------------------------------------------------------------------
-#STRUCTURES WITH CONSTITUTIVE MODELS AND BOUNDARY CONDITIONS:
+#CONSTITUTIVE MODELS:
 
 abstract type GasModel <: ConstModels end
 
@@ -96,6 +81,52 @@ Base.@kwdef mutable struct GasFP <: ReactiveGas
     
 end
 
+Base.@kwdef mutable struct GasH2 <: ReactiveGas
+
+    #Compressible flow characteristic fields:
+    epsilon         ::Float64           = 0.0
+    nu              ::Float64           = 0.0
+    beta            ::Float64           = 0.0
+    kappa_rho_cv    ::Float64           = 0.0
+    g               ::Float64           = 0.0   #Gravity force in -y direction
+    nReactions      ::Int               = 18
+    nSpecies        ::Int               = 13
+    CSS             ::Float64           = 0.1   #Subgrid stabilization
+    CW              ::Float64           = 50.0  #Boundary penalty (50.0-200.0 for IIPG)
+
+    #Reaction's characteristic fields:
+    coef1           ::Matrix{Float64}   = H2_coef1() # 200-1000 K NASA
+    coef2           ::Matrix{Float64}   = H2_coef2() # 1000-6000 K NASA
+    coef3           ::Matrix{Float64}   = H2_coef3() # 6000-20000 K NASA
+                                            # H2  O2  H2O  N2  He  Ar  CO  CO2 H   OH  HO2 H2O2 O
+    coefChaperon    ::Matrix{Float64}   = [ 2.5 1.0 16.0 1.0 0.7 0.7 1.2 2.4 1.0 1.0 1.0 1.0 1.0;
+                                            2.5 1.0 12.0 1.0 0.4 0.4 1.9 3.8 1.0 1.0 1.0 1.0  1.0;
+                                            2.5 1.0 12.0 1.0 0.5 0.5 1.9 3.8 1.0 1.0 1.0 1.0  1.0;
+                                            2.5 1.0 6.0  1.0 0.4 0.7 1.5 2.0 1.0 1.0 1.0 6.0  1.0]
+    Wi              ::Vector{Float64}   = H2_Wi() # kg/mol
+    hf              ::Vector{Float64}   = H2_hf() # J/mol
+    R               ::Float64           = 8.314510 #J/(mol-K)
+    T0              ::Float64           = 298.15 # K
+    D               ::Float64           = 0.0
+
+    #Dependent variables:
+    DepVars         ::Vector{String}    = [ "rho", "p", "vx", "vy", "gamma",
+                                           "e_i", "h_i", "D_i",
+                                           "mdot_i", "dmdot_ij", "lambda_max",
+                                           "epsilon", "nu", "beta", "kappa_rho_cv",
+                                           "D_penalty" ]
+
+    #Mandatory fields:
+    nVars           ::Int               = 16
+
+end
+include("GasH2_auxfun.jl")
+include("GasH2_coeffs.jl")
+include("GasH2_reac.jl")
+
+#---------------------------------------------------------------------------
+#BOUNDARY CONDITIONS:
+
 #Slip + adiabatic condition at a wall. nSpecies+3 conditions:
 #   m_n             = 0     zero normal velocity
 #   fmass_(k,j) n_j = 0     no mass flux, k=1,...,nSpecies
@@ -169,10 +200,10 @@ function DepVars(model::GasIdeal, t::Float64, x::Vector{<:AMF64},
     rhovx       = u[nSpecies+1]
     rhovy       = u[nSpecies+2]
     rhoE        = u[nSpecies+3]
-    rhoe        = @mlv    rhoE-0.5*(rhovx*rhovx+rhovy*rhovy)/rho
+    rhoe        = @tturbo @.    rhoE-0.5*(rhovx*rhovx+rhovy*rhovy)/rho
     gamma       = model.gamma
     p           = @. abs((gamma-1.0)*rhoe)
-#     p           = @mlv    (gamma-1.0)*rhoe
+#     p           = @tturbo @.    (gamma-1.0)*rhoe
     nout        = length(vout)
     xout        = Vector{Vector{Array{Float64,ndims(rhoE)}}}(undef,nout)
     for ivar in eachindex(vout)
@@ -186,32 +217,32 @@ function DepVars(model::GasIdeal, t::Float64, x::Vector{<:AMF64},
         elseif vble=="rhoE"
             xout[ivar]      = [rhoE]
         elseif vble=="vx"
-            xout[ivar]      = [@mlv rhovx./rho]
+            xout[ivar]      = [@tturbo @. rhovx./rho]
         elseif vble=="vy"
-            xout[ivar]      = [@mlv rhovy./rho]
+            xout[ivar]      = [@tturbo @. rhovy./rho]
         elseif vble=="v"
-            xout[ivar]      = [@mlv sqrt(rhovx*rhovx+rhovy*rhovy)/rho]
+            xout[ivar]      = [@tturbo @. sqrt(rhovx*rhovx+rhovy*rhovy)/rho]
         elseif vble=="rhoe"
             xout[ivar]      = [rhoe]
         elseif vble=="e"
-            xout[ivar]      = [@avxt @. rhoe/rho]
+            xout[ivar]      = [@tturbo @. rhoe/rho]
         elseif vble=="p"
             xout[ivar]      = [p]
         elseif vble=="a"
-            xout[ivar]      = [@mlv sqrt(abs(gamma*p/rho))]
+            xout[ivar]      = [@tturbo @. sqrt(abs(gamma*p/rho))]
         elseif vble=="lambda_max"
-            xout[ivar]      = [@mlv sqrt(abs(gamma*p/rho)) + sqrt(rhovx*rhovx+rhovy*rhovy)/abs(rho)]
+            xout[ivar]      = [@tturbo @. sqrt(abs(gamma*p/rho)) + sqrt(rhovx*rhovx+rhovy*rhovy)/abs(rho)]
         elseif vble=="M"
-            xout[ivar]      = [@mlv sqrt( (rhovx*rhovx+rhovy*rhovy)/(rho*rho) 
+            xout[ivar]      = [@tturbo @. sqrt( (rhovx*rhovx+rhovy*rhovy)/(rho*rho) 
                                         / abs(gamma*p/rho)) ]
         elseif vble=="RT"
-            xout[ivar]      = [@mlv abs(p/rho)]
+            xout[ivar]      = [@tturbo @. abs(p/rho)]
         elseif vble=="epsilon"
             xout[ivar]      = [fill(model.epsilon, size(u[1]))]
         elseif vble=="nu"
             xout[ivar]      = [fill(model.nu, size(u[1]))]
 #             nu              = model.nu
-#             xout[ivar]      = [ @avxt @. SmoothHeaviside(x[1]-0.55, 5e-2, nu, 0.0) ]
+#             xout[ivar]      = [ @tturbo @. SmoothHeaviside(x[1]-0.55, 5e-2, nu, 0.0) ]
         elseif vble=="beta"
             xout[ivar]      = [fill(model.beta, size(u[1]))]
         elseif vble=="kappa_rho_cv"
@@ -220,14 +251,14 @@ function DepVars(model::GasIdeal, t::Float64, x::Vector{<:AMF64},
             D_penalty       = max(model.epsilon, model.nu, model.beta, model.kappa_rho_cv)
             xout[ivar]      = [fill(D_penalty, size(u[1]))]
         elseif vble=="rhos"
-            xout[ivar]      = [@mlv rho*(log(abs(p))-gamma*log(abs(rho)))]
+            xout[ivar]      = [@tturbo @. rho*(log(abs(p))-gamma*log(abs(rho)))]
         elseif vble=="gamma"
             xout[ivar]      = [fill(gamma,size(u[1]))]
         elseif vble=="e_i"
             #(Assume all species have same energy)
             xout[ivar]      = Vector{Matrix{Float64}}(undef,nSpecies)
             for ss=1:nSpecies
-                xout[ivar][ss]  = @mlv rhoe/rho
+                xout[ivar][ss]  = @tturbo @. rhoe/rho
             end
         elseif vble=="dp_du"
             #From 
@@ -238,9 +269,9 @@ function DepVars(model::GasIdeal, t::Float64, x::Vector{<:AMF64},
             #   0       = 1/(gamma-1) * dp/drhovy + vy
             #   1       = 1/(gamma-1) * dp/drhoE 
             dp_dout         = Vector{Matrix{Float64}}(undef, nSpecies+3)
-            dp_dout[1]      = @mlv (gamma-1.0)*(0.5*(rhovx*rhovx+rhovy*rho)/(rho*rho))
-            dp_dout[2]      = @mlv -(gamma-1.0)*rhovx/rho
-            dp_dout[3]      = @mlv -(gamma-1.0)*rhovy/rho
+            dp_dout[1]      = @tturbo @. (gamma-1.0)*(0.5*(rhovx*rhovx+rhovy*rho)/(rho*rho))
+            dp_dout[2]      = @tturbo @. -(gamma-1.0)*rhovx/rho
+            dp_dout[3]      = @tturbo @. -(gamma-1.0)*rhovy/rho
             dp_dout[4]      = fill(gamma-1.0, size(u[1]))
             xout[ivar]      = dp_dout
         else
@@ -263,12 +294,12 @@ function DepVars(model::GasFP, t::Float64, x::Vector{<:AMF64},
     rhovx       = u[nSpecies+1]
     rhovy       = u[nSpecies+2]
     rhoE        = u[nSpecies+3]
-    rhoe        = @mlv rhoE-0.5*(rhovx*rhovx+rhovy*rhovy)/rho
+    rhoe        = @tturbo @. rhoE-0.5*(rhovx*rhovx+rhovy*rhovy)/rho
     gamma       = model.gamma
     hfF         = model.hfF
     hfP         = model.hfP
-    p           = @mlv (rhoe-u[1]*hfF-u[2]*hfP)*(gamma-1.0)
-    RT          = @mlv p/rho
+    p           = @tturbo @. (rhoe-u[1]*hfF-u[2]*hfP)*(gamma-1.0)
+    RT          = @tturbo @. p/rho
     nout        = length(vout)
     xout        = Vector{Vector{Array{Float64,ndims(rhoE)}}}(undef,nout)
     for ivar in eachindex(vout)
@@ -280,9 +311,9 @@ function DepVars(model::GasFP, t::Float64, x::Vector{<:AMF64},
         elseif vble=="rhoY_P"
             xout[ivar]      = [u[2]]
         elseif vble=="Y_F"
-            xout[ivar]      = [@mlv u[1]/rho]
+            xout[ivar]      = [@tturbo @. u[1]/rho]
         elseif vble=="Y_P"
-            xout[ivar]      = [@mlv u[2]/rho]
+            xout[ivar]      = [@tturbo @. u[2]/rho]
         elseif vble=="rhovx"
             xout[ivar]      = [rhovx]
         elseif vble=="rhovy"
@@ -290,26 +321,26 @@ function DepVars(model::GasFP, t::Float64, x::Vector{<:AMF64},
         elseif vble=="rhoE"
             xout[ivar]      = [rhoE]
         elseif vble=="vx"
-            xout[ivar]      = [@mlv rhovx./rho]
+            xout[ivar]      = [@tturbo @. rhovx./rho]
         elseif vble=="vy"
-            xout[ivar]      = [@mlv rhovy./rho]
+            xout[ivar]      = [@tturbo @. rhovy./rho]
         elseif vble=="v"
-            xout[ivar]      = [@mlv sqrt(rhovx*rhovx+rhovy*rhovy)/rho]
+            xout[ivar]      = [@tturbo @. sqrt(rhovx*rhovx+rhovy*rhovy)/rho]
         elseif vble=="rhoe"
             xout[ivar]      = [rhoe]
         elseif vble=="e"
-            xout[ivar]      = [@avxt @. rhoe/rho]
+            xout[ivar]      = [@tturbo @. rhoe/rho]
         elseif vble=="p"
             xout[ivar]      = [p]
         elseif vble=="a"
-            xout[ivar]      = [@mlv sqrt(abs(gamma*p/rho))]
+            xout[ivar]      = [@tturbo @. sqrt(abs(gamma*p/rho))]
         elseif vble=="lambda_max"
-            xout[ivar]      = [@mlv sqrt(abs(gamma*p/rho)) + sqrt(rhovx*rhovx+rhovy*rhovy)/abs(rho)]
+            xout[ivar]      = [@tturbo @. sqrt(abs(gamma*p/rho)) + sqrt(rhovx*rhovx+rhovy*rhovy)/abs(rho)]
         elseif vble=="M"
-            xout[ivar]      = [@mlv sqrt( (rhovx*rhovx+rhovy*rhovy)/(rho*rho) 
+            xout[ivar]      = [@tturbo @. sqrt( (rhovx*rhovx+rhovy*rhovy)/(rho*rho) 
                                         / abs(gamma*p/rho)) ]
         elseif vble=="RT"
-            xout[ivar]      = [@mlv abs(p/rho)]
+            xout[ivar]      = [@tturbo @. abs(p/rho)]
         elseif vble=="epsilon"
             xout[ivar]      = [fill(model.epsilon, size(u[1]))]
         elseif vble=="nu"
@@ -322,25 +353,25 @@ function DepVars(model::GasFP, t::Float64, x::Vector{<:AMF64},
             D_penalty       = max(model.epsilon, model.nu, model.beta, model.kappa_rho_cv)
             xout[ivar]      = [fill(D_penalty, size(u[1]))]
         elseif vble=="rhos"
-            xout[ivar]      = [@mlv rho*(log(abs(p))-gamma*log(abs(rho)))]
+            xout[ivar]      = [@tturbo @. rho*(log(abs(p))-gamma*log(abs(rho)))]
         elseif vble=="gamma"
             xout[ivar]      = [fill(gamma,size(u[1]))]
         elseif vble=="e_i"
             xout[ivar]      = Vector{Matrix{Float64}}(undef,nSpecies)
-            xout[ivar][1]   = @mlv hfF + RT/(gamma-1.0)
-            xout[ivar][2]   = @mlv hfP + RT/(gamma-1.0)
+            xout[ivar][1]   = @tturbo @. hfF + RT/(gamma-1.0)
+            xout[ivar][2]   = @tturbo @. hfP + RT/(gamma-1.0)
         elseif vble=="h_i"
             xout[ivar]      = Vector{Matrix{Float64}}(undef,nSpecies)
-            xout[ivar][1]   = @mlv hfF + RT*(gamma/(gamma-1.0))
-            xout[ivar][2]   = @mlv hfP + RT*(gamma/(gamma-1.0))
+            xout[ivar][1]   = @tturbo @. hfF + RT*(gamma/(gamma-1.0))
+            xout[ivar][2]   = @tturbo @. hfP + RT*(gamma/(gamma-1.0))
         elseif vble=="D_i"
             xout[ivar]      = Vector{Matrix{Float64}}(undef,nSpecies)
             xout[ivar][1]   = fill(model.D, size(u[1]))
             xout[ivar][2]   = fill(model.D, size(u[1]))
         elseif vble=="mdot_i"
             xout[ivar]      = Vector{Matrix{Float64}}(undef,nSpecies)
-            xout[ivar][1]   = @mlv -model.B*u[1]*min(1e40, exp(-model.RTa/RT))
-            xout[ivar][2]   = @mlv -xout[ivar][1]
+            xout[ivar][1]   = @tturbo @. -model.B*u[1]*min(1e40, exp(-model.RTa/RT))
+            xout[ivar][2]   = @tturbo @. -xout[ivar][1]
         elseif vble=="dmdot_ij"
             dmdot_ij            = Matrix{Matrix{Float64}}(undef,nSpecies,nSpecies+3)
             alloc!(dmdot_ij, size(u[1]))
@@ -350,19 +381,19 @@ function DepVars(model::GasFP, t::Float64, x::Vector{<:AMF64},
             #                       + 0.5*((rhovx)^2 + (rhovy)^2)/rho^2 * d(rho)
             #R/rho/cv           = (gamma-1.0)/rho
             #Term due to u[1]
-            @mlv dmdot_ij[1,1]  = -model.B*exp(-model.RTa/RT)
+            @tturbo @. dmdot_ij[1,1]    = -model.B*exp(-model.RTa/RT)
             #Term due to RT:
-            aux                 = @mlv -model.B*u[1]*exp(-model.RTa/RT)*
-                                        model.RTa/RT^2 * (gamma-1.0)/rho
-            @mlv dmdot_ij[1,1]  += aux * (0.5*(rhovx*rhovx+rhovy*rhovy)/(rho*rho) -
-                                    (hfF + RT/(gamma-1.0)))
-            @mlv dmdot_ij[1,2]  = aux * (0.5*(rhovx*rhovx+rhovy*rhovy)/(rho*rho) -
-                                    (hfP + RT/(gamma-1.0)))
-            @mlv dmdot_ij[1,3]  = - aux * rhovx/rho
-            @mlv dmdot_ij[1,4]  = - aux * rhovy/rho
-            @mlv dmdot_ij[1,5]  = aux
+            aux                         = @tturbo @. -model.B*u[1]*exp(-model.RTa/RT)*
+                                            model.RTa/RT^2 * (gamma-1.0)/rho
+            @tturbo @. dmdot_ij[1,1]    += aux * (0.5*(rhovx*rhovx+rhovy*rhovy)/(rho*rho) -
+                                            (hfF + RT/(gamma-1.0)))
+            @tturbo @. dmdot_ij[1,2]    = aux * (0.5*(rhovx*rhovx+rhovy*rhovy)/(rho*rho) -
+                                            (hfP + RT/(gamma-1.0)))
+            @tturbo @. dmdot_ij[1,3]    = - aux * rhovx/rho
+            @tturbo @. dmdot_ij[1,4]    = - aux * rhovy/rho
+            @tturbo @. dmdot_ij[1,5]    = aux
             for JJ=1:5
-                @mlv dmdot_ij[2,JJ]     = - dmdot_ij[1,JJ]
+                @tturbo @. dmdot_ij[2,JJ]     = - dmdot_ij[1,JJ]
             end
             xout[ivar]          = reshape(dmdot_ij, :)
         elseif vble=="dp_du"
@@ -374,10 +405,10 @@ function DepVars(model::GasFP, t::Float64, x::Vector{<:AMF64},
             #   0       = 1/(gamma-1) * dp/drhovy + vy
             #   1       = 1/(gamma-1) * dp/drhoE 
             dp_dout         = Vector{Matrix{Float64}}(undef, nSpecies+3)
-            dp_dout[1]      = @mlv (gamma-1.0)*(0.5*(rhovx*rhovx+rhovy*rho)/(rho*rho)-hfF)
-            dp_dout[2]      = @mlv (gamma-1.0)*(0.5*(rhovx*rhovx+rhovy*rho)/(rho*rho)-hfP)
-            dp_dout[3]      = @mlv -(gamma-1.0)*rhovx/rho
-            dp_dout[4]      = @mlv -(gamma-1.0)*rhovy/rho
+            dp_dout[1]      = @tturbo @. (gamma-1.0)*(0.5*(rhovx*rhovx+rhovy*rho)/(rho*rho)-hfF)
+            dp_dout[2]      = @tturbo @. (gamma-1.0)*(0.5*(rhovx*rhovx+rhovy*rho)/(rho*rho)-hfP)
+            dp_dout[3]      = @tturbo @. -(gamma-1.0)*rhovx/rho
+            dp_dout[4]      = @tturbo @. -(gamma-1.0)*rhovy/rho
             dp_dout[5]      = fill(gamma-1.0, size(u[1]))
             xout[ivar]      = dp_dout
         else
@@ -387,6 +418,204 @@ function DepVars(model::GasFP, t::Float64, x::Vector{<:AMF64},
     
     return xout
     
+end
+
+function DepVars(model::GasH2, t::Float64, x::Vector{<:AMF64},
+                 u::Vector{<:AMF64}, vout::Vector{String})
+
+    nSpecies    = model.nSpecies
+    nVars       = model.nVars
+    rho         = sum(u[1:nSpecies])
+    rhovx       = u[nSpecies+1]
+    rhovy       = u[nSpecies+2]
+    rhoE        = u[nSpecies+3]
+    rhoe        = @tturbo @. rhoE-0.5*(rhovx*rhovx+rhovy*rhovy)/rho
+    R           = model.R
+    Wi          = model.Wi
+    Yi          = Vector{Matrix{Float64}}(undef, model.nSpecies)
+    for i = 1:model.nSpecies
+        Yi[i]   = @tturbo @. u[i]./rho
+    end
+    T           = calc_T(model, rhoe./rho,Yi)
+    p           = zeros(size(u[1]))
+    for i = 1:nSpecies
+        p       += @tturbo @. u[i]./Wi[i]
+    end
+    p           = R*T.*p
+
+    cp          = calc_cp_total(model,T,Yi)
+    cv          = calc_cv_total(model,T,Yi)
+    gamma       = cp./cv
+
+    nout        = length(vout)
+    xout        = Vector{Vector{Array{Float64,ndims(rhoE)}}}(undef,nout)
+    for ivar in eachindex(vout)
+        vble    = vout[ivar]
+        if vble=="rho"
+            xout[ivar]      = [rho]
+        elseif vble=="rhoY_H2"
+            xout[ivar]      = [u[1]]
+        elseif vble=="rhoY_O2"
+            xout[ivar]      = [u[2]]
+        elseif vble=="rhoY_H2O"
+            xout[ivar]      = [u[3]]
+        elseif vble=="rhoY_N2"
+            xout[ivar]      = [u[4]]
+        elseif vble=="rhoY_He"
+            xout[ivar]      = [u[5]]
+        elseif vble=="rhoY_Ar"
+            xout[ivar]      = [u[6]]
+        elseif vble=="rhoY_CO"
+            xout[ivar]      = [u[7]]
+        elseif vble=="rhoY_CO2"
+            xout[ivar]      = [u[8]]
+        elseif vble=="rhoY_H"
+            xout[ivar]      = [u[9]]
+        elseif vble=="rhoY_OH"
+            xout[ivar]      = [u[10]]
+        elseif vble=="rhoY_HO2"
+            xout[ivar]      = [u[11]]
+        elseif vble=="rhoY_H2O2"
+            xout[ivar]      = [u[12]]
+        elseif vble=="rhoY_O"
+            xout[ivar]      = [u[13]]
+        elseif vble=="Y_H2"
+            xout[ivar]      = [@tturbo @. u[1]/rho]
+        elseif vble=="Y_O2"
+            xout[ivar]      = [@tturbo @. u[2]/rho]
+        elseif vble=="Y_H2O"
+            xout[ivar]      = [@tturbo @. u[3]/rho]
+        elseif vble=="Y_N2"
+            xout[ivar]      = [@tturbo @. u[4]/rho]
+        elseif vble=="Y_He"
+            xout[ivar]      = [@tturbo @. u[5]/rho]
+        elseif vble=="Y_Ar"
+            xout[ivar]      = [@tturbo @. u[6]/rho]
+        elseif vble=="Y_CO"
+            xout[ivar]      = [@tturbo @. u[7]/rho]
+        elseif vble=="Y_CO2"
+            xout[ivar]      = [@tturbo @. u[8]/rho]
+        elseif vble=="Y_H"
+            xout[ivar]      = [@tturbo @. u[9]/rho]
+        elseif vble=="Y_OH"
+            xout[ivar]      = [@tturbo @. u[10]/rho]
+        elseif vble=="Y_HO2"
+            xout[ivar]      = [@tturbo @. u[11]/rho]
+        elseif vble=="Y_H2O2"
+            xout[ivar]      = [@tturbo @. u[12]/rho]
+        elseif vble=="Y_O"
+            xout[ivar]      = [@tturbo @. u[13]/rho]
+        elseif vble=="rhovx"
+            xout[ivar]      = [rhovx]
+        elseif vble=="rhovy"
+            xout[ivar]      = [rhovy]
+        elseif vble=="rhoE"
+            xout[ivar]      = [rhoE]
+        elseif vble=="vx"
+            xout[ivar]      = [@tturbo @. rhovx./rho]
+        elseif vble=="vy"
+            xout[ivar]      = [@tturbo @. rhovy./rho]
+        elseif vble=="v"
+            xout[ivar]      = [@tturbo @. sqrt(rhovx*rhovx+rhovy*rhovy)/rho]
+        elseif vble=="rhoe"
+            xout[ivar]      = [rhoe]
+        elseif vble=="e"
+            xout[ivar]      = [@tturbo @. rhoe/rho]
+        elseif vble=="p"
+            xout[ivar]      = [p]
+        elseif vble=="cp"
+            xout[ivar]      = [cp]
+        elseif vble=="cv"
+            xout[ivar]      = [cv]
+        elseif vble=="gamma"
+            xout[ivar]      = [gamma]
+        elseif vble=="a"
+            xout[ivar]      = [@tturbo @. sqrt(abs(gamma*p/rho))]
+        elseif vble=="lambda_max"
+            xout[ivar]      = [@tturbo @. sqrt(abs(gamma*p/rho)) + sqrt(rhovx*rhovx+rhovy*rhovy)/abs(rho)]
+        elseif vble=="M"
+            xout[ivar]      = [@tturbo @. sqrt( (rhovx*rhovx+rhovy*rhovy)/(rho*rho)/ abs(gamma*p/rho)) ]
+        elseif vble=="T"
+            xout[ivar]      = [@. 1.0*T]
+        elseif vble=="epsilon"
+            xout[ivar]      = [fill(model.epsilon, size(u[1]))]
+        elseif vble=="nu"
+            xout[ivar]      = [fill(model.nu, size(u[1]))]
+        elseif vble=="beta"
+            xout[ivar]      = [fill(model.beta, size(u[1]))]
+        elseif vble=="kappa_rho_cv"
+            xout[ivar]      = [fill(model.kappa_rho_cv, size(u[1]))]
+        elseif vble=="D_penalty"
+            D_penalty       = max(model.epsilon, model.nu, model.beta, model.kappa_rho_cv)
+            xout[ivar]      = [fill(D_penalty, size(u[1]))]
+        elseif vble=="e_i"
+            xout[ivar]      = calc_ei(model,T)
+        elseif vble=="h_i"
+            xout[ivar]      = calc_hi(model,T)
+        elseif vble=="D_i"
+            xout[ivar]      = Vector{Matrix{Float64}}(undef,nSpecies)
+            xout[ivar]      = [fill(model.D, size(u[1])) for i = 1:nSpecies]
+        elseif vble=="mdot_i"
+            xout[ivar]      = calc_mdot(model,u,T)
+        elseif vble=="dmdot_ij"
+            dmdot_ij        = Matrix{Matrix{Float64}}(undef,model.nSpecies,model.nVars)
+            dm_d            = calc_dmdot(model,u,T)
+            dm_drhoYi       = dm_d[1] # Matrix{Matrix{Float64}} 13x13
+            dm_dT           = dm_d[2] # Vector{Matrix{Float}}   13x1
+
+            # Computation of dT_d
+            e_i = calc_ei(model,T)
+            cv  = calc_cv_total(model,T,Yi)
+            vx  = rhovx./rho
+            vy  = rhovy./rho
+
+            dT_drhoYi   = @. [((vx^2+vy^2)/2-e_i[i])/(rho*cv) for i = 1:model.nSpecies]
+            dT_dmi      = @. [-vx/(rho*cv), -vy/(rho*cv)]
+            dT_dE       = @. 1/(rho*cv)
+
+            for II=1:model.nSpecies
+                for JJ=1:model.nSpecies
+                    dmdot_ij[II,JJ]             = @. dm_drhoYi[II,JJ] + dm_dT[II]*dT_drhoYi[JJ]
+                end
+                dmdot_ij[II,model.nSpecies+1]   = @. dm_dT[II]*dT_dmi[1]
+                dmdot_ij[II,model.nSpecies+2]   = @. dm_dT[II]*dT_dmi[2]
+                dmdot_ij[II,model.nSpecies+3]   = @. dm_dT[II]*dT_dE
+            end
+
+            xout[ivar]      = dmdot_ij
+        elseif vble=="dp_du"
+            dp_dout = Vector{Matrix{Float64}}(undef, nVars)
+
+            # Computation of dT_du
+            e_i = calc_ei(model,T)
+            cv  = calc_cv_total(model,T,Yi)
+            vx  = rhovx./rho
+            vy  = rhovy./rho
+
+            dT_drhoYi   = @. [((vx^2+vy^2)/2-e_i[i])/(rho*cv) for i = 1:model.nSpecies]
+            dT_dmi      = @. [-vx/(rho*cv), -vy/(rho*cv)]
+            dT_dE       = @. 1/(rho*cv)
+
+            dp_dout     = calc_dp_du(model,u,T,dT_drhoYi,dT_dmi,dT_dE)
+
+            xout[ivar]  = dp_dout
+        elseif vble=="Q_reac"
+
+            mdot    = calc_mdot(model,u,T)
+            hf      = model.hf
+            Q_reac  = fill(0.0, size(mdot[1]))
+            for i = 1:model.nSpecies
+                @. Q_reac += mdot[i]*hf[i]
+            end
+            Q_reac  = -1.0.*Q_reac
+
+            xout[ivar]      = [Q_reac]
+        else
+            error("Variable $(vble) not supported")
+        end
+    end
+
+    return xout
 end
 
 #-------------------------------------------------------------------------------
@@ -430,10 +659,10 @@ function FluxSource!(model::GasModel, _qp::TrIntVars, ComputeJ::Bool)
     HyperbolicFlux!(model, u, udep, ComputeJ, _qp.f, _qp.df_du)
     
     #Viscosities:
-    epsilon         = @mlv udep[$DepVarIndex(model,"epsilon")][1]
-    nu              = @mlv udep[$DepVarIndex(model,"nu")][1]         
-    beta            = @mlv udep[$DepVarIndex(model,"beta")][1]       
-    kappa_rho_cv    = @mlv udep[$DepVarIndex(model,"kappa_rho_cv")][1]
+    epsilon         = @tturbo @. udep[$DepVarIndex(model,"epsilon")][1]
+    nu              = @tturbo @. udep[$DepVarIndex(model,"nu")][1]         
+    beta            = @tturbo @. udep[$DepVarIndex(model,"beta")][1]       
+    kappa_rho_cv    = @tturbo @. udep[$DepVarIndex(model,"kappa_rho_cv")][1]
     
     #Terms due to viscous flux:
     ViscousFlux!(model, nu, beta, u, udep, du, 
@@ -454,7 +683,7 @@ function FluxSource!(model::GasModel, _qp::TrIntVars, ComputeJ::Bool)
     A_Elems         = areas(_qp.Integ2D.mesh)
     h_Elems         = @tturbo @. sqrt(A_Elems)
     hp              = h_Elems./_qp.FesOrder * ones(1, _qp.nqp)
-    tau             = @mlv model.CSS*lambda*hp
+    tau             = @tturbo @. model.CSS*lambda*hp
     epsilonFlux!(model, tau, duB, ComputeJ, _qp.fB, _qp.dfB_dgraduB)
     
     #Source terms:
@@ -462,7 +691,7 @@ function FluxSource!(model::GasModel, _qp::TrIntVars, ComputeJ::Bool)
     
     #CFL number:
     hp_min              = _hmin(_qp.Integ2D.mesh)./_qp.FesOrder * ones(1, _qp.nqp)
-    D_max               = @mlv max(epsilon, nu, beta, kappa_rho_cv)
+    D_max               = @. max(epsilon, nu, beta, kappa_rho_cv)
     Deltat_CFL_lambda   = @. $minimum(hp_min/lambda)
     Deltat_CFL_D        = @. $minimum(hp_min^2/D_max)
     _qp.Deltat_CFL      = min(Deltat_CFL_lambda, Deltat_CFL_D)
