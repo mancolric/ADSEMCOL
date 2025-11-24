@@ -1,7 +1,7 @@
 include("PlotResults.jl")
 
 #Initial condition:
-function utheor_Test1(t::Float64, x::Vector{<:AAF64})
+function utheor_ExpBL(t::Float64, x::Vector{<:AAF64})
     
     r   = @avxt @. sqrt(x[1]*x[1]+x[2]*x[2])+1e-14
     r0  = sqrt(2)/2.0
@@ -10,7 +10,7 @@ function utheor_Test1(t::Float64, x::Vector{<:AAF64})
     
 end
     
-function Contour_Test1(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=8.50, h::Float64=8.50)
+function Contour_ExpBL(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=8.50, h::Float64=8.50)
     
     solver      = GetSolver(SC, nb)
     
@@ -62,7 +62,7 @@ function Contour_Test1(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=8.50, h
     
 end
 
-function CompareSpaceAdaptation_Test1(StudyCase::String; nb::Int=1,
+function CompareSpaceAdaptation_ExpBL(StudyCase::String; nb::Int=1,
     SaveFig::Bool=false, w::Float64=8.50, h::Float64=8.50)
 
     #Best case: "001_3"
@@ -283,7 +283,7 @@ function CompareSpaceAdaptation_Test1(StudyCase::String; nb::Int=1,
     legend(leg)
     grid("on")
     if SaveFig
-        savefig("$(FigUbi)Test1_SpaceAdapt1.eps", dpi=800, pad_inches=0)
+        savefig("$(FigUbi)ExpBL_SpaceAdapt1.eps", dpi=800, pad_inches=0)
     end
     
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.5)
@@ -300,7 +300,7 @@ function CompareSpaceAdaptation_Test1(StudyCase::String; nb::Int=1,
     tick_params(axis="both", which="both", labelsize=TickSize)
     legend(leg)
     if SaveFig
-        savefig("$(FigUbi)Test1_SpaceAdapt2.eps", dpi=800, pad_inches=0)
+        savefig("$(FigUbi)ExpBL_SpaceAdapt2.eps", dpi=800, pad_inches=0)
     end
     
     PyPlotFigure(w=w, h=h, bottom=1.5, left=1.5)
@@ -312,7 +312,7 @@ function CompareSpaceAdaptation_Test1(StudyCase::String; nb::Int=1,
     legend(leg, fontsize=TickSize)
     tick_params(axis="both", which="both", labelsize=TickSize)
     if SaveFig
-        savefig("$(FigUbi)Test1_SpaceAdapt3.png", dpi=800, pad_inches=0)
+        savefig("$(FigUbi)ExpBL_SpaceAdapt3.png", dpi=800, pad_inches=0)
     end
     
     display(EOCvv0)
@@ -322,7 +322,7 @@ function CompareSpaceAdaptation_Test1(StudyCase::String; nb::Int=1,
     
 end
 
-function CompareTimeAdaptation_Test1(StudyCase::String; 
+function CompareTimeAdaptation_ExpBL(StudyCase::String; 
     SaveFig::Bool=false, w::Float64=8.50, h::Float64=8.50)
 
     SCvv0   = NaN
@@ -430,7 +430,7 @@ function CompareTimeAdaptation_Test1(StudyCase::String;
     legend(leg)
     grid("on")
     if SaveFig
-        savefig("$(FigUbi)Test1_TimeAdapt1.png", dpi=800, pad_inches=0)
+        savefig("$(FigUbi)ExpBL_TimeAdapt1.png", dpi=800, pad_inches=0)
     end
             
 #     figure()
@@ -447,7 +447,7 @@ function CompareTimeAdaptation_Test1(StudyCase::String;
     leg     = vcat(L"Unif.", L"Adapt.")
     legend(leg)
     if SaveFig
-        savefig("$(FigUbi)Test1_TimeAdapt2.png", dpi=800, pad_inches=0)
+        savefig("$(FigUbi)ExpBL_TimeAdapt2.png", dpi=800, pad_inches=0)
     end
     
     display(EOCvv0)
@@ -457,7 +457,7 @@ function CompareTimeAdaptation_Test1(StudyCase::String;
     
 end
 
-function TableResults_SpaceAdapt_Test1(StudyCase::String)
+function TableResults_SpaceAdapt_ExpBL(StudyCase::String)
 
     vbles       = [ "FesOrder", "SAType",           "TolS_max", 
                     "NDOF",     "hp", 
@@ -540,13 +540,13 @@ function TableResults_SpaceAdapt_Test1(StudyCase::String)
     table           = string(table, "\\end{tabular}")
     print(table)
     
-    write("$(FigUbi)Test1_SpaceAdapt.txt", table)
+    write("$(FigUbi)ExpBL_SpaceAdapt.txt", table)
     
     return
     
 end
 
-function TableResults_TimeAdapt_Test1(StudyCase::String)
+function TableResults_TimeAdapt_ExpBL(StudyCase::String)
 
     vbles       = [ "TolT_bool", 
                     "Nt",       "Deltat", 
@@ -600,7 +600,7 @@ function TableResults_TimeAdapt_Test1(StudyCase::String)
     table           = string(table, "\\end{tabular}")
     print(table)
     
-    write("$(FigUbi)Test1_TimeAdapt.txt", table)
+    write("$(FigUbi)ExpBL_TimeAdapt.txt", table)
     
     return
     

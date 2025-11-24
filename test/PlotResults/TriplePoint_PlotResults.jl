@@ -17,16 +17,15 @@ function Contour_TriplePoint(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=8
     
     for ii=1:length(PlotVars)
         
-        
         #Numerical solution:
         PyPlotFigure(w=w, h=h, bottom=0.0, top=0.0, left=0.0, right=0.0)
         v_plot  = PlotContour(solver, GasModel, PlotVars[ii], delta=1e-5)
-#         title(latexstring(LatexString(PlotVars[ii]),"; t^n=", sprintf1("%.2e", solver.t)),
+#         title(latexstring(LatexString(GasModel, PlotVars[ii]),"; t^n=", sprintf1("%.2e", solver.t)),
 #             fontsize=10)
         if PlotVars[ii]=="e"
-            text(-0.5, 0.9, latexstring(LatexString(PlotVars[ii])), color="k", fontsize=10)
+            text(-0.5, 0.9, latexstring(LatexString(GasModel, PlotVars[ii])), color="k", fontsize=10)
         else
-            text(-0.5, 0.9, latexstring(LatexString(PlotVars[ii])), color="w", fontsize=10)
+            text(-0.5, 0.9, latexstring(LatexString(GasModel, PlotVars[ii])), color="w", fontsize=10)
         end
         tick_params(axis="both", which="both", labelsize=TickSize)
         axis("off")
@@ -72,7 +71,7 @@ function Contour_TriplePoint2(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=
     
         #Numerical solution:
         PyPlotFigure(w=w, h=h+0.7, bottom=0.0, top=0.7, left=0.0, right=0.0)
-        title(latexstring(LatexString(PlotVars[ii]),"; t^n=", sprintf1("%.2e", solver.t)),
+        title(latexstring(LatexString(GasModel, PlotVars[ii]),"; t^n=", sprintf1("%.2e", solver.t)),
             fontsize=10)
         if PlotVars[ii]=="e"
             v_plot  = PlotContour(solver, GasModel, PlotVars[ii], delta=1e-5, z1=0.24)
@@ -147,9 +146,9 @@ end
 
 function Video_TriplePoint_old(SC::Int; SaveFig::Bool=false, w::Float64=8.50, h::Float64=8.50)
 
-    fig     = PyPlotSubPlots(1, 2, w=w, h=h, top=1.0)
-    
-    kSave   = 0
+    fig         = PyPlotSubPlots(1, 2, w=w, h=h, top=1.0)
+    GasModel    = GasIdeal()
+    kSave       = 0
     for nb=vcat(0:38,1000)
     
         FileName    = GetFileName(SC, nb)
@@ -160,7 +159,7 @@ function Video_TriplePoint_old(SC::Int; SaveFig::Bool=false, w::Float64=8.50, h:
         PlotContour(solver.u[1], solver.fes)
 #         PlotMesh!(SC, nb, color="w")
         tick_params(axis="both", which="both", labelsize=TickSize)
-        title(latexstring(LatexString("rho"),"; t^n=", sprintf1("%.2e", solver.t)),
+        title(latexstring(LatexString(GasModel, "rho"),"; t^n=", sprintf1("%.2e", solver.t)),
             fontsize=10)
         
         PyPlot.subplot(1,2,2)
@@ -168,7 +167,7 @@ function Video_TriplePoint_old(SC::Int; SaveFig::Bool=false, w::Float64=8.50, h:
         PlotContour(solver.u[1], solver.fes)
         PlotMesh!(SC, nb, color="w")
         tick_params(axis="both", which="both", labelsize=TickSize)
-        title(latexstring(LatexString("rho"),"; t^n=", sprintf1("%.2e", solver.t)),
+        title(latexstring(LatexString(GasModel, "rho"),"; t^n=", sprintf1("%.2e", solver.t)),
             fontsize=10)
         
         if SaveFig
@@ -217,7 +216,7 @@ function Video_TriplePoint(SC::Int; SaveFig::Bool=false, w::Float64=8.50, h::Flo
                 PlotMesh!(SC, nb, color="w")
             end
             
-            title(latexstring(LatexString(PlotVars[ii]),"; t^n=", sprintf1("%.2e", solver.t)),
+            title(latexstring(LatexString(GasModel, PlotVars[ii]),"; t^n=", sprintf1("%.2e", solver.t)),
                 fontsize=10)
             tick_params(axis="both", which="both", labelsize=TickSize)
             axis("off")

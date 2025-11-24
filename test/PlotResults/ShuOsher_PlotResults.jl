@@ -68,7 +68,7 @@ function x1Plot_ShuOsher(SC::Int, nb::Int;
         legend(["Ref.", "Num."], fontsize=TickSize)
         tick_params(axis="both", which="both", labelsize=TickSize)
         xlabel(latexstring("x_1"), fontsize=10)
-        title(latexstring(LatexString(PlotVars[ii]),
+        title(latexstring(LatexString(GasModel, PlotVars[ii]),
             "; t^n=", sprintf1("%.2e", solver.t)), 
             fontsize=10)
         if SaveFig
@@ -97,7 +97,7 @@ function x1Plot_ShuOsher(SC::Int, nb::Int;
         tick_params(axis="both", which="both", labelsize=TickSize)
         xlim(0.5, 2.5)
         xlabel(latexstring("x_1"), fontsize=10)
-        title(latexstring(LatexString(PlotVars[ii]),
+        title(latexstring(LatexString(GasModel, PlotVars[ii]),
             "; t^n=", sprintf1("%.2e", solver.t)), 
             fontsize=10)
         if SaveFig
@@ -127,7 +127,7 @@ function x1Plot_ShuOsher(SC::Int, nb::Int;
         xlim(2.38, 2.41)
         xlabel(latexstring("x_1"), fontsize=10)
         yticks([1, 2, 3, 4], ["", "", "", ""])
-        title(latexstring(LatexString(PlotVars[ii]),
+        title(latexstring(LatexString(GasModel, PlotVars[ii]),
             "; t^n=", sprintf1("%.2e", solver.t)), 
             fontsize=10)
         if SaveFig

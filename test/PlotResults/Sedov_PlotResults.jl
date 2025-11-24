@@ -78,7 +78,7 @@ function RadialPlot_Sedov(SC::Int, nb::Int;
         tick_params(axis="both", which="both", labelsize=TickSize)
         xlim([0.0,Rplot])
         xlabel(latexstring("r"), fontsize=10)
-        title(latexstring(LatexString(PlotVars[ii]),
+        title(latexstring(LatexString(GasModel, PlotVars[ii]),
             "; t^n=", sprintf1("%.2e", solver.t)), 
             fontsize=10)
         legend(["Exact", "Num."], fontsize=TickSize)
@@ -109,7 +109,7 @@ function RadialPlot_Sedov(SC::Int, nb::Int;
                 [sprintf1("%.3f", Rshock-delta),  
                 sprintf1("%.3f", Rshock),  
                 sprintf1("%.3f", Rshock+delta)]) 
-        title(latexstring(LatexString(PlotVars[ii]),
+        title(latexstring(LatexString(GasModel, PlotVars[ii]),
             "; t^n=", sprintf1("%.2e", solver.t)), 
             fontsize=10)
         legend(["Exact", "Num."], fontsize=TickSize)
@@ -161,7 +161,7 @@ function Contour_Sedov(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=8.50, h
         tick_params(axis="both", which="both", labelsize=TickSize)
         axis("off")
         if PlotTitle
-            title(latexstring(LatexString(PlotVars[ii]),
+            title(latexstring(LatexString(GasModel, PlotVars[ii]),
                 "; t^n=", sprintf1("%.2e", solver.t)), 
                 fontsize=10)
         end
@@ -202,7 +202,7 @@ function Mesh_Sedov(SC::Int, nb::Int;
     tick_params(axis="both", which="both", labelsize=TickSize)
     axis("off")
     if PlotTitle
-        title(latexstring(LatexString(PlotVar),
+        title(latexstring(LatexString(GasModel, PlotVar),
             "; t^n=", sprintf1("%.2e", solver.t)), 
             fontsize=10)
     end
@@ -290,7 +290,7 @@ function Video_Sedov(SC::Int; SaveFig::Bool=false, w::Float64=8.50, h::Float64=w
         xlim(Rshock-1e-3, Rshock+1e-3)
 #         PlotMesh!(SC, nb, color="w")
         tick_params(axis="both", which="both", labelsize=TickSize)
-        title(latexstring(LatexString("rho"),"; t^n=", sprintf1("%.2e", solver.t)),
+        title(latexstring(LatexString(GasModel, "rho"),"; t^n=", sprintf1("%.2e", solver.t)),
             fontsize=10)
         
         PyPlot.subplot(1,2,2)
@@ -298,7 +298,7 @@ function Video_Sedov(SC::Int; SaveFig::Bool=false, w::Float64=8.50, h::Float64=w
         PlotContour(solver.u[1], solver.fes)
         PlotMesh!(SC, nb, color="w")
         tick_params(axis="both", which="both", labelsize=TickSize)
-        title(latexstring(LatexString("rho"),"; t^n=", sprintf1("%.2e", solver.t)),
+        title(latexstring(LatexString(GasModel, "rho"),"; t^n=", sprintf1("%.2e", solver.t)),
             fontsize=10)
         
         if SaveFig
