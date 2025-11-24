@@ -78,11 +78,11 @@ function x1Plot_ShockFlame(SC::Int, nb::Int;
         else    
             splot_fun(x1,x2)= @mlv x1       
             v_plot          = PlotNodes(splot_fun, solver, GasModel, PlotVars[ii])
-            vbleString      = LatexString(PlotVars[ii])
+            vbleString      = LatexString(GasModel, PlotVars[ii])
         end
         tick_params(axis="both", which="both", labelsize=TickSize)
         xlabel(latexstring("x_1"), fontsize=10)
-        ylabel(latexstring(LatexString(PlotVars[ii])), rotation=0, fontsize=10, labelpad=10)
+        ylabel(latexstring(LatexString(GasModel, PlotVars[ii])), rotation=0, fontsize=10, labelpad=10)
             
         #Get positions of shock and flame:
         if MarkSF
@@ -131,7 +131,7 @@ function Contour_ShockFlame(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=8.
         tick_params(axis="both", which="both", labelsize=TickSize)
         axis("off")
         if PlotTitle
-            title(latexstring(LatexString(PlotVars[ii]),
+            title(latexstring(LatexString(GasModel, PlotVars[ii]),
                 "; t^n=", sprintf1("%.2e", solver.t)), 
                 fontsize=10)
         end
@@ -228,7 +228,7 @@ function Video_ShockFlame(SC::Int;
             else    
                 splot_fun(x1,x2)= @mlv x1       
                 v_plot          = PlotNodes(splot_fun, solver, GasModel, PlotVars[ii])
-                vbleString      = LatexString(PlotVars[ii])
+                vbleString      = LatexString(GasModel, PlotVars[ii])
             end
             if MarkSF
                 plot([xf, xf], [0.9*minimum(v_plot), 1.1*maximum(v_plot)], "--r")

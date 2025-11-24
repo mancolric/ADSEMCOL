@@ -56,7 +56,7 @@ function Lines_SmoothVortex(SC::Int, nb::Int;
         plot(x1v, DepVars(GasModel, solver.t, Vector{<:AMF64}(xm), Vector{<:AMF64}(um), [PlotVars[ii]])[1][1][:], "--k", linewidth=0.5)
         plot(x1v, DepVars(GasModel, solver.t, Vector{<:AMF64}(xm), Vector{<:AMF64}(u_terp), [PlotVars[ii]])[1][1][:], "b", linewidth=0.5)
         xlabel(latexstring("x_1"), fontsize=10)
-        title(latexstring(LatexString(PlotVars[ii]),
+        title(latexstring(LatexString(GasModel, PlotVars[ii]),
             "; t^n=", sprintf1("%.2e", solver.t)), 
             fontsize=10)
     end
@@ -662,7 +662,7 @@ function Contour_SmoothVortex(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=
         #Numerical solution:
         PlotContour(solver, GasModel, PlotVars[ii], delta=1e-5)
         PlotMesh!(SC, nb, color="w")
-        title(latexstring(LatexString(PlotVars[ii]),"; t^n=", sprintf1("%.2e", solver.t)),
+        title(latexstring(LatexString(GasModel, PlotVars[ii]),"; t^n=", sprintf1("%.2e", solver.t)),
             fontsize=10)
         tick_params(axis="both", which="both", labelsize=TickSize)
         axis("off")
@@ -708,7 +708,7 @@ function Video_SmoothVortex(SC::Int; SaveFig::Bool=false, w::Float64=8.50, h::Fl
             PlotContour(solver, GasModel, PlotVars[ii], delta=1e-5)
             PlotMesh!(SC, nb, color="w")
    
-            title(latexstring(LatexString(PlotVars[ii]),"; t^n=", sprintf1("%.2e", solver.t)),
+            title(latexstring(LatexString(GasModel, PlotVars[ii]),"; t^n=", sprintf1("%.2e", solver.t)),
                 fontsize=10)
             tick_params(axis="both", which="both", labelsize=TickSize)
             axis("off")
