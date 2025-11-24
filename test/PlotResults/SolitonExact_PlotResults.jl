@@ -56,7 +56,7 @@ function Nodes_SolitonExact(SC::Int, nb::Int;
         PlotNodes(splot_fun, solver, model, PlotVars[ii])
         plot(x1v, vm[ii][1], "r", linewidth=0.5)
         xlabel(latexstring("x_1"), fontsize=10)
-        title(latexstring(LatexString(PlotVars[ii]),
+        title(latexstring(LatexString(model, PlotVars[ii]),
                             "; t^n=", sprintf1("%.2e", solver.t)),
                 fontsize=10)
         tick_params(axis="both", which="both", labelsize=TickSize)

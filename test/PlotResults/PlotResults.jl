@@ -1,7 +1,7 @@
 include("../ResUbi.jl")
-# include("../test_ConvectionDiffusion/test_ConvectionDiffusion.jl")
-# include("../test_CompressibleFlow/test_CompressibleFlow.jl")
-# include("../test_NonHydrostaticWaterWaves/test_NonHydrostaticWaterWaves.jl")
+include("../test_ConvectionDiffusion/test_ConvectionDiffusion.jl")
+include("../test_CompressibleFlow/test_CompressibleFlow.jl")
+include("../test_NonHydrostaticWaterWaves/test_NonHydrostaticWaterWaves.jl")
 
 PyPlot.using3D()
 
