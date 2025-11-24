@@ -137,7 +137,7 @@ function ShuOsher(hp0::Float64, FesOrder::Int;
                 splot_fun(x1,x2)    = @mlv x1
                 PlotNodes(splot_fun, solver, PlotVars[ii])
                 xlabel(latexstring("x_1"), fontsize=10)
-                title(latexstring(LatexString(PlotVars[ii]),
+                title(latexstring(LatexString(GasModel, PlotVars[ii]),
                     "; t^n=", sprintf1("%.2e", solver.t)), 
                     fontsize=10)
             end

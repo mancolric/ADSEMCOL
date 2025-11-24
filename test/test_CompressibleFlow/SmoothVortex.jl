@@ -164,7 +164,7 @@ function SmoothVortex(hp::Float64, FesOrder::Int, tfv::Array{Float64,1};
             plot(x1v, DepVars(solver.model, solver.t, Vector{<:AMF64}(um), Vector{<:AMF64}(um), [PlotVars[ii]])[1][1][:], "--k", linewidth=0.5)
             plot(x1v, DepVars(solver.model, solver.t, Vector{<:AMF64}(u_terp), Vector{<:AMF64}(u_terp), [PlotVars[ii]])[1][1][:], "b", linewidth=0.5)
             xlabel(latexstring("x_1"), fontsize=10)
-            title(latexstring(LatexString(PlotVars[ii]),
+            title(latexstring(LatexString(GasModel, PlotVars[ii]),
                 "; t^n=", sprintf1("%.2e", solver.t)), 
                 fontsize=10)
         end

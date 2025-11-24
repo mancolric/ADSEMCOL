@@ -163,7 +163,7 @@ function Sedov(hp0::Float64, FesOrder::Int;
                 PlotNodes(splot_fun, solver, PlotVars[ii])
                 xlim([0.0,Rplot])
                 xlabel(latexstring("r"), fontsize=10)
-                title(latexstring(LatexString(PlotVars[ii]),
+                title(latexstring(LatexString(GasModel, PlotVars[ii]),
                     "; t^n=", sprintf1("%.2e", solver.t)), 
                     fontsize=10)
             end

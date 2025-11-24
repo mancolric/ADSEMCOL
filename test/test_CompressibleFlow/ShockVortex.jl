@@ -159,7 +159,7 @@ function ShockVortex(MeshCase::Int, FesOrder::Int, tfv::Array{Float64,1};
             PlotContour(reshape(xout[ii][1],:), solver.fes.PSpace)
             PlotMesh!(solver.mesh, color="k") 
             axis("equal")
-            title(latexstring(LatexString(PlotVars[ii]),
+            title(latexstring(LatexString(GasModel, PlotVars[ii]),
                 "; t^n=", sprintf1("%.2e", solver.t)), 
                 fontsize=10)
             if SaveFig
@@ -172,7 +172,7 @@ function ShockVortex(MeshCase::Int, FesOrder::Int, tfv::Array{Float64,1};
             PyPlot.cla()
             PlotContour(reshape(xout[ii][1],:), solver.fes.PSpace)
             axis("equal")
-            title(latexstring(LatexString(PlotVars[ii]),
+            title(latexstring(LatexString(GasModel, PlotVars[ii]),
                 "; t^n=", sprintf1("%.2e", solver.t)), 
                 fontsize=10)
             if SaveFig
