@@ -114,7 +114,7 @@ function RayleighTaylor(hp0::Float64, FesOrder::Int;
                 PyPlot.subplot(mFig, nFig, ii)
                 PyPlot.cla()
                 v_plot  = PlotContour(solver, solver.model, PlotVars[ii])
-                title(latexstring(LatexString(PlotVars[ii]),
+                title(latexstring(LatexString(GasModel, PlotVars[ii]),
                     "; t^n=", sprintf1("%.2e", solver.t)), 
                     fontsize=10)
                 println(PlotVars[ii], ", min=", minimum(v_plot), ", max=", maximum(v_plot))
