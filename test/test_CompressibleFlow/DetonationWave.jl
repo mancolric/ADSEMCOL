@@ -1,6 +1,8 @@
 include("test_CompressibleFlow.jl")
 
-function DetonationWave(FesOrder::Int;
+#Section 5.3 in Johsonn and Kercher, JCP2020:
+
+function DetonationWave(; FesOrder::Int=5, 
     tf::Float64=20.0, RKMethod::String="Ascher3", #"BPR3"
     delta::Float64=1e-2,
     epsilon::Float64=1000*delta,
@@ -32,82 +34,95 @@ function DetonationWave(FesOrder::Int;
     GasModel.D              = 0.0
 
     #Define domain:
-    MeshFile            = "$(@__DIR__)/../../temp/DetonationWave_SC$(SC).geo"
+    MeshFile                = "$(@__DIR__)/../../temp/DetonationWave_SC$(SC).geo"
     #Definition of the initial rectangle: x1,x2,Nx,y1,y2,Ny:
     TrMesh_Rectangle_Create!(MeshFile, 0.0, 0.45, 100, 0.0, 0.0045, 2) 
 
     #Initial conditions:
-    W        = GasModel.Wi
-    W        = [W[6], W[2], W[1], W[10], W[3]]
+    Wi       = GasModel.Wi
     R        = GasModel.R
-
-    # 0-0.015: Ar (6), H2O (3), OH (10)
-    X1       = [1.0, 0.0, 0.0, 0.01/8, 2/8]
+    #Remind that the species are:
+    # 1-H2  2-O2  3-H2O  4-N2  5-He  6-Ar  7-CO  8-CO2  9-H  10-OH  11-HO2 
+    #12-H2O2 13-O
+    
+    #State 1: 0-0.015: Ar (6), H2O (3), OH (10)
+    X1       = zeros(13)
+    X1[6]    = 8.0
+    X1[3]    = 2.0
+    X1[10]   = 0.01
+    X1       /= sum(X1)
+    #
     T1       = 3500.0
     p1       = 5.5e5
-    R1       = R*sum(X1./sum(X1.*W))
+    #Rgas = Rbar/W, W=sum_i X_i W_i
+    W1       = sum(X1.*Wi)
+    R1       = R/W1
+    #
     rho1     = p1/(R1*T1)
-    Y1       = [(X1[i]*W[i])/sum(X1.*W) for i = 1:5]
-    Y1_Ar    = Y1[1]
-    Y1_O2    = Y1[2]
-    Y1_H2    = Y1[3]
-    Y1_OH    = Y1[4]
-    Y1_H2O   = Y1[5]
+    #Y_i = m_i/m = n_i W_i / (n W) = X_i W_i/W
+    Y1       = @. X1*Wi/W1;
+    #Energy per unit mass:
     e1       = calc_ei(GasModel, fill(T1,1,1))
-    E1       = sum(Y1.*e1[[6,2,1,10,3]])
-
-    # 0.015-0.025: Ar (1), O2 (2), H2 (1), OH (10)
-    X2       = [1.0, 1/7, 2/7, 0.01/7, 0.0]
+    E1       = sum(Y1.*e1)
+    
+    #State 2: 0.015-0.025: 
+    X2       = zeros(13)
+    X2[6]    = 7.0
+    X2[2]    = 1.0
+    X2[1]    = 2.0
+    X2[10]   = 0.01
+    X2       /= sum(X2)
+    #
     T2       = 350.0
     p2       = 6.67e3
-    R2       = R*sum(X2./sum(X2.*W))
+    #Rgas = Rbar/W, W=sum_i X_i W_i
+    W2       = sum(X2.*Wi)
+    R2       = R/W2
+    #
     rho2     = p2/(R2*T2)
-    Y2       = [(X2[i]*W[i])/sum(X2.*W) for i = 1:5]
-    Y2_Ar    = Y2[1]
-    Y2_O2    = Y2[2]
-    Y2_H2    = Y2[3]
-    Y2_OH    = Y2[4]
-    Y2_H2O   = Y2[5]
+    #Y_i = m_i/m = n_i W_i / (n W) = X_i W_i/W
+    Y2       = @. X2*Wi/W2;
+    #Energy per unit mass:
     e2       = calc_ei(GasModel, fill(T2,1,1))
-    E2       = sum(Y2.*e2[[6,2,1,10,3]])
+    E2       = sum(Y2.*e2)
 
-    # 0.025-0.45: Ar (6), O2 (2), H2 (1)
-    X3       = [1.0, 1/7, 2/7, 0.0, 0.0]
+    #State 3: 0.025-0.45:
+    X3       = zeros(13)
+    X3[6]    = 7.0
+    X3[2]    = 1.0
+    X3[1]    = 2.0
+    X3       /= sum(X3)
+    #
     T3       = 298.0
     p3       = 6.67e3
-    R3       = R*sum(X3./sum(X3.*W))
+    #
+    W3       = sum(X3.*Wi)
+    R3       = R/W3
+    #
     rho3     = p3/(R3*T3)
-    Y3       = [(X3[i]*W[i])/sum(X3.*W) for i = 1:5]
-    Y3_Ar    = Y3[1]
-    Y3_O2    = Y3[2]
-    Y3_H2    = Y3[3]
-    Y3_OH    = Y3[4]
-    Y3_H2O   = Y3[5]
+    #Y_i = m_i/m = n_i W_i / (n W) = X_i W_i/W
+    Y3       = @. X3*Wi/W3;
+    #Energy per unit mass:
     e3       = calc_ei(GasModel, fill(T3,1,1))
-    E3       = sum(Y3.*e3[[6,2,1,10,3]])
+    E3       = sum(Y3.*e3)
 
     function u0fun(x::Vector{Matrix{Float64}})
 
-        rhoY_Ar     = @mlv SmoothHeaviside(x[1] - 0.015, delta, rho1*Y1_Ar, rho2*Y2_Ar) + SmoothHeaviside(x[1] - 0.025, delta, 0.0, rho3*Y3_Ar - rho2*Y2_Ar)
-        rhoY_O2     = @mlv SmoothHeaviside(x[1] - 0.015, delta, rho1*Y1_O2, rho2*Y2_O2) + SmoothHeaviside(x[1] - 0.025, delta, 0.0, rho3*Y3_O2 - rho2*Y2_O2)
-        rhoY_H2     = @mlv SmoothHeaviside(x[1] - 0.015, delta, rho1*Y1_H2, rho2*Y2_H2) + SmoothHeaviside(x[1] - 0.025, delta, 0.0, rho3*Y3_H2 - rho2*Y2_H2)
-        rhoY_OH     = @mlv SmoothHeaviside(x[1] - 0.015, delta, rho1*Y1_OH, rho2*Y2_OH) + SmoothHeaviside(x[1] - 0.025, delta, 0.0, rho3*Y3_OH - rho2*Y2_OH)
-        rhoY_H20    = @mlv SmoothHeaviside(x[1] - 0.015, delta, rho1*Y1_H2O, rho2*Y2_H2O) + SmoothHeaviside(x[1] - 0.025, delta, 0.0, rho3*Y3_H2O - rho2*Y2_H2O)
-        rhoY_N2     = x[1].*0.0
-        rhoY_He     = x[1].*0.0
-        rhoY_CO     = x[1].*0.0
-        rhoY_CO2    = x[1].*0.0
-        rhoY_H      = x[1].*0.0
-        rhoY_H2O2   = x[1].*0.0
-        rhoY_HO2    = x[1].*0.0
-        rhoY_O      = x[1].*0.0
+        u0          = Vector{Matrix{Float64}}(undef, GasModel.nVars)
+        for II=1:GasModel.nSpecies
+            u0[II]  = @. SmoothHeaviside(x[1] - 0.015, delta, 
+                                    rho1*Y1[II], rho2*Y2[II]) + 
+                        + SmoothHeaviside(x[1] - 0.025, delta, 
+                            0.0, rho3*Y3[II]-rho2*Y2[II])
+        end
+        u0[GasModel.nSpecies+1]     = x[1].*0.0
+        u0[GasModel.nSpecies+2]     = x[1].*0.0
+        u0[GasModel.nSpecies+3]     = @. SmoothHeaviside(x[1] - 0.015, delta, 
+                                            rho1*E1[1], rho2*E2[1]) + 
+                                        + SmoothHeaviside(x[1] - 0.025, delta, 
+                                                0.0, rho3*E3[1] - rho2*E2[1])
 
-        rhovx       = x[1].*0.0
-        rhovy       = x[1].*0.0
-
-        rhoE        = @mlv SmoothHeaviside(x[1] - 0.015, delta, rho1*E1[1], rho2*E2[1]) + SmoothHeaviside(x[1] - 0.025, delta, 0.0, rho3*E3[1] - rho2*E2[1])
-
-        return [rhoY_H2, rhoY_O2, rhoY_H20, rhoY_N2, rhoY_He, rhoY_Ar, rhoY_CO, rhoY_CO2, rhoY_H, rhoY_OH, rhoY_HO2, rhoY_H2O2, rhoY_O, rhovx, rhovy, rhoE]
+        return u0
 
     end
 
@@ -149,7 +164,7 @@ function DetonationWave(FesOrder::Int;
     #Function to plot solution:
     figv                = Vector{Figure}(undef,3)
     if PlotFig
-        figv[1]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
+        figv[1]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=1.5, right=0.4, bottom=1.1, top=1.0)
         for ii=2:length(figv)
             figv[ii]    = figure()
         end
@@ -173,10 +188,11 @@ function DetonationWave(FesOrder::Int;
 
                 splot_fun(x1,x2)    = @mlv x1
                 PlotNodes(splot_fun, solver, PlotVars[ii])
-                xlabel(latexstring("x_1"), fontsize=10)
-                title(latexstring(LatexString(PlotVars[ii]),
+                xlabel(latexstring("x_1"), fontsize=8)
+                tick_params(axis="both", which="minor", labelsize=8)
+                title(latexstring(LatexString(GasModel, PlotVars[ii]),
                                   "; t^n=", sprintf1("%.2e", solver.t)),
-                fontsize=10)
+                fontsize=8)
             end
             if SaveFig
                 savefig("$(VideosUbi)DetonationWave_SC$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)

@@ -34,6 +34,8 @@ function LatexString(model::GasModel, vble::String)
         return "M"
     elseif vble=="RT"
         return "RT"
+    elseif vble=="T"
+        return "T"
     elseif vble=="epsilon"
         return "\\epsilon"
     elseif vble=="nu"
@@ -48,6 +50,15 @@ function LatexString(model::GasModel, vble::String)
         return "\\gamma"
     elseif vble=="e_i"
         return "e_i"
+    elseif length(vble)>=5 && vble[1:5]=="rhoY_"
+        S   = vble[6:length(vble)]
+        return "\\rho_{$(S)}"
+    elseif length(vble)>=2 && vble[1:2]=="Y_"
+        S   = vble[3:length(vble)]
+        return "Y_{$(S)}"
+    elseif length(vble)>=2 && vble[1:2]=="X_"
+        S   = vble[3:length(vble)]
+        return "X_{$(S)}"
     else
         @warn "Variable $(vble) not supported"
         return vble

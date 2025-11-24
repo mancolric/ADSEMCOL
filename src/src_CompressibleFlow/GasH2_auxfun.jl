@@ -1,5 +1,3 @@
-@warn "Review calc_cpi, calc_cvi, calc_h"
-
 #-----------------------------------------------------------------------------------------------------
 # Function to compute dp_du:
 function calc_dp_du(model::GasH2, u::Vector{Matrix{Float64}}, T::Matrix{Float64}, dT_drhoYi::Vector{Matrix{Float64}}, dT_dmi::Vector{Matrix{Float64}}, dT_dE::Matrix{Float64})
@@ -221,10 +219,10 @@ end
 # Find T with Newton-Raphson method:
 function calc_T(model::GasH2, emat::Matrix{Float64}, Yi::Vector{Matrix{Float64}})
 
-    T_k     = fill(model.T0, size(e))
-    e_T     = zeros(size(e))
-    cv_T    = zeros(size(e))
-    T_pk    = zeros(size(e))
+    T_k     = fill(model.T0, size(emat))
+    e_T     = zeros(size(emat))
+    cv_T    = zeros(size(emat))
+    T_pk    = zeros(size(emat))
 
     # Newton-Raphson
     for n = 1:10

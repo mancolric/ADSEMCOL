@@ -95,6 +95,9 @@ Base.@kwdef mutable struct GasH2 <: ReactiveGas
     CW              ::Float64           = 50.0  #Boundary penalty (50.0-200.0 for IIPG)
 
     #Reaction's characteristic fields:
+    species         ::Vector{String}    = [ "H2", "O2", "H2O", "N2", "He",
+                                            "Ar", "CO", "CO2", "H", "OH", 
+                                            "HO2", "H2O2 O", "O" ]
     coef1           ::Matrix{Float64}   = H2_coef1() # 200-1000 K NASA
     coef2           ::Matrix{Float64}   = H2_coef2() # 1000-6000 K NASA
     coef3           ::Matrix{Float64}   = H2_coef3() # 6000-20000 K NASA
@@ -188,8 +191,11 @@ end
 #LOAD AUXILIARY FUNCTIONS:
 
 #Return index corresponding to dependent variable "var":
-function DepVarIndex(model::ConstModels, var::String)
+function DepVarIndex(model::GasModel, var::String)
     return findfirst(model.DepVars.==var)
+end
+function SpecieIndex(model::GasModel, var::String)
+    return findfirst(model.species.==var)
 end
 
 function DepVars(model::GasIdeal, t::Float64, x::Vector{<:AMF64},
@@ -436,13 +442,19 @@ function DepVars(model::GasH2, t::Float64, x::Vector{<:AMF64},
     for i = 1:model.nSpecies
         Yi[i]   = @tturbo @. u[i]./rho
     end
-    T           = calc_T(model, rhoe./rho,Yi)
-    p           = zeros(size(u[1]))
+    T           = calc_T(model, rhoe./rho, Yi)
+    rho_m       = zeros(size(u[1])) #molar density = rho_m = n/V = sum_i m_i/W_i /V 
     for i = 1:nSpecies
-        p       += @tturbo @. u[i]./Wi[i]
+        rho_m   += @tturbo @. u[i]./Wi[i] 
     end
-    p           = R*T.*p
+    p           = R*T.*rho_m
 
+    #Note that W could be readily obtained from rho = W*rho_m.
+    #Also, the constant of the gas Rg could be obtained from the universal constant
+    #Rbar from 
+    #   p = rho R_g T = rho_m Rbar T 
+    #so rho R_g = rho_m Rbar or R_g = 1/W Rbar
+    
     cp          = calc_cp_total(model,T,Yi)
     cv          = calc_cv_total(model,T,Yi)
     gamma       = cp./cv
@@ -453,58 +465,20 @@ function DepVars(model::GasH2, t::Float64, x::Vector{<:AMF64},
         vble    = vout[ivar]
         if vble=="rho"
             xout[ivar]      = [rho]
-        elseif vble=="rhoY_H2"
-            xout[ivar]      = [u[1]]
-        elseif vble=="rhoY_O2"
-            xout[ivar]      = [u[2]]
-        elseif vble=="rhoY_H2O"
-            xout[ivar]      = [u[3]]
-        elseif vble=="rhoY_N2"
-            xout[ivar]      = [u[4]]
-        elseif vble=="rhoY_He"
-            xout[ivar]      = [u[5]]
-        elseif vble=="rhoY_Ar"
-            xout[ivar]      = [u[6]]
-        elseif vble=="rhoY_CO"
-            xout[ivar]      = [u[7]]
-        elseif vble=="rhoY_CO2"
-            xout[ivar]      = [u[8]]
-        elseif vble=="rhoY_H"
-            xout[ivar]      = [u[9]]
-        elseif vble=="rhoY_OH"
-            xout[ivar]      = [u[10]]
-        elseif vble=="rhoY_HO2"
-            xout[ivar]      = [u[11]]
-        elseif vble=="rhoY_H2O2"
-            xout[ivar]      = [u[12]]
-        elseif vble=="rhoY_O"
-            xout[ivar]      = [u[13]]
-        elseif vble=="Y_H2"
-            xout[ivar]      = [@tturbo @. u[1]/rho]
-        elseif vble=="Y_O2"
-            xout[ivar]      = [@tturbo @. u[2]/rho]
-        elseif vble=="Y_H2O"
-            xout[ivar]      = [@tturbo @. u[3]/rho]
-        elseif vble=="Y_N2"
-            xout[ivar]      = [@tturbo @. u[4]/rho]
-        elseif vble=="Y_He"
-            xout[ivar]      = [@tturbo @. u[5]/rho]
-        elseif vble=="Y_Ar"
-            xout[ivar]      = [@tturbo @. u[6]/rho]
-        elseif vble=="Y_CO"
-            xout[ivar]      = [@tturbo @. u[7]/rho]
-        elseif vble=="Y_CO2"
-            xout[ivar]      = [@tturbo @. u[8]/rho]
-        elseif vble=="Y_H"
-            xout[ivar]      = [@tturbo @. u[9]/rho]
-        elseif vble=="Y_OH"
-            xout[ivar]      = [@tturbo @. u[10]/rho]
-        elseif vble=="Y_HO2"
-            xout[ivar]      = [@tturbo @. u[11]/rho]
-        elseif vble=="Y_H2O2"
-            xout[ivar]      = [@tturbo @. u[12]/rho]
-        elseif vble=="Y_O"
-            xout[ivar]      = [@tturbo @. u[13]/rho]
+        elseif length(vble)>=5 && vble[1:5]=="rhoY_"
+            S               = vble[6:length(vble)]
+            indexS          = SpecieIndex(model,S)
+            xout[ivar]      = [u[indexS]]
+        elseif length(vble)>=2 && vble[1:2]=="Y_"
+            S               = vble[3:length(vble)]
+            indexS          = SpecieIndex(model,S)
+            xout[ivar]      = [@tturbo @. u[indexS]/rho]
+        elseif length(vble)>=2 && vble[1:2]=="X_"
+            #X_i = n_i/V / (n/V) = m_i/W_i/V / rho_m = rho_i/W_i / rho_m
+            #Also, X_i = Y_i/W_i / (1/W) = rhoY_i/W_i / (rho/W) = rho_i/W_i / rho_m
+            S               = vble[3:length(vble)]
+            indexS          = SpecieIndex(model,S)
+            xout[ivar]      = [@tturbo @. u[indexS]/Wi[indexS]/rho_m]
         elseif vble=="rhovx"
             xout[ivar]      = [rhovx]
         elseif vble=="rhovy"
