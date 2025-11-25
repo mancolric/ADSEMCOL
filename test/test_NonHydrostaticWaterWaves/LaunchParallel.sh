@@ -19,8 +19,8 @@
 
 # Outputs: %x is the job name, %a is the array id number:
 # (https://stackoverflow.com/questions/50242293/using-sbatch-job-name-as-a-variable-in-file-output)
-#SBATCH --output=../../temp/%x-%a.out
-#SBATCH --error=../../temp/%x-%a.err
+#SBATCH --output=temp/%x-%a.out
+#SBATCH --error=temp/%x-%a.err
 
 # Start:
 echo "Starting on $(date)"
@@ -31,10 +31,10 @@ module load julia
 module load bamg
 
 # Read line $SLURM_TASK_ID of $SLURM_JOB_NAME.txt file to get input arguments:
-ARGS=$( awk 'NR=='$SLURM_ARRAY_TASK_ID $SLURM_JOB_NAME.lp )
+ARGS=$( awk 'NR=='$SLURM_ARRAY_TASK_ID 'test/test_NonHydrostaticWaterWaves/'$SLURM_JOB_NAME.lp )
 
 #Call Julia:
-srun --exclusive julia -t$SLURM_CPUS_PER_TASK Launch.jl $ARGS
+srun --exclusive julia -t$SLURM_CPUS_PER_TASK test/test_NonHydrostaticWaterWaves/Launch.jl $ARGS
 
 #Finish:
 echo "Finished on $(date)"
