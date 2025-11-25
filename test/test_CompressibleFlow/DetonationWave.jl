@@ -1,5 +1,9 @@
 include("test_CompressibleFlow.jl")
 
+#DetonationWave(tf=1.0, PlotFig=true, PlotVars=["X_Ar", "X_H2O", "X_OH", "X_O2", "X_H2", "p", "T"], delta=1e-3);
+#El cálculo del jacobiano aumenta mucho, pero el número de elementos no
+#aumenta tanto. Qué sucede??
+
 #Section 5.3 in Johsonn and Kercher, JCP2020:
 
 function DetonationWave(; FesOrder::Int=5, 
@@ -9,7 +13,7 @@ function DetonationWave(; FesOrder::Int=5,
     #
     TolS::Float64=1e-6, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
     #
-    TolT::Float64=1e-5, Deltat0::Float64=1e-6,
+    TolT::Float64=1e-5, Deltat0::Float64=1e-8,
     #
     PlotFig::Bool=false, wFig::Float64=9.50, hFig::Float64=6.50,
     PlotVars::Vector{String}=String[], PlotCode::Vector{String}=fill("nodes", length(PlotVars)),
