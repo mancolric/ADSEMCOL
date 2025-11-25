@@ -1,24 +1,20 @@
-#Number of workers and threads is set by SLURM, in particular, by the arguments 
-#   --ntasks_per_nodes, --cpus-per-task
+cd(@__DIR__)
+include("../../src/AuxiliaryFunctions/Distributed.jl")
 
-#See https://www.tquelch.com/posts/distributed-julia/
-
-include("../../src/AuxiliaryFunctions/basic.jl")
-using Distributed
-using ClusterManagers
-using Base.Threads
+global nProcs       = 2
+global nThreads     = 4
 
 #-------------------------------------------------------------------------------
 #Load cases:
 
 #Read cases:
-ProblemNames    = readdlm("$(@__DIR__)/LaunchParallel.txt")
+ProblemNames    = readdlm("LaunchParallel.txt")
 nProblems       = size(ProblemNames,1)
 
 #For each problem, get number of cases to be solved:
 nCases          = zeros(Int, nProblems)
 for ii=1:nProblems
-    ProblemTable    = readdlm("$(@__DIR__)/LaunchParallel_$(ProblemNames[ii]).txt")
+    ProblemTable    = readdlm("LaunchParallel_$(ProblemNames[ii]).txt")
     nCases[ii]      = size(ProblemTable, 1)
 end
 TotalCases      = sum(nCases)
@@ -36,15 +32,16 @@ end
 #-------------------------------------------------------------------------------
 #Run cases in parallel:
 
-#Number of workers is set from the command line.
-# addprocs(2)
-# addprocs_slurm(parse(Int, ENV["SLURM_NTASKS"]))
-#Workers are created with the same nb of threads than master.
+#Add workers:
+println("Adding $nProcs processes")
+rmallprocs()
+addprocs(nProcs)
 
 #Set global variable "computer" in all processors:
 for ii in workers()
+    fetch(@spawnat ii global nProcs=nProcs)
+    fetch(@spawnat ii global nThreads=nThreads)
     fetch(@spawnat ii global ProblemNames=ProblemNames)
-#     display("$(ii) $(nthreads()) $(BLAS.get_num_threads())")
 end
 
 #Load libraries in all processes:
@@ -52,8 +49,9 @@ end
     using Pkg
     Pkg.activate(".")
     for ProblemName in ProblemNames
-        include("$(@__DIR__)/$(ProblemName).jl")
+        include("$(ProblemName).jl")
     end
+    BLAS.set_num_threads(nThreads)
 end
 
 #Function to launch i-th case in the list for problem ProblemName:
@@ -62,7 +60,7 @@ end
     try
         
         #Load table:
-        ProblemTable    = readdlm("$(@__DIR__)/LaunchParallel_$(ProblemName).txt")
+        ProblemTable    = readdlm("LaunchParallel_$(ProblemName).txt")
         if ProblemName=="SolitonRelaxed"
             hp0         = 0.1
             FesOrder    = Int(ProblemTable[iCase,1])
@@ -99,7 +97,7 @@ end
         
     catch err
     
-        PrintToFile("$(@__DIR__)/../../temp/LaunchParallel_$(ProblemName)_$(iCase).err", 
+        PrintToFile("../../temp/LaunchParallel_$(ProblemName)_$(iCase).err", 
             string(Error2String(err), "\n\n"))
         
     end
@@ -110,6 +108,5 @@ end
 
 #Call pmap:
 t0              = time()
-# pmap(LaunchCase, problems, casesv)
-# rmprocs(workers())
+pmap(LaunchCase, problems, casesv)
 println("$(TotalCases) cases computed in $(time()-t0) seconds")
