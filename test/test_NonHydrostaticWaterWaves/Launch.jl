@@ -2,29 +2,6 @@
 ProblemName     = ARGS[1]
 include("$(ProblemName).jl")
 
-display(Threads.nthreads())
-display(BLAS.get_num_threads())
-
-t_ini       = time()
-N           = 20000
-for ii=1:10
-    A       = rand(N, N)
-    B       = rand(N, N)
-    C       = @tturbo @. A*B
-#     D       = A*B
-    println(time()-t_ini)
-end
-N           = 20000
-for ii=1:1
-    A       = rand(N, N)
-    B       = rand(N, N)
-#     C       = @tturbo @. A*B
-    D       = A*B
-    println(time()-t_ini)
-end
-
-#=
-
 try
     if ProblemName=="SolitonRelaxed"
         hp0         = 0.1
@@ -65,4 +42,3 @@ catch err
     println(Error2String(err))
             
 end
-=#
