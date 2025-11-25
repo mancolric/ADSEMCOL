@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # https://guiesbibtic.upf.edu/recerca/hpc/array-jobs
 
 # NOTE: SBATCH parameters must be defined first. Do not define any variable before them.
@@ -17,8 +19,8 @@
 
 # Outputs: %x is the job name, %a is the array id number:
 # (https://stackoverflow.com/questions/50242293/using-sbatch-job-name-as-a-variable-in-file-output)
-#SBATCH --output=%x-%a.out
-#SBATCH --error=%x-%a.err
+#SBATCH --output=../../temp/%x-%a.out
+#SBATCH --error=../../temp/%x-%a.err
 
 # Start:
 echo "Starting on $(date)"
