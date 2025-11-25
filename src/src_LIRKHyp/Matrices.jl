@@ -1189,7 +1189,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     end
     flux_Ik                     = zeros(solver.mesh.nElems, Integ2D.QRule.nqp)
     
-#     println("Memory allocation = ", time()-t_ini)
+    println("Memory allocation = ", time()-t_ini)
     
     #----------------------------------------------------------------
     #Contribution of flux and source terms in the domain:
@@ -1200,7 +1200,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     #Evaluate flux and source term:
     t_ini           = time()
     FluxSource!(solver.model, _qp, ComputeJ)
-#     println("Flux and source terms = ", time()-t_ini)
+    println("Flux and source terms = ", time()-t_ini)
     
     #Check NaN's:
     for II=1:solver.nVars
@@ -1217,17 +1217,6 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     
     t_ini           = time()
     
-    #=
-    #Fluxes. We assume f and fB depend on u, uB, grad u, grad uB, with u the total (large+fine) solution,
-    #and uB the bubble terms.
-    Rhs_Flux!(flux_ElemsDof, J_ElemsDof, flux_Ik, Integ2D, 
-        _qp.f, _qp.df_du, _qp.df_duB, _qp.df_dgradu, _qp.df_dgraduB, 
-        gradNm, Nm, flucNm, gradNm, gradflucNm, ComputeJ)
-    Rhs_Flux!(flux_ElemsDof, J_ElemsDof, flux_Ik, Integ2D, 
-        _qp.fB, _qp.dfB_du, _qp.dfB_duB, _qp.dfB_dgradu, _qp.dfB_dgraduB, 
-        gradflucNm, Nm, flucNm, gradNm, gradflucNm, ComputeJ)
-    =#
-    
     #Fluxes. We assume f=f(x, t, u, grad u) and fB=fB(x, t, u, grad uB),
     #with u the total (large+fine scale) solution and uB the bubble terms.
     Rhs_Flux!(flux_ElemsDof, J_ElemsDof, flux_Ik, Integ2D, 
@@ -1242,7 +1231,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     Rhs_Source!(flux_ElemsDof, J_ElemsDof, flux_I, Integ2D, 
                 _qp.Q, _qp.dQ_du, _qp.dQ_dgradu, Nm, Nm, gradNm, ComputeJ)
     
-#     println("Flux and source terms * shape functions = ", time()-t_ini)
+    println("Flux and source terms * shape functions = ", time()-t_ini)
     
     #---------------------------------------------------------------------
     #Boundary terms:
@@ -1319,7 +1308,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         
     end
     
-#     println("Boundary terms = ", time()-t_ini)
+    println("Boundary terms = ", time()-t_ini)
     
 #     display(flux_ElemsDof[4])
 #     error("")
@@ -1346,7 +1335,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         
     end
     
-#     println("Assembly = ", time()-t_ini)
+    println("Assembly = ", time()-t_ini)
     
     return _qp.Deltat_CFL
     
