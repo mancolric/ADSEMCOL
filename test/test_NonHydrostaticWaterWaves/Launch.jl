@@ -2,6 +2,29 @@
 ProblemName     = ARGS[1]
 include("$(ProblemName).jl")
 
+display(Threads.nthreads())
+display(BLAS.get_num_threads())
+
+t_ini       = time()
+N           = 20000
+for ii=1:10
+    A       = rand(N, N)
+    B       = rand(N, N)
+    C       = @tturbo @. A*B
+#     D       = A*B
+    println(time()-t_ini)
+end
+N           = 20000
+for ii=1:1
+    A       = rand(N, N)
+    B       = rand(N, N)
+#     C       = @tturbo @. A*B
+    D       = A*B
+    println(time()-t_ini)
+end
+
+#=
+
 try
     if ProblemName=="SolitonRelaxed"
         hp0         = 0.1
@@ -23,7 +46,7 @@ try
         FesOrder    = parse(Int, ARGS[2])
         tf          = parse(Float64, ARGS[3])
         xend        = parse(Float64, ARGS[4])
-        alpha       = parse(Int, ARGS[5])
+        alpha       = parse(Float64, ARGS[5])
         TolS        = parse(Float64, ARGS[6])
         TolT        = parse(Float64, ARGS[7])
         SC          = parse(Int, ARGS[8])
@@ -39,7 +62,7 @@ try
     
 catch err
     
-#     println(err)
     println(Error2String(err))
             
 end
+=#

@@ -4,6 +4,16 @@
 
 # NOTE: SBATCH parameters must be defined first. Do not define any variable before them.
 
+# https://docs.ycrc.yale.edu/clusters-at-yale/job-scheduling/resource-usage/
+# To check CPU / RAM use, run
+# 	ssh -t cn1 htop -u $USER
+# or 
+# 	squeue --nodelist cn1 -o "%A %j %C %J"
+# Also,
+# 	export SQUEUE_FORMAT="%.12i %.10j %.9u %.2t %.10M %.4P %.8c %.4C %.7m"
+# and 
+# 	squeue
+
 # Editable options:
 #SBATCH --job-name=Soliton1
 #SBATCH --partition=cn1
