@@ -39,7 +39,7 @@ try
     
 catch err
     
-    println(err)
-#     println(Error2String(err))
+#     println(err)
+    println(Error2String(err))
             
 end
