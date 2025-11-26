@@ -113,6 +113,54 @@ function mult!(Binteg::TrBint, alpha::Float64, flux_qp::AbstractMatrix{Float64},
     return
     
 end
+function mult_test!(Binteg::TrBint, alpha::Float64, flux_qp::AbstractMatrix{Float64}, Upsilonm::Vector{Matrix{Float64}}, 
+    beta::Float64, smat::AbstractMatrix{Float64})
+    
+    nElems              = Binteg.bmesh.nElems
+    nqp                 = Binteg.QRule.nqp
+    nDof                = size(smat,2)  #May also be nDof*nDof
+    ParentFaces         = Binteg.bmesh.ParentFaces
+    
+#     BLAS.scal!(beta, smat)
+#     @inbounds for iDof=1:nDof, iqp=1:nqp, iElem=1:nElems
+#         ParentFace          = ParentFaces[iElem]
+#         smat[iElem,iDof]    += alpha*flux_qp[iElem,iqp]*Upsilonm[ParentFace][iqp,iDof]
+#     end
+#     @inbounds for iElem=1:nElems
+#         ParentFace              = ParentFaces[iElem]
+#         Upsilonm_elem           = Upsilonm[ParentFace]
+#         @inbounds for iDof=1:nDof, iqp=1:nqp
+#             smat[iElem,iDof]    += flux_qp[iElem,iqp]*Upsilonm_elem[iqp,iDof]
+#             smat[iElem,iDof]    += BLAS.dot(nqp, view(flux_qp,iElem,:), 1, 
+#                                         view(Upsilonm_elem,:,iDof), 1)
+#         end
+#     end
+#     for face=1:3
+#         face_belems         = findall(Binteg.bmesh.ParentFaces.==face)
+#         Upsilon             = Upsilonm[face]
+#         @inbounds for iDof=1:nDof, iqp=1:nqp, iElem=face_belems
+#             smat[iElem,iDof]    += flux_qp[iElem,iqp]*Upsilon[iqp,iDof]
+#         end
+#     end
+
+#     smat        *= beta
+#     smat        += alpha*(flux_qp*Upsilonm[1])
+#     mul!(smat, flux_qp, Upsilonm[1], alpha, beta)
+#     for face=1:3
+#         face_belems         = (Binteg.bmesh.ParentFaces.==face)
+#         smat_face           = smat[face_belems, :]
+#         BLAS.gemm!('N', 'N', alpha, flux_qp[face_belems, :], Upsilonm[face], 
+#                 beta, smat_face)
+#         smat[face_belems,:] = smat_face
+#     end
+    for face=1:3
+        BLAS.gemm!('N', 'N', alpha, flux_qp, Upsilonm[face], 
+                beta, smat)
+    end
+    
+    return
+    
+end
 
 #Prolongation matrix from given space fes to corresponding discontinuous
 #space with the same basis functions:

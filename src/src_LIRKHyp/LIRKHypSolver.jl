@@ -458,8 +458,10 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
             if kk==2 || solver.RK.AI[kk,kk]!=solver.RK.AI[kk-1,kk-1]
                 println("Setting up linear system")
                 t_ini                   = time()
-                @mlv solver.Am.nzval    = solver.Mm.nzval - 
-                                            (Deltat_n*solver.RK.AI[kk,kk])*solver.Jm.nzval
+#                 @mlv solver.Am.nzval    = solver.Mm.nzval - 
+#                                             (Deltat_n*solver.RK.AI[kk,kk])*solver.Jm.nzval
+                BLAS.axpy!(1.0, solver.Mm.nzval, 0.0, solver.Am.nzval)
+                BLAS.axpy!(-Deltat_n*solver.RK.AI[kk,kk], solver.Jm.nzval, 1.0, solver.Am.nzval)
                 LinearSystem!(solver.Am_LS)
                 solver.tSCILU           += time()-t_ini
                 printstyled("Linear system set up in ", time()-t_ini, " seconds \n", color=:cyan)

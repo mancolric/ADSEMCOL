@@ -1077,11 +1077,29 @@ end
 #Update sparse matrix S according to
 #   S.nzval                 = S.nzval * alpha
 #   S.nzval[pinv[ii]]       += smat[ii]
-function sparse!(alpha::N, S::SparseMatrixCSC{N,Int}, pinv::Vector{Int}, 
-    smat::Array{N,T}) where{T<:Any, N<:Number}
+#DO NOT USE this funtion to update a matrix in a block-wise function. The sentence 
+#S.nzval *= alpha will be executed too many times.
+function sparse!(alpha::N, S::SparseMatrixCSC{N,Int}, #pinv::Vector{Int}, 
+    pinv::Array{Int,T1}, 
+    smat::Array{N,T2}) where{T1<:Any, T2<:Any, N<:Number}
 
     S_nzval                 = S.nzval
     @avxt @. S_nzval        *= alpha
+    @inbounds for ii=1:length(smat)
+        S_nzval[pinv[ii]]   += smat[ii]
+    end
+    
+    return
+    
+end
+
+#Update sparse matrix S according to
+#   S.nzval[pinv[ii]]       += smat[ii]
+function sparse!(S::SparseMatrixCSC{N,Int}, 
+    pinv::Array{Int,T1}, 
+    smat::Array{N,T2}) where{T1<:Any, T2<:Any, N<:Number}
+
+    S_nzval                 = S.nzval
     @inbounds for ii=1:length(smat)
         S_nzval[pinv[ii]]   += smat[ii]
     end
