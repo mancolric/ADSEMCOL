@@ -126,15 +126,14 @@ function mult_test!(Binteg::TrBint, alpha::Float64, flux_qp::AbstractMatrix{Floa
 #         ParentFace          = ParentFaces[iElem]
 #         smat[iElem,iDof]    += alpha*flux_qp[iElem,iqp]*Upsilonm[ParentFace][iqp,iDof]
 #     end
-#     @inbounds for iElem=1:nElems
-#         ParentFace              = ParentFaces[iElem]
-#         Upsilonm_elem           = Upsilonm[ParentFace]
-#         @inbounds for iDof=1:nDof, iqp=1:nqp
-#             smat[iElem,iDof]    += flux_qp[iElem,iqp]*Upsilonm_elem[iqp,iDof]
-#             smat[iElem,iDof]    += BLAS.dot(nqp, view(flux_qp,iElem,:), 1, 
-#                                         view(Upsilonm_elem,:,iDof), 1)
-#         end
-#     end
+    #Threads.@threads 
+    @inbounds for iElem=1:nElems
+        ParentFace              = ParentFaces[iElem]
+        Upsilonm_elem           = Upsilonm[ParentFace]
+        @inbounds for iDof=1:nDof, iqp=1:nqp
+            smat[iElem,iDof]    += flux_qp[iElem,iqp]*Upsilonm_elem[iqp,iDof]
+        end
+    end
 #     for face=1:3
 #         face_belems         = findall(Binteg.bmesh.ParentFaces.==face)
 #         Upsilon             = Upsilonm[face]
@@ -153,10 +152,10 @@ function mult_test!(Binteg::TrBint, alpha::Float64, flux_qp::AbstractMatrix{Floa
 #                 beta, smat_face)
 #         smat[face_belems,:] = smat_face
 #     end
-    for face=1:3
-        BLAS.gemm!('N', 'N', alpha, flux_qp, Upsilonm[face], 
-                beta, smat)
-    end
+#     for face=1:3
+#         BLAS.gemm!('N', 'N', alpha, flux_qp, Upsilonm[face], 
+#                 beta, smat)
+#     end
     
     return
     

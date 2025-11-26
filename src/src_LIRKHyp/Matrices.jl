@@ -764,131 +764,6 @@ function ProjectFlux(flux::Matrix{MFloat}, dflux_du::Array{MFloat,3},
 end
 
 #Project a flux onto a finite element space and compute derivatives:
-#=
-function Rhs_Flux!(
-    flux_ElemsDof   ::Vector{Matrix{Float64}},
-    J_ElemsDof      ::Matrix{Matrix{Float64}},
-    flux_Ik         ::Matrix{Float64}, 
-    Integ2D         ::TrInt,
-    f               ::Matrix{Matrix{Float64}},
-    df_du           ::Array{Matrix{Float64},3},
-    df_duB          ::Array{Matrix{Float64},3},
-    df_dgradu       ::Array{Matrix{Float64},4},
-    df_dgraduB      ::Array{Matrix{Float64},4},
-    gradNm_alpha    ::Vector{Matrix{Float64}},
-    Nm              ::Matrix{Float64},
-    flucNm          ::Matrix{Float64},
-    gradNm          ::Vector{Matrix{Float64}},
-    gradflucNm      ::Vector{Matrix{Float64}},
-    ComputeJ        ::Bool              )
-    
-    t_ini           = time()
-    
-    nVars           = size(f,1)
-    Jinvm           = Integ2D.Jinv
-    wdetJ           = Integ2D.wdetJ
-
-    #Compute 
-    #   int_Omega f_{Ij} dpsi_alpha/dx_j dOmega
-    #   = int_Omega f_{Ij} dxi_k/dx_j dpsi_alpha/dxi_k dOmega
-    #   = int_Omega fhat_Ik dpsi_alpha/dxi_k dOmega
-    #
-    for II=1:nVars, kk=1:2
-        #sum for j and assemble:
-        @avxt @. flux_Ik    = ( f[II,1]*Jinvm[kk,1] + 
-                                f[II,2]*Jinvm[kk,2] )*wdetJ
-        BLAS.gemm!('N', 'N', 1.0, flux_Ik, gradNm_alpha[kk], 1.0, flux_ElemsDof[II])
-    end
-    
-    #Compute 
-    #   int_Omega df_{Ij}/du_J dpsi_alpha/dx_j psi_beta dOmega
-    #   = int_Omega df_{Ij}/du_J dxi_k/dx_j dpsi_alpha/dxi_k psi_beta dOmega
-    #   = int_Omega dfhat_{Ik}/du_J UpsilonGN_{k}_{alpha,beta} dOmega
-    if ComputeJ
-    
-        #Change notation for pointers:
-        dflux_IkJ           = flux_Ik   
-        
-        #Matrices UpsilonGN:
-        UpsilonGN           = Vector{Matrix{Float64}}(undef,2)
-        for ii=1:2
-            UpsilonGN[ii]   = UpsilonCompute(gradNm_alpha[ii], Nm)    #Upsilon[ii][:,(II.JJ) = gradNm[ii][:,II]*Nm[:,JJ]
-        end
-        
-#         println("Upsilon GN  = ", time()-t_ini)
-        
-        #Sum for j and assemble:
-        for JJ=1:nVars, II=1:nVars, kk=1:2
-            @avxt @. dflux_IkJ  = ( df_du[II,1,JJ]*Jinvm[kk,1] + 
-                                    df_du[II,2,JJ]*Jinvm[kk,2])*wdetJ
-#             println("df_du nabla psi 1 = ", time()-t_ini)
-            BLAS.gemm!('N', 'N', 1.0, dflux_IkJ, UpsilonGN[kk], 1.0, J_ElemsDof[II,JJ])
-#             println("df_du nabla psi 2 = ", time()-t_ini)
-        end
-        
-        #Matrices UpsilonGN:
-        for ii=1:2
-            UpsilonGN[ii]   = UpsilonCompute(gradNm_alpha[ii], flucNm)    #Upsilon[ii][:,(II.JJ) = gradNm[ii][:,II]*Nm[:,JJ]
-        end
-        
-#         println("Upsilon GN (B) = ", time()-t_ini)
-        
-        #Sum for j and assemble:
-        for JJ=1:nVars, II=1:nVars, kk=1:2
-            @avxt @. dflux_IkJ  = ( df_duB[II,1,JJ]*Jinvm[kk,1] + 
-                                    df_duB[II,2,JJ]*Jinvm[kk,2])*wdetJ
-            BLAS.gemm!('N', 'N', 1.0, dflux_IkJ, UpsilonGN[kk], 1.0, J_ElemsDof[II,JJ])
-        end
-        
-#         println("df_du nabla psi (B) = ", time()-t_ini)
-        
-    end
-    
-    #Compute 
-    #   int_Omega df_{Ij}/d(du_J/dx_l) dpsi_alpha/dx_j dpsi_beta/dx_l dOmega
-    #   = int_Omega df_{Ij}/d(du_J/dx_l) dxi_k/dx_j dxi_m/dx_l dpsi_alpha/dxi_k dpsi_beta/dxi_m dOmega
-    #   = int_Omega dfhat_{Ik}/d(du_J/dx_m) UpsilonGG_{k,m}_{alpha,beta} dOmega
-    if ComputeJ
-    
-        #Change notation for pointers:
-        dflux_IkJm          = flux_Ik   
-        
-        #Matrices UpsilonGG:
-        UpsilonGG           = Matrix{Matrix{Float64}}(undef,2,2)
-        for ii=1:2, jj=1:2
-            UpsilonGG[ii,jj]= UpsilonCompute(gradNm_alpha[ii], gradNm[jj])    #Upsilon[ii][:,(II.JJ) = gradNm[ii][:,II]*Nm[:,JJ]
-        end
-        
-        #Sum for j,l  and assemble:
-        for JJ=1:nVars, II=1:nVars, mm=1:2, kk=1:2  
-            @avxt @. dflux_IkJm = ( df_dgradu[II,1,JJ,1]*Jinvm[kk,1]*Jinvm[mm,1] + 
-                                    df_dgradu[II,1,JJ,2]*Jinvm[kk,1]*Jinvm[mm,2] +
-                                    df_dgradu[II,2,JJ,1]*Jinvm[kk,2]*Jinvm[mm,1] +
-                                    df_dgradu[II,2,JJ,2]*Jinvm[kk,2]*Jinvm[mm,2])*wdetJ
-            BLAS.gemm!('N', 'N', 1.0, dflux_IkJm, UpsilonGG[kk,mm], 1.0, J_ElemsDof[II,JJ])
-        end
-        
-        #Matrices UpsilonGG:
-        UpsilonGG           = Matrix{Matrix{Float64}}(undef,2,2)
-        for ii=1:2, jj=1:2
-            UpsilonGG[ii,jj]= UpsilonCompute(gradNm_alpha[ii], gradflucNm[jj])    #Upsilon[ii][:,(II.JJ) = gradNm[ii][:,II]*Nm[:,JJ]
-        end
-        
-        #Sum for j,l  and assemble:
-        for JJ=1:nVars, II=1:nVars, mm=1:2, kk=1:2  
-            @avxt @. dflux_IkJm = ( df_dgraduB[II,1,JJ,1]*Jinvm[kk,1]*Jinvm[mm,1] + 
-                                    df_dgraduB[II,1,JJ,2]*Jinvm[kk,1]*Jinvm[mm,2] +
-                                    df_dgraduB[II,2,JJ,1]*Jinvm[kk,2]*Jinvm[mm,1] +
-                                    df_dgraduB[II,2,JJ,2]*Jinvm[kk,2]*Jinvm[mm,2])*wdetJ
-            BLAS.gemm!('N', 'N', 1.0, dflux_IkJm, UpsilonGG[kk,mm], 1.0, J_ElemsDof[II,JJ])
-        end
-
-    end
-    
-    return
-    
-end
-=#
 function Rhs_Flux!(
     flux_ElemsDof   ::Vector{Matrix{Float64}},
     J_ElemsDof      ::Matrix{Matrix{Float64}},
@@ -1214,47 +1089,7 @@ function Rhs_bFlux_test!(
     
     end
     println("Rhs_bFlux 3B: ", time()-t_ini)
-    
-    #=
-    t_ini           = time()
-    #Pack df_gradu:
-    nElems          = Binteg2D.bmesh.nElems
-    nqp             = Binteg2D.QRule.nqp
-    nDof2           = size(J_BElemsDof[1,1], 2) 
-    df_dgradu_mat   = zeros(nElems, nVars, nVars, nqp, 2)
-    J_BElemsDof_mat = zeros(nElems, nVars, nVars, nDof2) 
-    for JJ=1:nVars, II=1:nVars
-        df_dgradu_mat[:,II,JJ,:,1]      = df_dgradu[II,JJ,1]
-        df_dgradu_mat[:,II,JJ,:,2]      = df_dgradu[II,JJ,2]
-        J_BElemsDof_mat[:,II,JJ,:]      = J_BElemsDof[II,JJ]
-    end
-    #Allocate bflux_IJl
-    bflux_IJl       = zeros(nElems, nVars, nVars, nqp)
-    println("Rhs_bFlux 4: ", time()-t_ini)
-    
-    t_ini       = time()
-    if ComputeJ
-        
-        #Matrix UpsilonNG:
-        UpsilonNG       = Vector{Vector{Matrix{Float64}}}(undef,2)
-        for kk=1:2
-            UpsilonNG[kk]   = UpsilonCompute(Nm_alpha, gradNm[kk])
-        end
-        
-        #Sum for k=1,2 and assemble:
-        for ll=1:2
-            for JJ=1:1:nVars, II=1:nVars
-                @avxt @. bflux_IJl[:,II,JJ,:]   = 
-                    (   df_dgradu_mat[:,II,JJ,:,1]*Jinvm[ll,1] + 
-                        df_dgradu_mat[:,II,JJ,:,2]*Jinvm[ll,2] )*wdetJ
-            end
-            mult_test!(Binteg2D, -1.0, reshape(bflux_IJl,:,nqp), UpsilonNG[ll], 1.0, 
-                        reshape(J_BElemsDof_mat,:,nDof2))
-        end
-                    
-    end
-    println("Rhs_bFlux 5: ", time()-t_ini)
-    =#
+    error("")
     
     return
     
@@ -1479,6 +1314,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     println("Boundary terms 6 = ", tB6)
     println("Boundary terms = ", time()-t_ini)
 #     error("")
+
 #     display(flux_ElemsDof[4])
 #     error("")
     

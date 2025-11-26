@@ -69,7 +69,7 @@ function SCILU0_alloc(A::SparseMatrixCSC{nb,int}, nSlaves::Int) where {nb<:Numbe
     #Pointer to diagonal terms and first master term:
     ILU.diag                            = zeros(int, N)
     ILU.master                          = zeros(int, N)
-    for jj=1:N
+    @inbounds for jj=1:N
         SearchDiag                      = true
         SearchMaster                    = true
         ILU.master[jj]                  = ILU.LU.colptr[jj+1] #Assume there is no master
@@ -102,20 +102,20 @@ function SCILU0_alloc(A::SparseMatrixCSC{nb,int}, nSlaves::Int) where {nb<:Numbe
     #
     #Count number of (upper diagonal) nonzeros per row:
     u_aux           = zeros(int, N)
-    for jj=1:N, ss=A.colptr[jj]:ILU.diag[jj]-1
+    @inbounds for jj=1:N, ss=A.colptr[jj]:ILU.diag[jj]-1
         row         = A.rowval[ss]
         u_aux[row]  += 1
     end
     #Save accumulated number of nonzeros per row:
     u_ptr           = ones(int, N+1)
-    for jj=1:N
+    @inbounds for jj=1:N
         u_ptr[jj+1] = u_ptr[jj]+u_aux[jj]
     end
     #Save columns and ss-pointer for each row:
     u_aux           .= 0    #local pointer
     u_cols          = zeros(int, u_ptr[N+1])
     u_ss            = zeros(int, u_ptr[N+1])
-    for jj=1:N, ss=A.colptr[jj]:ILU.diag[jj]-1
+    @inbounds for jj=1:N, ss=A.colptr[jj]:ILU.diag[jj]-1
         row         = A.rowval[ss]
         ptr         = u_ptr[row]+u_aux[row]
         u_cols[ptr] = jj
@@ -130,7 +130,7 @@ function SCILU0_alloc(A::SparseMatrixCSC{nb,int}, nSlaves::Int) where {nb<:Numbe
     Ared_colptr     = zeros(int, ILU.nMasters+1)
     #Save nb of cum nnz values per column:
     Ared_colptr[1]  = 1
-    for jj=1:ILU.nMasters
+    @inbounds for jj=1:ILU.nMasters
         #master elements in column nSlaves+jj of matrix A:
         Ared_colptr[jj+1]   = Ared_colptr[jj] + ILU.LU.colptr[nSlaves+jj+1] - 
                                 ILU.master[nSlaves+jj]
@@ -139,7 +139,7 @@ function SCILU0_alloc(A::SparseMatrixCSC{nb,int}, nSlaves::Int) where {nb<:Numbe
     Ared_nnz        = Ared_colptr[ILU.nMasters+1]-1
     Ared_rowval     = zeros(int, Ared_nnz)
     ssred           = 0
-    for jj=1:ILU.nMasters, ss=ILU.master[nSlaves+jj]:ILU.LU.colptr[nSlaves+jj+1]-1
+    @inbounds for jj=1:ILU.nMasters, ss=ILU.master[nSlaves+jj]:ILU.LU.colptr[nSlaves+jj+1]-1
         row                 = ILU.LU.rowval[ss]
         ssred               += 1
         Ared_rowval[ssred]  = row-nSlaves
