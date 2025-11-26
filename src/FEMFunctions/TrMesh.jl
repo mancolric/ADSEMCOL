@@ -411,13 +411,24 @@ function TrMesh_Process!(mesh::TrMesh)
     #--------------------------------------------------------------
     #Boundary meshes:
     
+    #NOTE: The fields 
+    #     dim         ::Int
+    #     nElems      ::Int
+    #     nNodes      ::Int
+    #     nVerts      ::Int
+    #     NodesPerElem::Int
+    #     VertsPerElem::Int
+    #     order       ::Int
+    #     ElemsNodes  ::Matrix{Int}
+    #have already been defined 
+    
     for ib=1:mesh.nBounds
     
         bmesh               = mesh.bmesh[ib]
         
         #Loop bmesh elements. Find parent info:
         bmesh.ParentElems   = zeros(Int, bmesh.nElems)
-        bmesh.ParentFaces   = zeros(Int, bmesh.nElems)
+        bmesh_ParentFaces   = zeros(Int, bmesh.nElems)
         bmesh.ParentEdges   = zeros(Int, bmesh.nElems)
         for iElem=1:bmesh.nElems
             
@@ -431,7 +442,7 @@ function TrMesh_Process!(mesh::TrMesh)
             
             #Find face and edge:
             face                        = findfirst(view(mesh.ElemsNodes,elem,:).==node1)
-            bmesh.ParentFaces[iElem]    = face
+            bmesh_ParentFaces[iElem]    = face
             bmesh.ParentEdges[iElem]    = mesh.ElemsEdges[elem,face]
             
         end

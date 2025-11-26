@@ -13,6 +13,7 @@ import FastGaussQuadrature.gausslegendre
 mutable struct TrBmesh
 
     #Mesh data:
+    boundary_id ::Int
     dim         ::Int
     nElems      ::Int
     nNodes      ::Int
@@ -34,7 +35,8 @@ mutable struct TrBmesh
     ParentEdges ::Vector{Int}
     ParentNodes ::Vector{Int}
     ParentElems ::Vector{Int}
-    ParentFaces ::Vector{Int}
+#     ParentFaces ::Vector{Int}
+    ParentFace  ::Int
     
     #Matrix to compute Lagrangian shape functions associated with isoparametric
     #transformations:
