@@ -942,16 +942,13 @@ function Rhs_bFlux!(
     Jinvm           = Binteg2D.Jinv
     wdetJ           = Binteg2D.wdetJ
     
-    t_ini           = time()
     #Compute 
     #   -int_Gamma f_I psi_alpha dGamma
     for II=1:nVars
         @avxt @. bflux_I    = f[II]*wdetJ
         BLAS.gemm!('N', 'N', -1.0, bflux_I, Nm_alpha, 1.0, flux_BElemsDof[II])
     end
-    println("Rhs_bFlux 1: ", time()-t_ini)
-    
-    t_ini           = time()
+
     #Compute 
     #   -int_Gamma df_I/du_J psi_alpha psi_beta dGamma
     if ComputeJ
@@ -969,9 +966,7 @@ function Rhs_bFlux!(
         end
     
     end
-    println("Rhs_bFlux 2: ", time()-t_ini)
     
-    t_ini               = time()
     #Compute 
     #   -int_Gamma df_I/d(du_J/dx_k) psi_alpha dpsi_beta/dx_k dGamma = 
     #   -int_Gamma df_I/d(du_J/dx_k) dxi_l/dx_k psi_alpha dpsi_beta/dxi_l dGamma
@@ -981,7 +976,7 @@ function Rhs_bFlux!(
         bflux_IJl       = bflux_I
         
         #Matrix UpsilonNG:
-        UpsilonNG       = Vector{Vector{Matrix{Float64}}}(undef,2)
+        UpsilonNG       = Vector{Matrix{Float64}}(undef,2)
         for kk=1:2
             UpsilonNG[kk]   = UpsilonCompute(Nm_alpha, gradNm[kk])
         end
@@ -994,7 +989,6 @@ function Rhs_bFlux!(
         end
     
     end
-    println("Rhs_bFlux 3: ", time()-t_ini)
     
     return
     
@@ -1130,13 +1124,14 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     tB6             = 0.0
     
     #Loop boundaries:
-    for ib=1:solver.nBounds*3
+    for jb=1:solver.nBounds*3
         
         t_ini2              = time()
-        Binteg2D            = solver.Binteg2D[ib]
+        Binteg2D            = solver.Binteg2D[jb]
         bmesh               = Binteg2D.bmesh
         Jinvm               = Binteg2D.Jinv
         wdetJ               = Binteg2D.wdetJ
+        bound_id            = bmesh.boundary_id
         
         #Compute variables at quadrature nodes:
         _bqp                = TrBintVars()
@@ -1178,33 +1173,43 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         
         t_ini2                      = time()
         #Evaluate flux at the boundary:
-        bflux!(solver.model, solver.BC[ib].BC, _bqp, ComputeJ)
+        bflux!(solver.model, solver.BC[bound_id].BC, _bqp, ComputeJ)
         tB3                         += time()-t_ini2
         
         #Check NaN's:
         t_ini2                      = time()
         for II=1:solver.nVars
             if !all(isfinite.(_bqp.f[II]))
-                error("flux $(II) for boundary $(ib) is not finite")
+                error("flux $(II) for boundary $(bound_id) is not finite")
             end
         end
         tB4                         += time()-t_ini2
         
         t_ini2                      = time()
         #Compute contribution of boundary term:
-        Rhs_bFlux_test!(flux_BElemsDof, J_BElemsDof, bflux_I, Binteg2D,
+        Rhs_bFlux!(flux_BElemsDof, J_BElemsDof, bflux_I, Binteg2D,
             _bqp.f, _bqp.df_du, _bqp.df_dgradu, 
             Nm, Nm, gradNm, ComputeJ)
         tB5                         += time()-t_ini2
         
         #Update global values for flux_ElemsDof and J_ElemsDof:
         t_ini2                      = time()
-        for II=1:nVars
-            flux_ElemsDof[II][bmesh.ParentElems,:]          += flux_BElemsDof[II]
+#         for II=1:nVars
+#             flux_ElemsDof[II][bmesh.ParentElems,:]          += flux_BElemsDof[II]
+#         end
+#         if ComputeJ
+#             for JJ=1:nVars, II=1:nVars
+#                 J_ElemsDof[II,JJ][bmesh.ParentElems,:]      += J_BElemsDof[II,JJ]
+#             end
+#         end
+        @inbounds for II=1:nVars, iDof=1:fes.DofPerElem, iElem=1:bmesh.nElems
+            parent_elem                             = bmesh.ParentElems[iElem]
+            flux_ElemsDof[II][parent_elem, iDof]    += flux_BElemsDof[II][iElem, iDof]
         end
         if ComputeJ
-            for JJ=1:nVars, II=1:nVars
-                J_ElemsDof[II,JJ][bmesh.ParentElems,:]      += J_BElemsDof[II,JJ]
+            @inbounds for JJ=1:nVars, II=1:nVars, iDof2=1:fes.DofPerElem^2, iElem=1:bmesh.nElems
+                parent_elem                         = bmesh.ParentElems[iElem]
+                J_ElemsDof[II,JJ][parent_elem,iDof2]+= J_BElemsDof[II,JJ][iElem, iDof2]
             end
         end
         tB6                         += time()-t_ini2
