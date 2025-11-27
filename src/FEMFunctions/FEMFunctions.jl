@@ -213,7 +213,7 @@ mutable struct TrBint
     order           ::Int           #tentative order
     QRule           ::LineQRule     #QRule.order is the real order  
     x               ::Vector{Matrix{Float64}}
-    xi2D            ::Vector{Matrix{Float64}}   #Trace of natural coordinates at each face
+    xi2D            ::Matrix{Float64}   #Trace of natural coordinates at the corresponding face
     wdetJ           ::Matrix{Float64}
     Jinv            ::Matrix{Matrix{Float64}}
     t_qp            ::Vector{Matrix{Float64}}

@@ -422,9 +422,14 @@ function TrMesh_Process!(mesh::TrMesh)
     #     ElemsNodes  ::Matrix{Int}
     #have already been defined 
     
+    #Generate new bmeshes with same ParentFace for each element:
+    bmeshes     = Vector{TrBmesh}(undef, 3*mesh.nBounds)
+    
+    #Split original meshes into child meshes with same ParentFace for each element:
     for ib=1:mesh.nBounds
     
-        bmesh               = mesh.bmesh[ib]
+        #Get current bmesh:
+        bmesh                           = mesh.bmesh[ib]
         
         #Loop bmesh elements. Find parent info:
         bmesh.ParentElems   = zeros(Int, bmesh.nElems)
@@ -447,6 +452,43 @@ function TrMesh_Process!(mesh::TrMesh)
             
         end
         
+        #Loop faces:
+        for face=1:3
+            
+            #Create mesh:
+            jb                          = (ib-1)*3+face
+            bmeshes[jb]                 = TrBmesh()
+            bmeshes[jb].boundary_id     = ib
+            bmeshes[jb].dim             = 2
+            
+            #Find elements:
+            aux                         = bmesh_ParentFaces.==face
+            bmeshes[jb].nElems          = sum(aux)
+            bmeshes[jb].nNodes          = 0 #will be updated later
+            bmeshes[jb].nVerts          = 0 #will be updated later
+            bmeshes[jb].NodesPerElem    = bmesh.order+1
+            bmeshes[jb].VertsPerElem    = 2
+            bmeshes[jb].order           = bmesh.order
+            bmeshes[jb].ElemsNodes      = bmesh.ElemsNodes[aux,:]
+            
+            #Save parent face, elements and edges:
+            bmeshes[jb].ParentFace      = face
+            bmeshes[jb].ParentElems     = bmesh.ParentElems[aux]
+            bmeshes[jb].ParentEdges     = bmesh.ParentEdges[aux]
+            
+        end 
+        
+    end 
+    
+    #Get rest of fields for boundaries:
+    mesh.bmesh                  = bmeshes
+#     figure()
+#     PlotMesh!(mesh, color="k")
+    for ib=1:mesh.nBounds*3
+    
+        #Get mesh:
+        bmesh                   = mesh.bmesh[ib]
+        
         #Re-write ElemsNodes with high-order nodes:
         bmesh.ElemsNodes        = mesh.EdgesNodes[bmesh.ParentEdges,:]
         
@@ -456,10 +498,11 @@ function TrMesh_Process!(mesh::TrMesh)
         ChildNodes              = sparsevec(bmesh.ParentNodes, 1:bmesh.nNodes, mesh.nNodes)
         bmesh.ElemsNodes        = ChildNodes[bmesh.ElemsNodes]
         bmesh.NodesCoords       = mesh.NodesCoords[bmesh.ParentNodes,:]
-        bmesh.nVerts            = maximum(view(bmesh.ElemsNodes,:,1:2))
+        if bmesh.nElems>0
+            bmesh.nVerts        = maximum(view(bmesh.ElemsNodes,:,1:2))
+        end 
         bmesh.nEdges            = bmesh.nElems
         ElemsCoordsCompute!(bmesh)
-        bmesh.dim               = 2
        
         #Variables to compute isoparametric transformations:
         xi_bound        = ChebyNodes(-1.0, 1.0, mesh.order+1)
@@ -470,8 +513,11 @@ function TrMesh_Process!(mesh::TrMesh)
             bmesh.Lag_Leg   = Lag_Leg
         end
     
+#         colorv  = ["b", "g", "r"]
+#         PlotMesh!(bmesh, color=colorv[mod(ib,3)+1], linewidth=2.0)
+        
     end
-    
+
     #Metric tensor:
     mesh.metric     = ComputeMetric(mesh)
     
@@ -538,9 +584,11 @@ end
 
 function PlotMesh!(mesh::TrBmesh; color::String="b", linewidth::Float64=0.5)
 
-    plot(mesh.NodesCoords[1:mesh.nVerts,1], mesh.NodesCoords[1:mesh.nVerts,2], 
-        color=color, linewidth=linewidth)
-    
+#     plot(mesh.NodesCoords[1:mesh.nVerts,1], mesh.NodesCoords[1:mesh.nVerts,2], 
+#         color=color, linewidth=linewidth)
+    xcoords     = mesh.ElemsCoords[:,[1,3]]
+    ycoords     = mesh.ElemsCoords[:,[2,4]]
+    plot(transpose(xcoords), transpose(ycoords), color=color, linewidth=linewidth)
     return
     
 end

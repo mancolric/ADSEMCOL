@@ -68,7 +68,7 @@ function TrBint(mesh::TrMesh, ib::Int, order::Int)
     QRule           = GLRule(order)
     Integ.QRule     = QRule
     wv              = QRule.w
-    Integ.xi2D      = TrBint_xi_trace(QRule.xi)
+    Integ.xi2D      = TrBint_xi_trace(QRule.xi, bmesh.ParentFace)
     
     #Quadrature nodes:
     x_qp            = Vector{Matrix{Float64}}(undef,2)
@@ -108,53 +108,18 @@ end
 #Compute position of quadrature nodes:
 function QuadNodesCoords(Integ2D::TrInt)
 
-#     error("Deprecated. Use Integ2D.x")
     return Integ2D.x
-    
-    #Allocate:
-    x_qp            = Vector{Matrix{Float64}}(undef,2)
-    for ii=1:length(x_qp)
-        x_qp[ii]    = zeros(Integ2D.mesh.nElems, Integ2D.QRule.nqp)
-    end
-    
-    #Apply isoparametric transformation:
-    mesh            = Integ2D.mesh
-    xm              = view(mesh.ElemsCoords,:, 1:2:2*mesh.NodesPerElem-1)
-    ym              = view(mesh.ElemsCoords,:, 2:2:2*mesh.NodesPerElem)
-    Nm              = NCompute(mesh, Integ2D.QRule.xi)
-    BLAS.gemm!('N', 'T', 1.0, xm, Nm, 0.0, x_qp[1]) 
-    BLAS.gemm!('N', 'T', 1.0, ym, Nm, 0.0, x_qp[2]) 
-
-    return x_qp
     
 end
 function QuadNodesCoords(Integ2D::TrBint)
 
-#     error("Deprecated. Use Integ2D.x")
     return Integ2D.x
-    
-    bmesh           = Integ2D.bmesh
-    
-    #Allocate:
-    x_qp            = Vector{Matrix{Float64}}(undef,2)
-    for ii=1:length(x_qp)
-        x_qp[ii]    = zeros(bmesh.nElems, Integ2D.QRule.nqp)
-    end
-    
-    #Apply isoparametric transformation:
-    xm              = view(bmesh.ElemsCoords,:, 1:2:2*bmesh.NodesPerElem-1)
-    ym              = view(bmesh.ElemsCoords,:, 2:2:2*bmesh.NodesPerElem)
-    Nm              = NCompute(bmesh, Integ2D.QRule.xi)
-    BLAS.gemm!('N', 'T', 1.0, xm, Nm, 0.0, x_qp[1])   
-    BLAS.gemm!('N', 'T', 1.0, ym, Nm, 0.0, x_qp[2])   
-    
-    return x_qp
     
 end
 
 #For a given vector "xi" in a boundary (1D), compute corresponding values of "xi" in the triangle,
 #for each possible face:
-function TrBint_xi_trace(xiv::AbstractVector{Float64})
+function TrBint_xi_trace(xiv::AbstractVector{Float64}, face::Int)
 
     #Coordinates of nodes (1,2,3,1) in the reference triangle:
     xi1         = [ -sqrt(3)/2, sqrt(3)/2,  0.0, -sqrt(3)/2 ]
@@ -165,18 +130,15 @@ function TrBint_xi_trace(xiv::AbstractVector{Float64})
     N_end       = @mlv    0.5*(1.0+xiv)
     
     #Create xim for each face:
-    xim         = Vector{Matrix{Float64}}(undef,3)
-    nqp         = length(xiv)
-    for face=1:3
-        xim[face]       = zeros(nqp,2)
-        xim[face][:,1]  = xi1[face]*N_start + xi1[face+1]*N_end
-        xim[face][:,2]  = xi2[face]*N_start + xi2[face+1]*N_end
-    end
+    xim         = zeros(length(xiv),2)
+    xim[:,1]    = xi1[face]*N_start + xi1[face+1]*N_end
+    xim[:,2]    = xi2[face]*N_start + xi2[face+1]*N_end
     
     return xim
     
 end
 
+#=
 #Return vector with elements and natural coordinates in the triangle 
 #for the quadrature nodes in a boundary integral:
 function QuadNodes_trace(Integ2D::TrBint)
@@ -196,6 +158,7 @@ function QuadNodes_trace(Integ2D::TrBint)
     return elemv, xim
     
 end
+=#
 
 #Compute solution at the quadrature nodes of the boundary:
 function SolutionCompute(Binteg::TrBint, uv::AbstractVector{Float64}, FES::FES_Union)
@@ -222,26 +185,13 @@ function SolutionCompute(Binteg::TrBint, uv::Vector{<:AbstractVector{Float64}}, 
     #quadrature node:
     u_ElemsQp   = Vector{Matrix{Float64}}(undef, length(uv))
     for iVar=1:nVars
-        u_ElemsQp[iVar] = zeros(bmesh.nElems, Binteg.QRule.nqp)
-    end
-    
-    #Loop faces:
-    for face=1:3
         
-        #Select elements:
-        face_belems     = bmesh.ParentFaces.==face
-        face_elems      = bmesh.ParentElems[face_belems]
-        
-        for iVar=1:nVars
+        #Matrix <nElems,DofPerElem> with values for each element and dof:
+        u_ElemsDof          = uv[iVar][FES.ElemsDof[bmesh.ParentElems,:]]
+
+        #Compute umat*Nm^T, which gives a matrix <nElems, ngp>:
+        u_ElemsQp[iVar]     = u_ElemsDof*transpose(Nm)
             
-            #Matrix <nElems,DofPerElem> with values for each element and dof:
-            u_ElemsDof                      = uv[iVar][FES.ElemsDof[face_elems,:]]
-    
-            #Compute umat*Nm^T, which gives a matrix <nElems, ngp>:
-            u_ElemsQp[iVar][face_belems,:]  .= u_ElemsDof*transpose(Nm[face])
-            
-        end
-        
     end
     
     return u_ElemsQp #Vector{Matrix{Float64}}
@@ -257,25 +207,14 @@ function SolutionGradCompute(Binteg::TrBint, uv::Vector{<:AbstractVector{Float64
     
     #Allocate output:
     Du_ElemsQp  = Matrix{Matrix{Float64}}(undef,nVars,2)
-    for iVar=1:nVars, jj=1:2
-        Du_ElemsQp[iVar,jj] = zeros(bmesh.nElems, Binteg.QRule.nqp)
-    end 
+    for iVar=1:nVars
+            
+        #Matrix <nElems,DofPerElem> with values for each element and dof:
+        u_ElemsDof          = uv[iVar][FES.ElemsDof[bmesh.ParentElems,:]]
     
-    #Loop faces:
-    for face=1:3
-        
-        #Select elements:
-        face_belems     = bmesh.ParentFaces.==face
-        face_elems      = bmesh.ParentElems[face_belems]
-        
-        for iVar=1:nVars
-            #Matrix <nElems,DofPerElem> with values for each element and dof:
-            u_ElemsDof      = uv[iVar][FES.ElemsDof[face_elems,:]]
-        
-            #Compute umat*Nm^T, which gives a matrix <nElems, ngp>:
-            Du_ElemsQp[iVar,1][face_belems,:]    .= u_ElemsDof*transpose(gradNm[1][face])
-            Du_ElemsQp[iVar,2][face_belems,:]    .= u_ElemsDof*transpose(gradNm[2][face])
-        end
+        #Compute umat*Nm^T, which gives a matrix <nElems, ngp>:
+        Du_ElemsQp[iVar,1]  = u_ElemsDof*transpose(gradNm[1])
+        Du_ElemsQp[iVar,2]  = u_ElemsDof*transpose(gradNm[2])
         
     end
     
@@ -301,33 +240,25 @@ function JinvCompute(Binteg::TrBint)
     gradNm          = gradNCompute(mesh, Binteg.xi2D)
     
     #Allocate output:
-    Jinv11          = zeros(bmesh.nElems, QRule.nqp)
-    Jinv21          = zeros(bmesh.nElems, QRule.nqp)
-    Jinv12          = zeros(bmesh.nElems, QRule.nqp)
-    Jinv22          = zeros(bmesh.nElems, QRule.nqp)
-    
-    #Loop faces and compute Jinv:
-    for face=1:3
-    
-        face_belems     = bmesh.ParentFaces.==face
-        face_elems      = bmesh.ParentElems[face_belems]
+#     Jinv11          = zeros(bmesh.nElems, QRule.nqp)
+#     Jinv21          = zeros(bmesh.nElems, QRule.nqp)
+#     Jinv12          = zeros(bmesh.nElems, QRule.nqp)
+#     Jinv22          = zeros(bmesh.nElems, QRule.nqp)
         
-        #Mesh nodes:
-        x1              = mesh.ElemsCoords[face_elems, 1:2:2*mesh.NodesPerElem-1]
-        x2              = mesh.ElemsCoords[face_elems, 2:2:2*mesh.NodesPerElem]
+    #Mesh nodes:
+    x1              = mesh.ElemsCoords[bmesh.ParentElems, 1:2:2*mesh.NodesPerElem-1]
+    x2              = mesh.ElemsCoords[bmesh.ParentElems, 2:2:2*mesh.NodesPerElem]
         
-        #Compute Jacobian inverses:
-        Jinv11[face_belems,:]   = x2*transpose(gradNm[2][face])
-        Jinv21[face_belems,:]   = -x2*transpose(gradNm[1][face])
-        Jinv12[face_belems,:]   = -x1*transpose(gradNm[2][face])
-        Jinv22[face_belems,:]   = x1*transpose(gradNm[1][face])
-        
-    end
-    detJ            = @mlv    Jinv11*Jinv22 - Jinv21*Jinv12 
-    @mlv    Jinv11  /= detJ
-    @mlv    Jinv21  /= detJ
-    @mlv    Jinv12  /= detJ
-    @mlv    Jinv22  /= detJ
+    #Compute Jacobian inverses:
+    Jinv11              = x2*transpose(gradNm[2])
+    Jinv21              = -x2*transpose(gradNm[1])
+    Jinv12              = -x1*transpose(gradNm[2])
+    Jinv22              = x1*transpose(gradNm[1])
+    detJ                = @tturbo @. Jinv11*Jinv22 - Jinv21*Jinv12 
+    @tturbo @. Jinv11   /= detJ
+    @tturbo @. Jinv21   /= detJ
+    @tturbo @. Jinv12   /= detJ
+    @tturbo @. Jinv22   /= detJ
 
     #Pack Jinv:
     Jinv            = Matrix{Matrix{Float64}}(undef,2,2)

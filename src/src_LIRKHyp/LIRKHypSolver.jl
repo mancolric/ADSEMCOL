@@ -99,8 +99,8 @@ function ReadMesh!(solver::SolverData)
     #Create finite element space, matrices, integrals, auxiliary vectors:
     solver.fes          = TrPBSpace(solver.mesh, solver.FesOrder)
     solver.Integ2D      = TrInt(solver.mesh, 2*(solver.FesOrder+2)+1)
-    solver.Binteg2D     = Vector{TrBint}(undef, solver.nBounds)
-    for ib=1:solver.nBounds
+    solver.Binteg2D     = Vector{TrBint}(undef, solver.nBounds*3)
+    for ib=1:solver.nBounds*3
         solver.Binteg2D[ib]     = TrBint(solver.mesh, ib, 2*(solver.FesOrder+2))
     end
     solver.uv           = zeros(solver.nVars*solver.fes.nDof)

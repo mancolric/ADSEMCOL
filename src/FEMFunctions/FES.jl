@@ -1,6 +1,7 @@
 #---------------------------------------------------------
 #CONSTRUCTION AND ASSEMBLY OF MATRICES:
 
+#=
 #Return matrices N and gradN for several xi's:
 function NCompute(fes::Union{TrFES, TrMesh}, xim::Vector{<:AbstractMatrix{Float64}})
 
@@ -23,6 +24,7 @@ function gradNCompute(fes::Union{TrFES, TrMesh}, xim::Vector{<:AbstractMatrix{Fl
     return [gradN1, gradN2]
     
 end
+=#
 
 #Given two matrices A(N,m) B(N,n), return a matrix C(N,m*n) such that 
 #C(:,ii+(jj-1)*m)=A(:,ii)*B(:,jj):
@@ -38,6 +40,8 @@ function UpsilonCompute(A::AbstractMatrix{Float64}, B::AbstractMatrix{Float64})
     return C
     
 end
+
+#=
 #Idem for vector of matrices. Useful for computing boundary integrals:
 function UpsilonCompute(A::Vector{Matrix{Float64}}, B::Vector{Matrix{Float64}})
 
@@ -48,6 +52,7 @@ function UpsilonCompute(A::Vector{Matrix{Float64}}, B::Vector{Matrix{Float64}})
     return Upsilonm
     
 end
+=#
 
 #Given two FES FES_I and FES_J, we can compute two matrices, imat and jmat, with
 #the indices (ii,jj) associated with NComputeMerge.
@@ -94,6 +99,7 @@ function VectorAssemble!(iv::AbstractVecOrMat{Int}, sv::AbstractVecOrMat{Float64
     return
 end
 
+#=
 #Function to multiply matrix <nElems,nqp> with several matrices <nqp,nDof>. Useful for 
 #assembly at a boundary integral:
 function mult(Binteg::TrBint, alpha::Float64, flux_qp::AbstractMatrix{Float64}, Upsilonm::Vector{Matrix{Float64}})
@@ -160,6 +166,8 @@ function mult_test!(Binteg::TrBint, alpha::Float64, flux_qp::AbstractMatrix{Floa
     return
     
 end
+=#
+
 
 #Prolongation matrix from given space fes to corresponding discontinuous
 #space with the same basis functions:
