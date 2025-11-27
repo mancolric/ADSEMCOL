@@ -1068,7 +1068,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     end
     flux_Ik                     = zeros(solver.mesh.nElems, Integ2D.QRule.nqp)
     
-    println("Memory allocation = ", time()-t_ini)
+#     println("Memory allocation = ", time()-t_ini)
     
     #----------------------------------------------------------------
     #Contribution of flux and source terms in the domain:
@@ -1079,7 +1079,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     #Evaluate flux and source term:
     t_ini           = time()
     FluxSource!(solver.model, _qp, ComputeJ)
-    println("Flux and source terms = ", time()-t_ini)
+#     println("Flux and source terms = ", time()-t_ini)
     
     #Check NaN's:
     for II=1:solver.nVars
@@ -1110,7 +1110,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     Rhs_Source!(flux_ElemsDof, J_ElemsDof, flux_I, Integ2D, 
                 _qp.Q, _qp.dQ_du, _qp.dQ_dgradu, Nm, Nm, gradNm, ComputeJ)
     
-    println("Flux and source terms * shape functions = ", time()-t_ini)
+#     println("Flux and source terms * shape functions = ", time()-t_ini)
     
     #---------------------------------------------------------------------
     #Boundary terms:
@@ -1216,14 +1216,13 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         
     end
     
-    println("Boundary terms 1 = ", tB1)
-    println("Boundary terms 2 = ", tB2)
-    println("Boundary terms 3 = ", tB3)
-    println("Boundary terms 4 = ", tB4)
-    println("Boundary terms 5 = ", tB5)
-    println("Boundary terms 6 = ", tB6)
-    println("Boundary terms = ", time()-t_ini)
-#     error("")
+#     println("Boundary terms 1 = ", tB1)
+#     println("Boundary terms 2 = ", tB2)
+#     println("Boundary terms 3 = ", tB3)
+#     println("Boundary terms 4 = ", tB4)
+#     println("Boundary terms 5 = ", tB5)
+#     println("Boundary terms 6 = ", tB6)
+#     println("Boundary terms = ", time()-t_ini)
 
 #     display(flux_ElemsDof[4])
 #     error("")
@@ -1235,7 +1234,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     for II=1:nVars
         VectorAssemble!(ElemsDof, flux_ElemsDof[II], f[II])
     end
-    println("Assembly vector = ", time()-t_ini)
+#     println("Assembly vector = ", time()-t_ini)
     
     t_ini               = time()
     if ComputeJ
@@ -1249,7 +1248,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         end
         
     end
-    println("Assembly Jacobian = ", time()-t_ini)
+#     println("Assembly Jacobian = ", time()-t_ini)
     
 #     error("")
     
