@@ -4,27 +4,17 @@
 
 # NOTE: SBATCH parameters must be defined first. Do not define any variable before them.
 
-# https://docs.ycrc.yale.edu/clusters-at-yale/job-scheduling/resource-usage/
-# To check CPU / RAM use, run
-# 	ssh -t cn1 htop -u $USER
-# or 
-# 	squeue --nodelist cn1 -o "%A %j %C %J"
-# Also,
-# 	export SQUEUE_FORMAT="%.12i %.10j %.9u %.2t %.10M %.4P %.8c %.4C %.7m"
-# and 
-# 	squeue
-
 # Editable options:
-#SBATCH --job-name=Soliton1
+#SBATCH --job-name=DetonationWave1
 #SBATCH --partition=cn1
-#SBATCH --array=1-6%3
+#SBATCH --array=1-3%3
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=10G
+#SBATCH --mem=20G
 
 # Do not modify:
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1 
-#SBATCH --threads-per-core=1
+#Leave default config for --threads-per-core
 # Note that these data are per job in the job array
 
 # Outputs: %x is the job name, %a is the array id number:
@@ -44,7 +34,8 @@ module load bamg
 ARGS=$( awk 'NR=='$SLURM_ARRAY_TASK_ID 'test/test_NonHydrostaticWaterWaves/'$SLURM_JOB_NAME.lp )
 
 #Call Julia:
-srun --exclusive julia -t$SLURM_CPUS_PER_TASK test/test_NonHydrostaticWaterWaves/Launch.jl $ARGS
+# srun --exclusive julia -t$SLURM_CPUS_PER_TASK test/test_CompressibleFlow/Launch.jl $ARGS
+srun --exclusive julia test/test_NonHydrostaticWaterWaves/Launch.jl $ARGS
 
 #Finish:
 echo "Finished on $(date)"
