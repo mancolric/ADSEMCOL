@@ -426,7 +426,7 @@ function TrMesh_Process!(mesh::TrMesh)
     bmeshes     = Vector{TrBmesh}(undef, 3*mesh.nBounds)
     
     #Split original meshes into child meshes with same ParentFace for each element:
-    for ib=1:mesh.nBounds
+    @inbounds for ib=1:mesh.nBounds
     
         #Get current bmesh:
         bmesh                           = mesh.bmesh[ib]
@@ -484,7 +484,7 @@ function TrMesh_Process!(mesh::TrMesh)
     mesh.bmesh                  = bmeshes
 #     figure()
 #     PlotMesh!(mesh, color="k")
-    for ib=1:mesh.nBounds*3
+    @inbounds for ib=1:mesh.nBounds*3
     
         #Get mesh:
         bmesh                   = mesh.bmesh[ib]

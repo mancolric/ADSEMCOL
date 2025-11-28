@@ -12,7 +12,7 @@ using JLD2
 using Format
 
 #Set number of BLAS threads according to input from command line:
-BLAS.set_num_threads(Threads.nthreads())
+# BLAS.set_num_threads(Threads.nthreads())
 
 #Multithreaded vectorized loop:
 macro mlv(ex)
