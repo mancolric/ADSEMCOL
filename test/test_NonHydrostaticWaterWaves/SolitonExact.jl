@@ -165,7 +165,7 @@ function SolitonExact(hp0::Float64, FesOrder::Int;
                 PyPlot.cla()
                 v_plot  = PlotContour(solver, solver.model, PlotVars[ii])
                 PlotMesh!(solver.mesh, color="k")
-                title(latexstring(LatexString(PlotVars[ii]),
+                title(latexstring(LatexString(model,PlotVars[ii]),
                     "; t^n=", sprintf1("%.2e", solver.t)),
                     fontsize=10)
                 println(PlotVars[ii], ": min=", minimum(v_plot), ", max=", maximum(v_plot))
@@ -198,7 +198,7 @@ function SolitonExact(hp0::Float64, FesOrder::Int;
                 PlotNodes(splot_fun, solver, PlotVars[ii])
                 plot(x1v, vm[ii][1], "r", linewidth=0.5)
                 xlabel(latexstring("x_1"), fontsize=10)
-                title(latexstring(LatexString(PlotVars[ii]),
+                title(latexstring(LatexString(model,PlotVars[ii]),
                                   "; t^n=", sprintf1("%.2e", solver.t)),
                         fontsize=10)
                 xlim([x11, x12])
