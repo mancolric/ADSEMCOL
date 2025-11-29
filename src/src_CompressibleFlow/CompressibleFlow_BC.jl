@@ -261,7 +261,7 @@ function bflux!(model::GasModel, BC::SlipAdiabatic,
 
     #Compute hyperbolic flux. Here we employ (n,t) axis, not (x1, x2):
     flux, dflux_duBC, dflux_dgraduBC    = FluxAllocate(nVars, size(u[1]), ComputeJ)
-    uBCdep                              = DepVars(model, t, x, uBC, model.DepVars)
+    uBCdep                              = DepVars(model, t, x, uBC, ComputeJ)
     HyperbolicFlux!(model, uBC, uBCdep, ComputeJ, flux, dflux_duBC)
     fn, dfn_duBC, dfn_dgraduBC          = ProjectFlux(flux, dflux_duBC, dflux_dgraduBC, 
                                             nb, ComputeJ)
@@ -302,7 +302,7 @@ function bflux!(model::GasModel, BC::SlipAdiabatic,
     end
     
     #Compute viscous flux:
-    udep    = DepVars(model, t, x, u, model.DepVars)
+    udep    = DepVars(model, t, x, u, ComputeJ)
     nu      = udep[DepVarIndex(model, "nu")][1]
     beta    = udep[DepVarIndex(model, "beta")][1]
     epsilon = udep[DepVarIndex(model, "epsilon")][1]
@@ -428,7 +428,7 @@ function bflux!(model::GasModel, BC::SubsonicInlet1,
     
     #Compute hyperbolic flux. Here we employ (n,t) axis, not (x1, x2):
     flux, dflux_duBC, dflux_dgraduBC    = FluxAllocate(nVars, size(u[1]), ComputeJ)
-    uBCdep                              = DepVars(model, t, x, uBC, model.DepVars)
+    uBCdep                              = DepVars(model, t, x, uBC, ComputeJ)
     HyperbolicFlux!(model, uBC, uBCdep, ComputeJ, flux, dflux_duBC)
     fn, dfn_duBC, dfn_dgraduBC          = ProjectFlux(flux, dflux_duBC, dflux_dgraduBC, 
                                             nb, ComputeJ)
@@ -461,7 +461,7 @@ function bflux!(model::GasModel, BC::SubsonicInlet1,
     end
     
     #Compute viscous flux:
-    udep    = DepVars(model, t, x, u, model.DepVars)
+    udep    = DepVars(model, t, x, u, ComputeJ)
     epsilon = udep[DepVarIndex(model, "epsilon")][1]
     nu      = udep[DepVarIndex(model, "nu")][1]
     beta    = udep[DepVarIndex(model, "beta")][1]
@@ -539,7 +539,7 @@ function bflux!(model::GasModel, BC::SupersonicInlet1,
     
     #Compute hyperbolic flux:
     flux, dflux_duBC, dflux_dgraduBC    = FluxAllocate(nVars, size(u[1]), ComputeJ)
-    uBCdep                              = DepVars(model, t, x, uBC, model.DepVars)
+    uBCdep                              = DepVars(model, t, x, uBC, ComputeJ)
     HyperbolicFlux!(model, uBC, uBCdep, ComputeJ, flux, dflux_duBC)
     fn, dfn_duBC, dfn_dgraduBC          = ProjectFlux(flux, dflux_duBC, dflux_dgraduBC, 
                                             nb, ComputeJ)
@@ -572,7 +572,7 @@ function bflux!(model::GasModel, BC::SupersonicInlet1,
     end
     
     #Compute viscous flux:
-    udep            = DepVars(model, t, x, u, model.DepVars)
+    udep            = DepVars(model, t, x, u, ComputeJ)
     epsilon         = udep[DepVarIndex(model, "epsilon")][1]
     nu              = udep[DepVarIndex(model, "nu")][1]
     beta            = udep[DepVarIndex(model, "beta")][1]
@@ -674,7 +674,7 @@ function bflux!(model::GasModel0, BC::SubsonicOutlet1,
     
     #Compute hyperbolic flux. Here we employ (n,t) axis, not (x1, x2):
     flux, dflux_duBC, dflux_dgraduBC    = FluxAllocate(nVars, size(u[1]), ComputeJ)
-    uBCdep                              = DepVars(model, t, x, uBC, model.DepVars)
+    uBCdep                              = DepVars(model, t, x, uBC, ComputeJ)
     HyperbolicFlux!(model, uBC, uBCdep, ComputeJ, flux, dflux_duBC)
     fn, dfn_duBC, dfn_dgraduBC          = ProjectFlux(flux, dflux_duBC, dflux_dgraduBC, 
                                             nb, ComputeJ)
@@ -707,7 +707,7 @@ function bflux!(model::GasModel0, BC::SubsonicOutlet1,
     end
     
     #Compute heat flux:
-    udep            = DepVars(model, t, x, u, model.DepVars)
+    udep            = DepVars(model, t, x, u, ComputeJ)
     epsilon         = udep[DepVarIndex(model, "epsilon")][1]
     kappa_rho_cv    = udep[DepVarIndex(model, "kappa_rho_cv")][1]
     HeatFlux!(model, kappa_rho_cv, u, udep, du, ComputeJ, flux, dflux_du, dflux_dgradu)
@@ -772,7 +772,7 @@ function bflux!(model::GasModel, BC::Union{DoNothing1,SupersonicOutlet1},
     
     #Compute hyperbolic flux:
     flux, dflux_duBC, dflux_dgraduBC    = FluxAllocate(nVars, size(u[1]), ComputeJ)
-    uBCdep                              = DepVars(model, t, x, uBC, model.DepVars)
+    uBCdep                              = DepVars(model, t, x, uBC, ComputeJ)
     HyperbolicFlux!(model, uBC, uBCdep, ComputeJ, flux, dflux_duBC)
     fn, dfn_duBC, dfn_dgraduBC          = ProjectFlux(flux, dflux_duBC, dflux_dgraduBC, 
                                             nb, ComputeJ)
@@ -881,7 +881,7 @@ function bflux_old!(model::GasModel, BC::SupersonicOutlet1,
     
     #Compute hyperbolic flux:
     flux, dflux_duBC, dflux_dgraduBC    = FluxAllocate(nVars, size(u[1]), ComputeJ)
-    uBCdep                              = DepVars(model, t, x, uBC, model.DepVars)
+    uBCdep                              = DepVars(model, t, x, uBC, ComputeJ)
     HyperbolicFlux!(model, uBC, uBCdep, ComputeJ, flux, dflux_duBC)
     fn, dfn_duBC, dfn_dgraduBC          = ProjectFlux(flux, dflux_duBC, dflux_dgraduBC, 
                                             nb, ComputeJ)
@@ -925,7 +925,7 @@ function bflux_old!(model::GasModel, BC::SupersonicOutlet1,
     end
     
     #Compute viscous flux:
-    udep    = DepVars(model, t, x, u, model.DepVars)
+    udep    = DepVars(model, t, x, u, ComputeJ)
     nu      = udep[DepVarIndex(model, "nu")][1]
     beta    = udep[DepVarIndex(model, "beta")][1]
     epsilon = udep[DepVarIndex(model, "epsilon")][1]

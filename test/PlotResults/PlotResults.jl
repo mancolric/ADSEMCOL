@@ -13,7 +13,7 @@ PyPlot.matplotlib.rc("font",family="serif")
 PyPlot.matplotlib.rc("lines",linewidth=0.5)
 PyPlot.matplotlib.rc("font",size=10)
 
-function GetFileName(SC::Int, nb::Int)
+function GetFileName(SC::Int, nb::Union{Int,String})
     return "$(ResUbi)LIRKHyp_SC$(SC)_$(nb).jld2"
 end
 

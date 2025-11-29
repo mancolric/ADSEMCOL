@@ -19,11 +19,14 @@ Base.@kwdef mutable struct GasIdeal <: GasModel
     CSS             ::Float64           = 0.1   #Subgrid stabilization
     CW              ::Float64           = 50.0  #Boundary penalty (50.0-200.0 for IIPG)
     
-    #Dependent variables:
+    #Dependent variables. NOTE: DepVars contains variables to be evaluated when
+    #Jacobian is not necessary. DepVarsJ contains variables to be evaluated when
+    #Jacobian is to be computed. Variables in DepVars and DepVarsJ must be sorted in 
+    #the same way.
     DepVars         ::Vector{String}    = [ "rho", "p", "vx", "vy", "gamma", 
-                                        "e_i", "lambda_max",
-                                        "epsilon", "nu", "beta", "kappa_rho_cv",
-                                        "D_penalty" ]
+                                            "e_i", "lambda_max", "epsilon", "nu", "beta", 
+                                            "kappa_rho_cv", "D_penalty" ]
+    DepVarsJ        ::Vector{String}    = vcat(DepVars, ["dp_du"])
 
     #Mandatory fields:
     nVars           ::Int               = 4
@@ -68,12 +71,15 @@ Base.@kwdef mutable struct GasFP <: ReactiveGas
     B               ::Float64   = 1000*exp(10)
     RTa             ::Float64   = 10*6
     
-    #Dependent variables:
+    #Dependent variables. NOTE: DepVars contains variables to be evaluated when
+    #Jacobian is not necessary. DepVarsJ contains variables to be evaluated when
+    #Jacobian is to be computed. Variables in DepVars and DepVarsJ must be sorted in 
+    #the same way.
     DepVars         ::Vector{String}    = [ "rho", "p", "vx", "vy", "gamma", 
-                                        "e_i", "h_i", "D_i", 
-                                        "mdot_i", "dmdot_ij", "lambda_max",
-                                        "epsilon", "nu", "beta", "kappa_rho_cv",
-                                        "D_penalty" ]
+                                            "e_i", "h_i", "D_i", "mdot_i", "lambda_max",
+                                            "epsilon", "nu", "beta", "kappa_rho_cv",
+                                            "D_penalty" ]
+    DepVarsJ        ::Vector{String}    = vcat(DepVars, ["dp_du", "dmdot_ij"])
     
     #Mandatory fields:
     nVars           ::Int               = 5
@@ -112,13 +118,17 @@ Base.@kwdef mutable struct GasH2 <: ReactiveGas
     T0              ::Float64           = 298.15 # K
     D               ::Float64           = 0.0
 
-    #Dependent variables:
+    #Dependent variables. NOTE: DepVars contains variables to be evaluated when
+    #Jacobian is not necessary. DepVarsJ contains variables to be evaluated when
+    #Jacobian is to be computed. Variables in DepVars and DepVarsJ must be sorted in 
+    #the same way.
     DepVars         ::Vector{String}    = [ "rho", "p", "vx", "vy", "gamma",
-                                           "e_i", "h_i", "D_i",
-                                           "mdot_i", "dmdot_ij", "lambda_max",
-                                           "epsilon", "nu", "beta", "kappa_rho_cv",
-                                           "D_penalty" ]
-
+                                            "e_i", "h_i", "D_i",
+                                            "mdot_i", "lambda_max",
+                                            "epsilon", "nu", "beta", "kappa_rho_cv",
+                                            "D_penalty" ]
+    DepVarsJ        ::Vector{String}    = vcat(DepVars, ["dp_du", "dmdot_ij"])
+    
     #Mandatory fields:
     nVars           ::Int               = 16
 
@@ -192,7 +202,7 @@ end
 
 #Return index corresponding to dependent variable "var":
 function DepVarIndex(model::GasModel, var::String)
-    return findfirst(model.DepVars.==var)
+    return findfirst(model.DepVarsJ.==var)
 end
 function SpecieIndex(model::GasModel, var::String)
     return findfirst(model.species.==var)
@@ -528,11 +538,14 @@ function DepVars(model::GasH2, t::Float64, x::Vector{<:AMF64},
             xout[ivar]      = calc_hi(model,T)
         elseif vble=="D_i"
             xout[ivar]      = Vector{Matrix{Float64}}(undef,nSpecies)
-            xout[ivar]      = [fill(model.D, size(u[1])) for i = 1:nSpecies]
+            for II=1:nSpecies
+                xout[ivar][II]  = fill(model.D, size(u[1])) 
+            end
         elseif vble=="mdot_i"
             xout[ivar]      = calc_mdot(model,u,T)
         elseif vble=="dmdot_ij"
-            dmdot_ij        = Matrix{Matrix{Float64}}(undef,model.nSpecies,model.nVars)
+            
+            # Derivatives of mdot w.r.t. rhoYi, T:
             dm_d            = calc_dmdot(model,u,T)
             dm_drhoYi       = dm_d[1] # Matrix{Matrix{Float64}} 13x13
             dm_dT           = dm_d[2] # Vector{Matrix{Float}}   13x1
@@ -542,11 +555,15 @@ function DepVars(model::GasH2, t::Float64, x::Vector{<:AMF64},
             cv  = calc_cv_total(model,T,Yi)
             vx  = rhovx./rho
             vy  = rhovy./rho
-
-            dT_drhoYi   = @. [((vx^2+vy^2)/2-e_i[i])/(rho*cv) for i = 1:model.nSpecies]
-            dT_dmi      = @. [-vx/(rho*cv), -vy/(rho*cv)]
-            dT_dE       = @. 1/(rho*cv)
-
+            dT_drhoYi           = Vector{Matrix{Float64}}(undef, model.nVars)
+            for II=1:model.nSpecies
+                dT_drhoYi[II]   = @. ((vx^2+vy^2)/2-e_i[II])/(rho*cv)
+            end
+            dT_dmi              = @. [-vx/(rho*cv), -vy/(rho*cv)]
+            dT_dE               = @. 1/(rho*cv)
+            
+            # Computation of dmdot_ij/u:
+            dmdot_ij            = Matrix{Matrix{Float64}}(undef,model.nSpecies,model.nVars)
             for II=1:model.nSpecies
                 for JJ=1:model.nSpecies
                     dmdot_ij[II,JJ]             = @. dm_drhoYi[II,JJ] + dm_dT[II]*dT_drhoYi[JJ]
@@ -555,24 +572,26 @@ function DepVars(model::GasH2, t::Float64, x::Vector{<:AMF64},
                 dmdot_ij[II,model.nSpecies+2]   = @. dm_dT[II]*dT_dmi[2]
                 dmdot_ij[II,model.nSpecies+3]   = @. dm_dT[II]*dT_dE
             end
-
             xout[ivar]      = dmdot_ij
+            
         elseif vble=="dp_du"
-            dp_dout = Vector{Matrix{Float64}}(undef, nVars)
 
             # Computation of dT_du
             e_i = calc_ei(model,T)
             cv  = calc_cv_total(model,T,Yi)
             vx  = rhovx./rho
             vy  = rhovy./rho
+            dT_drhoYi           = Vector{Matrix{Float64}}(undef, model.nVars)
+            for II=1:model.nSpecies
+                dT_drhoYi[II]   = @. ((vx^2+vy^2)/2-e_i[II])/(rho*cv)
+            end
+            dT_dmi              = @. [-vx/(rho*cv), -vy/(rho*cv)]
+            dT_dE               = @. 1/(rho*cv)
 
-            dT_drhoYi   = @. [((vx^2+vy^2)/2-e_i[i])/(rho*cv) for i = 1:model.nSpecies]
-            dT_dmi      = @. [-vx/(rho*cv), -vy/(rho*cv)]
-            dT_dE       = @. 1/(rho*cv)
-
+            # Computation of dp_du
             dp_dout     = calc_dp_du(model,u,T,dT_drhoYi,dT_dmi,dT_dE)
-
             xout[ivar]  = dp_dout
+            
         elseif vble=="Q_reac"
 
             mdot    = calc_mdot(model,u,T)
@@ -590,6 +609,16 @@ function DepVars(model::GasH2, t::Float64, x::Vector{<:AMF64},
     end
 
     return xout
+end
+
+function DepVars(model::GasModel, t::Float64, x::Vector{<:AMF64}, u::Vector{<:AMF64}, 
+    ComputeJ::Bool)
+    
+    if ComputeJ
+        return DepVars(model, t, x, u, model.DepVarsJ)
+    else
+        return DepVars(model, t, x, u, model.DepVars)
+    end
 end
 
 #-------------------------------------------------------------------------------
@@ -627,7 +656,7 @@ function FluxSource!(model::GasModel, _qp::TrIntVars, ComputeJ::Bool)
     duB             = _qp.graduB
     
     #Compute dependent variables:
-    udep            = DepVars(model, t, x, u, model.DepVars)
+    udep            = DepVars(model, t, x, u, ComputeJ)
     
     #Terms due to pressures and convection:
     HyperbolicFlux!(model, u, udep, ComputeJ, _qp.f, _qp.df_du)

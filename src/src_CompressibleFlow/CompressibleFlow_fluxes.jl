@@ -50,7 +50,7 @@ function HyperbolicFlux!(model::GasModel,
         #   1       = 1/(gamma-1) * dp/drhoE 
         
         #Derivatives of pressure w.r.t. conservative variables:
-        dp_du       = DepVars(model, 0.0, u, u, ["dp_du"])[1]
+        dp_du       = udep[DepVarIndex(model,"dp_du")]
         dp_drhoY    = dp_du[1:nSpecies]
         dp_drhovx   = dp_du[nSpecies+1]
         dp_drhovy   = dp_du[nSpecies+2]
@@ -549,11 +549,11 @@ function source!(model::ReactiveGas, t::Float64, x::Vector{MFloat},
     
     nSpecies    = model.nSpecies
     mdot_i      = udep[DepVarIndex(model, "mdot_i")] #Vector{MFloat}
-    dmdot_ij    = reshape(udep[DepVarIndex(model, "dmdot_ij")], nSpecies, nSpecies+3)   #Matrix{Float64}
     for ss=1:nSpecies
         @mlv flux[ss]               += mdot_i[ss]
     end
     if ComputeJ
+        dmdot_ij    = reshape(udep[DepVarIndex(model, "dmdot_ij")], nSpecies, nSpecies+3)   #Matrix{Float64}
         for ss=1:nSpecies, JJ=1:nSpecies+3
             @mlv dflux_du[ss,JJ]    += dmdot_ij[ss,JJ]
         end
