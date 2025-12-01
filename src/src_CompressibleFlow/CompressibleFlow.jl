@@ -582,9 +582,9 @@ function DepVars(model::GasFXP, t::Float64, x::Vector{<:AMF64},
             dm_drhoYi, dm_drhoRT        = calc_dmdot(model,u[1:nSpecies],RT)
         
             #Internal energy for each specie:
-            e_i         = [ @tturbo @. hfF + RT/(gamma-1.0), 
-                            @tturbo @. hfX + RT/(gamma-1.0), 
-                            @tturbo @. hfP + RT/(gamma-1.0) ]
+            e_i         = [ @. hfF + RT/(gamma-1.0), 
+                            @. hfX + RT/(gamma-1.0), 
+                            @. hfP + RT/(gamma-1.0) ]
                             
             # Derivatives w.r.t. conservative variables applying chain rule.
             # Note that 

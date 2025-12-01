@@ -427,27 +427,34 @@ function ChapmanJouget(gamma::Float64, q::Float64, beta0::Float64;
         
     end
     
+    #Compute Mach number:
+    Mv      = @. uv/sqrt(gamma*pv/rhov)
+    
+    #Plot results:
     if PlotRes
     
         Nx      = length(xv)
         display("theoretical")
-        display((rho2, u2, p2))
+        display((rho2, u2, p2, 0.0, 1.0))
         display("numerical")
-        display((rhov[Nx], uv[Nx], pv[Nx], YFv[Nx]))
+        display((rhov[Nx], uv[Nx], pv[Nx], YFv[Nx], Mv[Nx]))
         
         figure()
         plot(xv, rhov, "b")
         plot(xv, uv, "g")
         plot(xv, pv, "c")
         plot(xv, pv./rhov, "r")
-        plot(xv, YFv./YF0, "k")
+        plot(xv, YFv./YF0, color="orange")
+        plot(xv, Mv, "k")
         legend([latexstring("\\rho"), 
                 latexstring("u"), 
                 latexstring("p"),
                 latexstring("T"), 
-                latexstring("Y_{F}/Y_{F0}")], 
+                latexstring("Y_{F}/Y_{F0}"), 
+                latexstring("M") ], 
                 loc="best")
         xlabel("x/L") #Here, L=u1 exp(beta1)/(beta1*BB)
+        grid("on")
         
     end
     
