@@ -522,7 +522,7 @@ function source!(model::GasIdeal, t::Float64, x::Vector{MFloat},
     nSpecies        = model.nSpecies
     g               = model.g
     if g==0.0
-        return
+        return [ 0.0 ]
     end
     
     #Extract variables:
@@ -539,7 +539,10 @@ function source!(model::GasIdeal, t::Float64, x::Vector{MFloat},
         @avxt @. dflux_du[nSpecies+3, nSpecies+2]   -= g
     end
     
-    return
+    #Maximum eigenvalue of dmdot_i/drhoY_j:
+    lambda_reac     = [ 0.0 ]
+    
+    return lambda_reac
     
 end
 
@@ -559,7 +562,44 @@ function source!(model::ReactiveGas, t::Float64, x::Vector{MFloat},
         end
     end
     
-    return
+    #Maximum eigenvalue of dmdot_i/drhoY_j:
+    lambda_reac     = NaN
+    if ComputeJ
+    
+        #Since the rows nSpecies+1:nVars of dmdot_du are zero, this matrix has at
+        #least (nVars-nSpecies) zero eigenvalues, and the corresponding eigenvectors 
+        #are basis vectors of the null space. 
+        #
+        #Also, the eigenvectors "v" corresponding to nonzero eigenvalues "lambda"
+        #must satisfy, due to the structure of the matrix dmdot_du,
+        #   v[nSpecies+1:nVars]     = 0
+        #   v[1:nSpecies]           = lambda * dmdot_du[1:nSpecies,1:nSpecies]*v[1:nSpecies]
+        #that is, we need to find only the eigenvalues of dmdot_du[1:nSpecies,1:nSpecies], 
+        #which indeed have dimensions of 1/time.
+        #
+        #To find the maximum eigenvalue, one possibility is to employ Gershgorin circle theorem, 
+        #however, it is easy to show that this is equivalent to employing the inequality
+        #   rho(A) <= ||A||
+        #where ||A|| is any norm (the infty-norm if Gershgorin theorem is applied row-wise, 
+        #or the 1-norm if it is applied column-wise).
+        #Note that this provides a conservative estimation of the maximum eigenvalue,
+        #and therefore a pessimistic prediction for the maximum time step number for an
+        #explicit method and an overestimation of the CFL number due to reaction terms.
+        dmdot_ij    = reshape(udep[DepVarIndex(model, "dmdot_ij")], nSpecies, nSpecies+3)   #Matrix{Float64}
+        L1norm      = 0.0*dmdot_ij[1,1]
+        sum_rows    = 0.0*dmdot_ij[1,1]
+        for ii=1:nSpecies
+            BLAS.scal!(0.0, sum_rows)
+            for jj=1:nSpecies
+                @tturbo @. sum_rows     += abs(dmdot_ij[ii,jj])
+            end
+            L1norm                      = @. max(L1norm, sum_rows)
+        end
+        lambda_reac = L1norm
+        
+    end
+    
+    return lambda_reac
     
 end
 

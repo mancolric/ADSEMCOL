@@ -690,14 +690,22 @@ function FluxSource!(model::GasModel, _qp::TrIntVars, ComputeJ::Bool)
     epsilonFlux!(model, tau, duB, ComputeJ, _qp.fB, _qp.dfB_dgraduB)
     
     #Source terms:
-    source!(model, t, x, u, udep, ComputeJ, _qp.Q, _qp.dQ_du)
+    lambda_reac         = source!(model, t, x, u, udep, ComputeJ, _qp.Q, _qp.dQ_du)
+    #lambda_reac is the maximum eigenvalue of dmdot_i/drhoY_j
     
     #CFL number:
     hp_min              = _hmin(_qp.Integ2D.mesh)./_qp.FesOrder * ones(1, _qp.nqp)
     D_max               = @. max(epsilon, nu, beta, kappa_rho_cv)
     Deltat_CFL_lambda   = @. $minimum(hp_min/lambda)
     Deltat_CFL_D        = @. $minimum(hp_min^2/D_max)
-    _qp.Deltat_CFL      = min(Deltat_CFL_lambda, Deltat_CFL_D)
+    Deltat_CFL_reac     = @. $minimum(1.0/lambda_reac)
+    _qp.Deltat_CFL      = min(Deltat_CFL_lambda, Deltat_CFL_D, Deltat_CFL_reac)
+    #Print info:
+    if ComputeJ
+        println("Deltat_conv=", sprintf1("%.2E", Deltat_CFL_lambda), 
+                ", Deltat_diff=", sprintf1("%.2E", Deltat_CFL_D),
+                ", Deltat_source=", sprintf1("%.2E", Deltat_CFL_reac))
+    end
     
     return
     
