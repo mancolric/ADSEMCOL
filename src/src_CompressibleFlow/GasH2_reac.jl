@@ -25,17 +25,17 @@ end
 
 #-------------------------------------------------------------------------------
 # computation of mdot
-function calc_mdot(model::GasH2, u::Vector{Matrix{Float64}}, T::Matrix{Float64})
+function calc_mdot(model::GasH2, rhoY::Vector{Matrix{Float64}}, T::Matrix{Float64})
 
     N   = model.nSpecies
     Wi  = model.Wi
     C   = Vector{Matrix{Float64}}(undef, N)
     for ii=1:N
-        C[ii] = zeros(size(u[1]))
+        C[ii] = zeros(size(rhoY[1]))
     end
     # N species
     for i = 1:N
-        @. C[i] = 1e-6*u[i]/Wi[i] # kg/m^3 / kg/mol -> mol/cm^3
+        @. C[i] = 1e-6*rhoY[i]/Wi[i] # kg/m^3 / kg/mol -> mol/cm^3
     end
 
     ## Concentrations------------------------------------------
@@ -306,7 +306,9 @@ end
 
 #-------------------------------------------------------------------------------
 # computation of dmdot
+
 function calc_dmdot(model::GasH2, rhoY::Vector{Matrix{Float64}}, T::Matrix{Float64})
+    
     delta       = 1e-6;
     N           = model.nSpecies
     dfun_drhoY  = Matrix{Matrix{Float64}}(undef, N, N)
@@ -314,23 +316,29 @@ function calc_dmdot(model::GasH2, rhoY::Vector{Matrix{Float64}}, T::Matrix{Float
 
     # dfun/drhoY
     for j = 1:N
-        rhoY_pert      = deepcopy(rhoY)
-        rhoY_pert[j]   = rhoY[j].-delta
-        f_neg       = calc_mdot(model, rhoY_pert, T)
-        rhoY_pert[j]   = rhoY[j].+delta
-        f_pos       = calc_mdot(model, rhoY_pert, T)
+    
+        #Copy vector of pointers. Deep copy rhoY[j]:
+        rhoY_pert                   = copy(rhoY)
+        rhoY_pert[j]                = copy(rhoY[j])
+        
+        #Perturb rhoY and evaluate:
+        @tturbo @. rhoY_pert[j]     = rhoY[j]-delta
+        f_neg                       = calc_mdot(model, rhoY_pert, T)
+        @tturbo @. rhoY_pert[j]     = rhoY[j]+delta
+        f_pos                       = calc_mdot(model, rhoY_pert, T)
+        
         # Finite differences:
         for i=1:N
             dfun_drhoY[i,j] = (f_pos[i]-f_neg[i])/(2*delta)
         end
+    
     end
 
     # dfun/dT
 
-    T_pert      = deepcopy(T)
-    T_pert      = T.-delta
+    T_pert      = @tturbo @. T-delta
     f_neg       = calc_mdot(model, rhoY, T_pert)
-    T_pert      = T.+delta
+    T_pert      = @tturbo @. T+delta
     f_pos       = calc_mdot(model, rhoY, T_pert)
     # Finite differences:
     for i=1:N
@@ -338,6 +346,7 @@ function calc_dmdot(model::GasH2, rhoY::Vector{Matrix{Float64}}, T::Matrix{Float
     end
 
     return dfun_drhoY, dfun_dT
+    
 end
 
 #-----------------------------------------------------------------------------------------------------
