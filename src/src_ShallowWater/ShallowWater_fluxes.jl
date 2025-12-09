@@ -1,8 +1,10 @@
+@warn "nonconservative products"
+
 function HyperbolicFlux!(model::SWE,
     u::Vector{MFloat},
     ComputeJ::Bool, f::Matrix{MFloat}, df_du::Array{MFloat,3})where MFloat<:AbstractMatrix{Float64}
 
-    return HyperbolicFlux1!(model, u, ComputeJ, f, df_du)
+    return HyperbolicFlux2!(model, u, ComputeJ, f, df_du)
 
 end
 
@@ -10,14 +12,14 @@ function Source!(model::SWE, x::Vector{MFloat}, tau_char::Float64,
     u::Vector{MFloat}, du_dx::Matrix{MFloat}, ComputeJ::Bool,
     Q::Vector{MFloat}, dQ_du::Matrix{MFloat}, dQ_du_dx::Array{MFloat,3}) where MFloat<:AbstractMatrix{Float64}
 
-    return Source1!(model, x, tau_char, u, du_dx, ComputeJ, Q, dQ_du, dQ_du_dx)
+    return Source2!(model, x, tau_char, u, du_dx, ComputeJ, Q, dQ_du, dQ_du_dx)
 
 end
 
 function epsilonFlux!(model::SWE, tau::MFloat, duB::Matrix{MFloat},
                       ComputeJ::Bool,
                       fB::Matrix{MFloat}, dfB_dduB::Array{MFloat,4};
-                      IIv::Vector{Int}=Vector{Int}(1:model.nVars)) where MFloat<:Matrix{Float64}
+                      IIv::Vector{Int}=Vector{Int}(1:model.nVars-1)) where MFloat<:Matrix{Float64}
 
     for II=IIv, jj=1:2
         @avxt @. fB[II,jj]              -= tau*duB[II,jj]
@@ -140,7 +142,6 @@ function Source1!(model::SWE, x::Vector{MFloat}, tau_char::Float64,
 
 end
 
-#=
 function HyperbolicFlux2!(model::SWE,
     u::Vector{MFloat},
     ComputeJ::Bool, f::Matrix{MFloat}, df_du::Array{MFloat,3})where MFloat<:AbstractMatrix{Float64}
@@ -165,7 +166,7 @@ function HyperbolicFlux2!(model::SWE,
     @tturbo @. f[2,2]           += v2*q1
     @tturbo @. f[3,1]           += v1*q2
     @tturbo @. f[3,2]           += v2*q2
-
+    
     #Get Jacobian, if necessary:
     if ComputeJ
 
@@ -225,6 +226,13 @@ function Source2!(model::SWE, x::Vector{MFloat}, tau_char::Float64,
     @tturbo @. Q[3]             += -gamma*q2 - g*h*deta_dy
     @tturbo @. Q[4]             += -(b-b_exact)/tau_char
 
+#     for II=1:4
+#         display(norm(Q[II]))
+#     end
+#     @. $display($norm(deta_dx))
+#     @. $display($norm(deta_dy))
+#     error("")
+    
     if ComputeJ
 
         #Derivatives of Q(2)
@@ -247,4 +255,3 @@ function Source2!(model::SWE, x::Vector{MFloat}, tau_char::Float64,
     return
 
 end
-=#

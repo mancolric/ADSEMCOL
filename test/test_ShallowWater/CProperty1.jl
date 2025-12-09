@@ -1,11 +1,11 @@
-cd(@__DIR__)
 include("test_ShallowWater.jl")
 
 #CProperty1(0.1, 5, tf=1.0, TolS=1e-5, TolS0=1e-5, delta=1e-3, epsilon=0e-2, Deltah=0e-3, PlotFig=true, PlotVars=["eta", "v1", "v2", "b"], RKMethod="BPR3", TimeAdapt=false, Deltat0=1e-2);
 
 function CProperty1(hp0::Float64, FesOrder::Int;
     tf::Float64=0.48, RKMethod::String="BPR3",
-    epsilon::Float64=0e-3, delta::Float64=1e-2, Deltah::Float64=0e-2, g::Float64=9.8,
+    epsilon::Float64=0e-3, delta::Float64=1e-2, Deltah::Float64=0e-2,
+    eta0::Float64=1e4, g::Float64=9.8,
     #
     TolS::Float64=1e-4, TolS0=0.01*TolS, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
     #
@@ -35,14 +35,15 @@ function CProperty1(hp0::Float64, FesOrder::Int;
 #     model.b             = FW1( (x)-> @. 0.8*exp(-5*(x[1]+0.1)^2-50*x[2]^2) )
     av                  = rand(4)
     model.b             = FW1( (x)-> @. av[1]*sin(2*pi*x[1])+av[2]*cos(4*pi*x[1]) + 
-                                        av[3]*sin(3*pi*x[2])+av[4]*cos(5*pi*x[1]) ) 
+                                        av[3]*sin(3*pi*x[2])+av[4]*cos(5*pi*x[1]) - eta0 ) 
     function u0fun(x::Vector{Matrix{Float64}})
 
         b               = model.b(x)
 #         eta             = @. 1.0 + 
 #                             SmoothHeaviside(x[1]+0.95, delta, 0.0, Deltah) -
 #                             SmoothHeaviside(x[1]+0.85, delta, 0.0, Deltah)
-        eta             = @. 10.0 + Deltah*exp(-5*(x[1]+0.1)^2-50*x[2]^2)
+#         eta             = @. 10.0 + Deltah*exp(-5*(x[1]+0.1)^2-50*x[2]^2)
+        eta             = @tturbo @. 1.0*eta0 + 0.0*x[1]
         q1              = @tturbo @. 0.0*x[1]
         q2              = @tturbo @. 0.0*x[1]
         
@@ -54,7 +55,7 @@ function CProperty1(hp0::Float64, FesOrder::Int;
     #PRE-PROCESS STAGE:
 
     #Mesh:
-    MeshFile                = "../temp/CProperty1$(SC).geo"
+    MeshFile                = "$(@__DIR__)/../../temp/CProperty1$(SC).geo"
     NX                      = Int(ceil(7.0/(hp0*FesOrder)))
     NY                      = Int(ceil(3.0/(hp0*FesOrder)))
     TrMesh_Rectangle_Create!(MeshFile, -2.0, 1.0, NX, -0.5, 0.5, NY)
@@ -100,6 +101,11 @@ function CProperty1(hp0::Float64, FesOrder::Int;
         TolT            = 0.01*solver.etaS
         solver.TolT     = TolT
     end
+    
+    #DEBUG: Sum eta0 to eta:
+    if solver.u[1][1] == 0.0
+        solver.u[1][1:solver.fes.PSpace.nDof]   .+= eta0
+    end
 
     #Function to plot solution:
     figv                = Vector{Figure}(undef,2)
@@ -140,9 +146,13 @@ function CProperty1(hp0::Float64, FesOrder::Int;
                 PyPlot.subplot(mFig, nFig, ii)
                 PyPlot.subplots_adjust(hspace=0.8)
                 PyPlot.cla()
-
-                splot_fun(x1,x2)    = @mlv x1
-                PlotNodes(splot_fun, solver, PlotVars[ii])
+                if PlotVars[ii]=="eta"
+                    plot(solver.fes.PSpace.NodesCoords[:,1], 
+                        solver.u[1][1:solver.fes.PSpace.nDof].-eta0, ".b")
+                else
+                    splot_fun(x1,x2)    = @mlv x1
+                    PlotNodes(splot_fun, solver, PlotVars[ii])
+                end
                 xlabel(latexstring("x_1"), fontsize=10)
                 title(latexstring(LatexString(PlotVars[ii]),
                                   "; t^n=", sprintf1("%.2e", solver.t)),
@@ -235,14 +245,20 @@ function CProperty1(hp0::Float64, FesOrder::Int;
     solver.TolS_max     = TolS
     solver.TolS_min     = 0.01*TolS
     
+    #DEBUG:
+    u_eq                = 1.0*solver.uv
+    u_eq_views          = GetViews(u_eq, solver.nVars, solver.fes.nDof)
+    #Correct eta:
+    u_eq_views[1][1:solver.fes.PSpace.nDof]     .= eta0
+    
     while solver.t<tf
-
-        ConvFlag    = LIRKHyp_Step!(solver)
-
+    
+#         ConvFlag    = LIRKHyp_Step!(solver)
+        ConvFlag    = WB_LIRKHyp_Step!(solver, u_eq)
+        
         if ConvFlag<=0
             break
         end
-
 
         PlotSol()
         SaveSol()

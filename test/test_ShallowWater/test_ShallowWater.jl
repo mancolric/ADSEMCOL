@@ -1,5 +1,4 @@
 include("../../src/src_ShallowWater/ShallowWater.jl")
-include("ResUbi.jl")
 
 function LatexString(vble::String)
 

@@ -415,17 +415,24 @@ function LS_gmres!(LS::LinearSystem1, u::GenVector{Float64}, b::GenVector{Float6
                                 AbsTolG=AbsTol, RelTolG=RelTol,
                                 Display=Display, history=true,
                                 NormFun=LS.NormFun)
-#     if scaleP[1]!=1.0
-#         error("")
-#     end
+#     solver_output           = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), uhat_m,
+#                                 memory=100, MaxIter=MaxIter, 
+#                                 AbsTolX=AbsTol, RelTolX=RelTol,
+#                                 AbsTolG=0.0, RelTolG=0.0, 
+#                                 Display="iter", history=true,
+#                                 NormFun=LS.NormFun)
+    #Anderson does not return p=Inf if g_0=0.0:
     @mlv uhat[F.nSlaves+1:F.N]  = solver_output[1]*scaleP_m
     ldiv_slave!(uhat, F, bred)
     @mlv u[LS.p]            = uhat
-    nIter                   = solver_output[2].nIter
+    nIter                   = solver_output[2].nIter 
     resv                    = solver_output[2].gnorms
+#     resv                    = solver_output[2].pnorms
     etaA                    = resv[length(resv)]
     if solver_output[2].flag==2
         #Exit due to convergence in residual g
+    elseif solver_output[2].flag==1
+        #Exit due to convergence in unknown x
     else
         if false
             figure()
@@ -1112,6 +1119,17 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     
 #     println("Flux and source terms * shape functions = ", time()-t_ini)
     
+#     for II=1:4, ii=1:2
+#         display(norm(_qp.f[II,ii]))
+#     end
+#     for II=1:4, ii=1:2
+#         display(norm(_qp.fB[II,ii]))
+#     end
+#     for II=1:4
+#         display(norm(_qp.Q[II]))
+#     end
+#     error("")
+    
     #---------------------------------------------------------------------
     #Boundary terms:
     
@@ -1194,14 +1212,6 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         
         #Update global values for flux_ElemsDof and J_ElemsDof:
         t_ini2                      = time()
-#         for II=1:nVars
-#             flux_ElemsDof[II][bmesh.ParentElems,:]          += flux_BElemsDof[II]
-#         end
-#         if ComputeJ
-#             for JJ=1:nVars, II=1:nVars
-#                 J_ElemsDof[II,JJ][bmesh.ParentElems,:]      += J_BElemsDof[II,JJ]
-#             end
-#         end
         @inbounds for II=1:nVars, iDof=1:fes.DofPerElem, iElem=1:bmesh.nElems
             parent_elem                             = bmesh.ParentElems[iElem]
             flux_ElemsDof[II][parent_elem, iDof]    += flux_BElemsDof[II][iElem, iDof]
@@ -1213,6 +1223,12 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
             end
         end
         tB6                         += time()-t_ini2
+        
+#         display("")
+#         for II=1:4
+#             display(norm(_bqp.f[II]))
+#         end
+#         error("")
         
     end
     

@@ -426,3 +426,4 @@ end
 include("LIRKHypSolver.jl")
 include("Matrices.jl")
 include("PlotUtils.jl")
+include("Compatibility.jl")
