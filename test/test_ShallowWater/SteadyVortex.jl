@@ -1,10 +1,11 @@
 include("test_ShallowWater.jl")
 
-function CircularDambreak(hp0::Float64, FesOrder::Int;
-    tf::Float64=1.0, RKMethod::String="BPR3",
-    epsilon::Float64=1e-2, delta::Float64=1e-2, gamma::Float64=0.0, g::Float64=9.8,
+function SteadyVortex(hp0::Float64, FesOrder::Int;
+    tf::Float64=10.0, RKMethod::String="BPR3",
+    epsilon::Float64=0e-3, h0::Float64=1.0, g::Float64=1.0, 
     #
     TolS::Float64=1e-4, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
+    SpaceAdapt::Bool=true, 
     #
     TolT::Float64=1e-4, Deltat0::Float64=1e-5, TimeAdapt::Bool=true,
     #
@@ -25,39 +26,48 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
     ##Define model:
     model               = SWE()
     model.epsilon       = epsilon
-    model.gamma         = gamma
     model.g             = g
     model.CSS           = CSS
-    r0                  = 1.0
-    model.b             = (x) -> @. SmoothHeaviside(sqrt(x[1]^2+x[2]^2)-r0, delta, 0.2, 0.0)
+
     function u0fun(x::Vector{Matrix{Float64}})
 
-        r               = @tturbo @. sqrt(x[1]^2 + x[2]^2)
-        h               = @tturbo @. SmoothHeaviside(r-r0, delta, 0.8, 0.5)
-        b               = model.b(x)
-        eta             = h + b
-        q1              = @tturbo @. 0.0*x[1]
-        q2              = @tturbo @. 0.0*x[1]
-
+        r               = @tturbo @. sqrt(x[1]^2 + x[2]^2 + 1e-10)
+        h               = @tturbo @. h0 - (0.5*exp(-(r^2 - 1)))/g
+        v_phi           = @tturbo @. r*exp(-0.5*(r^2 - 1))
+        q1              = @tturbo @. -h*v_phi*x[2]/r      
+        q2              = @tturbo @. h*v_phi*x[1]/r
+        b               = @tturbo @. 0.0*x[1]
+        eta             = h
+        
         return [eta, q1, q2, b]
 
     end
 
+    function utheorfun(t::Float64, x::Vector{Matrix{Float64}})
+
+        x0      =  [x[1].-0.0*t, x[2]]
+        return u0fun(x0)
+
+    end
+
+    #Boundary conditions:
+    BC_walls        = SlipAdiabatic()
+    
     #---------------------------------------------------------------------
     #PRE-PROCESS STAGE:
 
     #Mesh:
-    MeshFile                = "$(@__DIR__)/../../temp/Dambreak$(SC).geo"
-    NX                      = Int(ceil(4.0/(hp0*FesOrder)))
-    NY                      = Int(ceil(4.0/(hp0*FesOrder)))
-    TrMesh_Rectangle_Create!(MeshFile, -2.0, 2.0, NX, -2.0, 2.0, NY)
+    MeshFile                = "$(@__DIR__)/../../temp/SteadyVortex$(SC).geo"
+    NX                      = Int(ceil(14.0/(hp0*FesOrder)))
+    NY                      = Int(ceil(14.0/(hp0*FesOrder)))
+    TrMesh_Rectangle_Create!(MeshFile, -7.0, 7.0, NX, -7.0, 7.0, NY)
 
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
     solver                  = LIRKHyp_Start(model)
-    solver.ProblemName      = "Dambreak" # Esto es simplemente un nombre?
+    solver.ProblemName      = "SteadyVortex" 
     solver.SC               = SC
     solver.MeshFile         = MeshFile
-    solver.nBounds          = 4             # Si quisiese definir una fuente cómo sería?
+    solver.nBounds          = 4             
     solver.FesOrder         = FesOrder
     solver.RKMethod         = RKMethod
     solver.Deltat0          = Deltat0
@@ -67,24 +77,35 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
     solver.AMA_AnisoOrder   = AMA_AnisoOrder
     solver.TolS_max         = TolS
     solver.TolS_min         = 0.0*TolS
+    solver.SpaceAdapt       = SpaceAdapt
     solver.TolT             = TolT
     solver.TimeAdapt        = TimeAdapt
 
     #Set initial and boundary conditions:
+#     solver.u0fun        = FW11((x) -> u0fun(x))
+#     BC_walls            = SlipAdiabatic()
+#     solver.BC           = [BCW(BC_walls), BCW(BC_walls), BCW(BC_walls), BCW(BC_walls)]
+
+    #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x))
-    BC_outer            = DoNothing1()
-    solver.BC           = [BCW(BC_outer), BCW(BC_outer), BCW(BC_outer), BCW(BC_outer)]
+    solver.BC           = [BCW(BC_walls), BCW(BC_walls), BCW(BC_walls), BCW(BC_walls)]
 
     #-----------------------------------------------------------------------------
     #INITIAL CONDITION:
 
     #Compute initial condition:
     ConvFlag            = LIRKHyp_InitialCondition!(solver)
-#     CheckJacobian(solver, Plot_df_du=true)
-#     for ii=1
-#         BC_CheckJacobian(solver, ii, Plot_df_du=true, Plot_df_dgradu=false)
+#     CheckJacobian(solver, Plot_df_du=false, Plot_df_dgradu=true, 
+#         Plot_dQ_du=false, Plot_dQ_dgradu=false)
+#     for ii = 4
+#         BC_CheckJacobian(solver, ii, Plot_df_du=true)
 #     end
 #     return
+
+    #Compute max eta:
+    tv              = [ 0.0 ]
+    etamax,         = LqMean(solver.Integ2D, 1.0*solver.u[1], solver.fes, q=Inf)
+    etamaxv         = [ etamax ]
     
     #Change TolT:
     if TolT==0.0
@@ -93,7 +114,7 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
     end
 
     #Function to plot solution:
-    figv                = Vector{Figure}(undef,2)
+    figv                = Vector{Figure}(undef,3)
     if PlotFig
         figv[1]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
         for ii=2:length(figv)
@@ -123,73 +144,64 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
                 println(PlotVars[ii], ": min=", minimum(v_plot), ", max=", maximum(v_plot))
             end
             if SaveFig
-                savefig("$(VideosUbiTFG)Dambreak$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbi)SteadyVortex$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
+            
+            #=
             figure(figv[2].number)
             #Loop plot variables:
             for ii=1:length(PlotVars)
                 PyPlot.subplot(mFig, nFig, ii)
+                PyPlot.subplots_adjust(hspace=0.8)
                 PyPlot.cla()
 
-                splot_fun(x1,x2)    = @mlv sqrt(x1^2 + x2^2)
+                splot_fun(x1,x2)    = @mlv x1
                 PlotNodes(splot_fun, solver, PlotVars[ii])
-                xlabel(latexstring("r"), fontsize=10)
+                xlabel(latexstring("x_1"), fontsize=10)
                 title(latexstring(LatexString(model, PlotVars[ii]),
                                   "; t^n=", sprintf1("%.2e", solver.t)),
                 fontsize=10)
             end
             if SaveFig
-                savefig("$(VideosUbiTFG)DambreakRadial$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbi)SteadyVortexNodes$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
-
-
-#=
+            =#
+            
             figure(figv[2].number)
-            PyPlot.cla()
-            PlotContour(solver.u[1], solver.fes)
-            PlotMesh!(solver.mesh, color="w")
+            #Domain limits:
+            x11     = -4.0
+            x12     = +4.0
+            #Interpolate exact solution:
+            x1v     = linspace(x11, x12, 500)
+            x2v     = zeros(size(x1v))
+            xm      = [ x1v, x2v ]
+            um      = utheorfun(solver.t, Vector{<:AMF64}(xm))
+            u_terp, = SolutionCompute(solver.u, solver.fes, xm)
+            #Loop plot variables:
+            for ii=1:length(PlotVars)
+                PyPlot.subplot(mFig, nFig, ii)
+                PyPlot.subplots_adjust(hspace=0.8)
+                PyPlot.cla()
+                plot(x1v, DepVars(model, solver.t, Vector{<:AMF64}(xm), um, [PlotVars[ii]])[1][1][:], "r", linewidth=0.5)
+                plot(x1v, DepVars(model, solver.t, Vector{<:AMF64}(xm), Vector{<:AMF64}(u_terp), [PlotVars[ii]])[1][1][:], "b", linewidth=0.5)
+                xlabel(latexstring("x_1"), fontsize=10)
+                title(latexstring(LatexString(model, PlotVars[ii]),
+                                  "; t^n=", sprintf1("%.2e", solver.t)),
+                fontsize=10)
+            end
             if SaveFig
-                savefig("$(VideosUbi)Sod_Problem_Mesh$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbi)TravellingVortexNodes$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
 
             figure(figv[3].number)
-            PyPlot.cla()
-            semilogy(solver.tv, solver.etaSv, ".-b")
-            semilogy(solver.tv, solver.etaTv, ".-g")
-            semilogy(solver.tv, solver.etaAv, ".-r")
-            if true
-                validv  = solver.validv .== 1
-                semilogy(solver.tv[validv], solver.etaSv[validv], "sb")
-                semilogy(solver.tv[validv], solver.etaTv[validv], "sg")
-                semilogy(solver.tv[validv], solver.etaAv[validv], "sr")
-            end
-            legend(["space", "time", "algebraic"])
-            xlabel(L"t")
-            if SaveFig && solver.t==tf
-                savefig("$(VideosUbi)Sod_Problem_Errors$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-            end=#
+            cla()
+            plot(tv, etamaxv.-h0, "b")
+            xlabel(latexstring("t"), fontsize=10)
+            ylabel(latexstring("\\eta^{\\max}"), fontsize=10, rotation=0)
 
             t_lastFig           += Deltat_SaveFig
             ct_SaveFig          = 0
             nb_SaveFig          += 1
-
-#             figure(figv[4].number)
-#
-#             #Loop plot variables:
-#             for ii=1:length(PlotVars)
-#                 PyPlot.subplot(mFig, nFig, ii)
-#                 PyPlot.cla()
-#
-#                 splot_fun(x1,x2)    = @mlv x1
-#                 PlotNodes(splot_fun, solver, PlotVars[ii])
-#                 xlabel(latexstring("x_1"), fontsize=10)
-#                 title(latexstring(LatexString(model, PlotVars[ii]),
-#                                   "; t^n=", sprintf1("%.2e", solver.t)),
-#                 fontsize=10)
-#             end
-#             if SaveFig
-#                 savefig("$(VideosUbi)Sod_Problem_Pts$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-#             end
 
         end
         return
@@ -206,7 +218,7 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
         ct_SaveRes      += 1
         if SaveRes && ( solver.t-t_lastRes>=Deltat_SaveRes ||
                         ct_SaveRes==Nt_SaveRes || solver.t==tf || solver.t==0.0 )
-            save("$(ResUbi)LIRKHyp_SC$(SC)_$(nb_SaveRes).jld2", "StudyCase", "Dambreak",
+            save("$(ResUbi)LIRKHyp_SC$(SC)_$(nb_SaveRes).jld2", "StudyCase", "SteadyVortex",
                 "ConvFlag", ConvFlag, "solver", save(solver),
                  "TolS", TolS, "TolT", TolT)
             t_lastRes   += Deltat_SaveRes
@@ -220,7 +232,7 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
 
     #-----------------------------------------------------------------------------
     #MARCH IN TIME:
-
+    
     while solver.t<tf
 
         ConvFlag    = LIRKHyp_Step!(solver)
@@ -229,20 +241,27 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
             break
         end
 
-
+        #Compute maximum value of eta:
+        etamax,     = LqMean(solver.Integ2D, 1.0*solver.u[1], solver.fes, q=Inf)
+        push!(tv, solver.t)
+        push!(etamaxv, etamax)
+        println("eta_max=", sprintf1("%.8E", etamax))
+        
         PlotSol()
         SaveSol()
 
     end
 
+    errLq,              = LqError(solver, FW11((x) -> utheorfun(tf, x)), q=2.0)
     hmean               = 2.0*sqrt(solver.Omega/solver.mesh.nElems/TrElem_Area)
     Deltat_mean         = solver.tf/(solver.Nt-1)
-    println("hmean=", sprintf1("%.2e", hmean), "Deltat_mean", sprintf1("%.2e", Deltat_mean))
+    println("hmean=", sprintf1("%.2e", hmean), ", Deltat_mean=", sprintf1("%.2e", Deltat_mean),
+            ", e_Lq=", sprintf1("%.2e", errLq))
 
     #Save results:
     if SaveRes
-        save("$(ResUbi)LIRKHyp_SC$(SC)_1000.jld2", "StudyCase", "Dambreak",
-            "ConvFlag", ConvFlag, "solver", save(solver), "hmean", hmean,  "Deltat_mean", Deltat_mean)
+        save("$(ResUbi)LIRKHyp_SC$(SC)_1000.jld2", "StudyCase", "SteadyVortex",
+            "ConvFlag", ConvFlag, "solver", save(solver), "hmean", hmean, "e_Lq", errLq, "Deltat_mean", Deltat_mean)
     end
 
     return solver

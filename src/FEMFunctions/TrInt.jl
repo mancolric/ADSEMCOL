@@ -533,7 +533,7 @@ function LqError(Integ2D::TrInt, uh::Vector{Float64},
 end
 
 #Compute Lq average of FES:
-function LqMean(Integ2D::TrInt, uh::Vector{Float64}, FES::TrFES; q::Real=2)
+function LqMean(Integ2D::TrInt, uh::GenVector{Float64}, FES::TrFES; q::Real=2)
     
     nElems          = Integ2D.mesh.nElems
     nqp             = Integ2D.QRule.nqp

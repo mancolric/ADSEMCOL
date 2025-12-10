@@ -90,8 +90,10 @@ function DepVars(model::SWE, t::Float64, x::Vector{<:AMF64},
             xout[ivar]      = [@tturbo @. q1/h]
         elseif vble=="v2"
             xout[ivar]      = [@tturbo @. q2/h]
-        elseif vble=="vr"
+        elseif vble=="v"
             xout[ivar]      = [@tturbo @. sqrt(q1*q1+q2*q2)/h]
+        elseif vble=="Fr"
+            xout[ivar]      = [@tturbo @. (sqrt(q1*q1+q2*q2))/h / sqrt(model.g*h)]
         elseif vble=="epsilon"
             xout[ivar]      = [fill(model.epsilon, size(u[1]))]
         elseif vble=="eta"
@@ -369,19 +371,28 @@ function WB_LIRKHyp_Step!(solver::SolverData, u_eq::Vector{Float64})
             end
             
             #Solve:
-            t_ini       = time()
+            t_ini           = time()
 #             BLAS.axpby!(1.0, u_k, 0.0, u_k_pert)
 #             BLAS.axpby!(-1.0, u_eq, 1.0, u_k_pert)
-            @. u_k_pert = u_k - u_eq
-            LSOutput    = LS_gmres!(solver.Am_LS, u_k_pert, solver.bv, AbsTol=TolA, Display="final",
-                            MaxIter=solver.LS_iters_max)
-            solver.tLS  += time()-t_ini
+            @. u_k_pert     = u_k - u_eq
+            #Correct u_k_pert if the latter is very small:
+            u_k_pert_norm,  = LqMean(solver.Integ2D, 
+                                GetViews(u_k_pert, solver.nVars, solver.fes.nDof), 
+                                solver.fes, solver.nFacts, q=solver.SpaceNorm)
+#             if u_k_pert_norm<10*TolA+Inf
+#                 @. u_k_pert = 0.0
+#             end
+#             u_k_pert_old    = copy(u_k_pert)
+            LSOutput        = LS_gmres!(solver.Am_LS, u_k_pert, solver.bv, AbsTol=TolA, Display="final",
+                                MaxIter=solver.LS_iters_max)
+            solver.tLS      += time()-t_ini
 #             BLAS.axpby!(1.0, u_eq, 0.0, u_k)
 #             BLAS.axpby!(1.0, u_k_pert, 1.0, u_k)
-            @. u_k      = u_eq + u_k_pert
-            LSFlag      = LSOutput[1]
-            LSIter      = LSOutput[2]
-            etaA_np1    = LSOutput[3]
+            @. u_k          = u_eq + u_k_pert
+#             display(norm(u_k_pert-u_k_pert_old,Inf))
+            LSFlag          = LSOutput[1]
+            LSIter          = LSOutput[2]
+            etaA_np1        = LSOutput[3]
             if LSFlag<=0
 #                 printstyled("Linear solver did not converge\n", color=:light_yellow)
                 break #loop for kk=1:nStages

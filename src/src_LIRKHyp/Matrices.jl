@@ -421,14 +421,13 @@ function LS_gmres!(LS::LinearSystem1, u::GenVector{Float64}, b::GenVector{Float6
 #                                 AbsTolG=0.0, RelTolG=0.0, 
 #                                 Display="iter", history=true,
 #                                 NormFun=LS.NormFun)
-    #Anderson does not return p=Inf if g_0=0.0:
     @mlv uhat[F.nSlaves+1:F.N]  = solver_output[1]*scaleP_m
     ldiv_slave!(uhat, F, bred)
-    @mlv u[LS.p]            = uhat
-    nIter                   = solver_output[2].nIter 
-    resv                    = solver_output[2].gnorms
-#     resv                    = solver_output[2].pnorms
-    etaA                    = resv[length(resv)]
+    @mlv u[LS.p]                = uhat
+    nIter                       = solver_output[2].nIter 
+    resv                        = solver_output[2].gnorms
+#     resv                        = solver_output[2].pnorms
+    etaA                        = resv[length(resv)]
     if solver_output[2].flag==2
         #Exit due to convergence in residual g
     elseif solver_output[2].flag==1

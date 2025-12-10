@@ -4,7 +4,7 @@ function HyperbolicFlux!(model::SWE,
     u::Vector{MFloat},
     ComputeJ::Bool, f::Matrix{MFloat}, df_du::Array{MFloat,3})where MFloat<:AbstractMatrix{Float64}
 
-    return HyperbolicFlux2!(model, u, ComputeJ, f, df_du)
+    return HyperbolicFlux1!(model, u, ComputeJ, f, df_du)
 
 end
 
@@ -12,7 +12,7 @@ function Source!(model::SWE, x::Vector{MFloat}, tau_char::Float64,
     u::Vector{MFloat}, du_dx::Matrix{MFloat}, ComputeJ::Bool,
     Q::Vector{MFloat}, dQ_du::Matrix{MFloat}, dQ_du_dx::Array{MFloat,3}) where MFloat<:AbstractMatrix{Float64}
 
-    return Source2!(model, x, tau_char, u, du_dx, ComputeJ, Q, dQ_du, dQ_du_dx)
+    return Source1!(model, x, tau_char, u, du_dx, ComputeJ, Q, dQ_du, dQ_du_dx)
 
 end
 

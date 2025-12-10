@@ -1,5 +1,9 @@
 include("test_ShallowWater.jl")
 
+#UNDO:
+#   -nFacts
+#   -u_k_pert=0 before LS
+
 #CProperty1(0.1, 5, tf=1.0, TolS=1e-5, TolS0=1e-5, delta=1e-3, epsilon=0e-2, Deltah=0e-3, PlotFig=true, PlotVars=["eta", "v1", "v2", "b"], RKMethod="BPR3", TimeAdapt=false, Deltat0=1e-2);
 
 function CProperty1(hp0::Float64, FesOrder::Int;
@@ -56,8 +60,8 @@ function CProperty1(hp0::Float64, FesOrder::Int;
 
     #Mesh:
     MeshFile                = "$(@__DIR__)/../../temp/CProperty1$(SC).geo"
-    NX                      = Int(ceil(7.0/(hp0*FesOrder)))
-    NY                      = Int(ceil(3.0/(hp0*FesOrder)))
+    NX                      = Int(ceil(3.0/(hp0*FesOrder)))
+    NY                      = Int(ceil(1.0/(hp0*FesOrder)))
     TrMesh_Rectangle_Create!(MeshFile, -2.0, 1.0, NX, -0.5, 0.5, NY)
 
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
@@ -132,7 +136,7 @@ function CProperty1(hp0::Float64, FesOrder::Int;
                 PyPlot.cla()
                 v_plot  = PlotContour(solver, solver.model, PlotVars[ii])
                 PlotMesh!(solver.mesh, color="k")
-                title(latexstring(LatexString(PlotVars[ii]),
+                title(latexstring(LatexString(model, PlotVars[ii]),
                     "; t^n=", sprintf1("%.2e", solver.t)),
                     fontsize=10)
                 println(PlotVars[ii], ": min=", minimum(v_plot), ", max=", maximum(v_plot))
@@ -154,7 +158,7 @@ function CProperty1(hp0::Float64, FesOrder::Int;
                     PlotNodes(splot_fun, solver, PlotVars[ii])
                 end
                 xlabel(latexstring("x_1"), fontsize=10)
-                title(latexstring(LatexString(PlotVars[ii]),
+                title(latexstring(LatexString(model, PlotVars[ii]),
                                   "; t^n=", sprintf1("%.2e", solver.t)),
                 fontsize=10)
             end
@@ -203,7 +207,7 @@ function CProperty1(hp0::Float64, FesOrder::Int;
 #                 splot_fun(x1,x2)    = @mlv x1
 #                 PlotNodes(splot_fun, solver, PlotVars[ii])
 #                 xlabel(latexstring("x_1"), fontsize=10)
-#                 title(latexstring(LatexString(PlotVars[ii]),
+#                 title(latexstring(LatexString(model, PlotVars[ii]),
 #                                   "; t^n=", sprintf1("%.2e", solver.t)),
 #                 fontsize=10)
 #             end
@@ -246,10 +250,15 @@ function CProperty1(hp0::Float64, FesOrder::Int;
     solver.TolS_min     = 0.01*TolS
     
     #DEBUG:
-    u_eq                = 1.0*solver.uv
+#     solver.nFacts[2]    = 1.0
+#     solver.nFacts[3]    = 1.0
+    
+    #DEBUG:
+    u_eq                = 0.0*solver.uv
     u_eq_views          = GetViews(u_eq, solver.nVars, solver.fes.nDof)
-    #Correct eta:
+    #Correct eta and b:
     u_eq_views[1][1:solver.fes.PSpace.nDof]     .= eta0
+    u_eq_views[4]                               .= solver.u[4]
     
     while solver.t<tf
     
