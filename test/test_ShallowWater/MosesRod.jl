@@ -1,8 +1,9 @@
 include("test_ShallowWater.jl")
 
-function CircularDambreak(hp0::Float64, FesOrder::Int;
+function MosesRod(hp0::Float64, FesOrder::Int;
     tf::Float64=1.0, RKMethod::String="BPR3",
-    epsilon::Float64=1e-2, delta::Float64=1e-2, gamma::Float64=0.0, g::Float64=9.8,
+    epsilon::Float64=0e-2, delta::Float64=1e-2, gamma::Float64=0.0, g::Float64=9.8, 
+    b0::Float64=1.0, 
     #
     TolS::Float64=1e-4, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
     #
@@ -29,15 +30,14 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
     model.g             = g
     model.CSS           = CSS
     r0                  = 1.0
-    model.b             = (x) -> @. SmoothHeaviside(sqrt(x[1]^2+x[2]^2)-r0, delta, 0.2, 0.0)
+    model.b             = FW1( (x) -> @. SmoothHeaviside(x[1]-25/3, delta, 0.0, b0) + 
+                                         SmoothHeaviside(x[1]-25/2, delta, 0.0, -b0) )
     function u0fun(x::Vector{Matrix{Float64}})
 
-        r               = @tturbo @. sqrt(x[1]^2 + x[2]^2)
-        h               = @tturbo @. SmoothHeaviside(r-r0, delta, 0.8, 0.5)
-        b               = model.b(x)
-        eta             = h + b
-        q1              = @tturbo @. 0.0*x[1]
+        eta             = @tturbo @. 0.0*x[1] + 10.0
+        q1              = @. SmoothHeaviside(x[1]-50/3, delta, -350.0, 350.0)
         q2              = @tturbo @. 0.0*x[1]
+        b               = model.b(x)
 
         return [eta, q1, q2, b]
 
@@ -47,14 +47,14 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
     #PRE-PROCESS STAGE:
 
     #Mesh:
-    MeshFile                = "$(@__DIR__)/../../temp/Dambreak$(SC).geo"
-    NX                      = Int(ceil(4.0/(hp0*FesOrder)))
-    NY                      = Int(ceil(4.0/(hp0*FesOrder)))
-    TrMesh_Rectangle_Create!(MeshFile, -2.0, 2.0, NX, -2.0, 2.0, NY)
+    MeshFile                = "$(@__DIR__)/../../temp/MosesRod$(SC).geo"
+    NX                      = Int(ceil(25.0/(hp0*FesOrder)))
+    NY                      = Int(ceil(1.0/(hp0*FesOrder)))
+    TrMesh_Rectangle_Create!(MeshFile, 0.0, 25.0, NX, -0.5, 0.5, NY)
 
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
     solver                  = LIRKHyp_Start(model)
-    solver.ProblemName      = "Dambreak" 
+    solver.ProblemName      = "MosesRod" 
     solver.SC               = SC
     solver.MeshFile         = MeshFile
     solver.nBounds          = 4             
@@ -72,8 +72,9 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
 
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x))
+    BC_walls            = SlipAdiabatic()
     BC_outer            = DoNothing1()
-    solver.BC           = [BCW(BC_outer), BCW(BC_outer), BCW(BC_outer), BCW(BC_outer)]
+    solver.BC           = [BCW(BC_walls), BCW(BC_outer), BCW(BC_walls), BCW(BC_outer)]
 
     #-----------------------------------------------------------------------------
     #INITIAL CONDITION:
@@ -85,15 +86,18 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
 #         BC_CheckJacobian(solver, ii, Plot_df_du=true, Plot_df_dgradu=false)
 #     end
 #     return
-    
-    #Change TolT:
-    if TolT==0.0
-        TolT            = 0.01*solver.etaS
-        solver.TolT     = TolT
-    end
 
+    #Compute minimum h:
+    hSWE_qp             = DepVars(model, solver.t, solver.Integ2D.x, 
+                            SolutionCompute(solver.u, solver.fes, 
+                                            solver.Integ2D.QRule.xi), 
+                            ["h"])[1][1]
+    hSWE_min            = minimum(hSWE_qp)
+    tv                  = [ 0.0 ]
+    hminv               = [ hSWE_min ]
+    
     #Function to plot solution:
-    figv                = Vector{Figure}(undef,2)
+    figv                = Vector{Figure}(undef,3)
     if PlotFig
         figv[1]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
         for ii=2:length(figv)
@@ -123,74 +127,43 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
                 println(PlotVars[ii], ": min=", minimum(v_plot), ", max=", maximum(v_plot))
             end
             if SaveFig
-                savefig("$(VideosUbiTFG)Dambreak$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbi)MosesRod$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
+            
             figure(figv[2].number)
             #Loop plot variables:
             for ii=1:length(PlotVars)
                 PyPlot.subplot(mFig, nFig, ii)
+                PyPlot.subplots_adjust(hspace=0.8)
                 PyPlot.cla()
-
-                splot_fun(x1,x2)    = @mlv sqrt(x1^2 + x2^2)
+                splot_fun(x1,x2)    = @mlv x1
                 PlotNodes(splot_fun, solver, PlotVars[ii])
-                xlabel(latexstring("r"), fontsize=10)
+                xlabel(latexstring("x_1"), fontsize=10)
                 title(latexstring(LatexString(model, PlotVars[ii]),
                                   "; t^n=", sprintf1("%.2e", solver.t)),
                 fontsize=10)
             end
             if SaveFig
-                savefig("$(VideosUbiTFG)DambreakRadial$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbi)MosesRodNodes$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
-
-
-#=
-            figure(figv[2].number)
-            PyPlot.cla()
-            PlotContour(solver.u[1], solver.fes)
-            PlotMesh!(solver.mesh, color="w")
-            if SaveFig
-                savefig("$(VideosUbi)Sod_Problem_Mesh$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-            end
-
+            
             figure(figv[3].number)
-            PyPlot.cla()
-            semilogy(solver.tv, solver.etaSv, ".-b")
-            semilogy(solver.tv, solver.etaTv, ".-g")
-            semilogy(solver.tv, solver.etaAv, ".-r")
-            if true
-                validv  = solver.validv .== 1
-                semilogy(solver.tv[validv], solver.etaSv[validv], "sb")
-                semilogy(solver.tv[validv], solver.etaTv[validv], "sg")
-                semilogy(solver.tv[validv], solver.etaAv[validv], "sr")
+            #Loop plot variables:
+            for ii=1:length(PlotVars)
+                cla()
+                plot(tv, hminv, "-b")
+                plot(tv, 0.0*tv, "--r")
+                xlabel(latexstring("t"), fontsize=10)
+                ylabel(latexstring("h_{\\min}"), fontsize=10, rotation=0)
             end
-            legend(["space", "time", "algebraic"])
-            xlabel(L"t")
             if SaveFig && solver.t==tf
-                savefig("$(VideosUbi)Sod_Problem_Errors$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-            end=#
+                savefig("$(VideosUbi)MosesRodhmin$(SC).png", dpi=400, pad_inches=0)
+            end
 
             t_lastFig           += Deltat_SaveFig
             ct_SaveFig          = 0
             nb_SaveFig          += 1
-
-#             figure(figv[4].number)
-#
-#             #Loop plot variables:
-#             for ii=1:length(PlotVars)
-#                 PyPlot.subplot(mFig, nFig, ii)
-#                 PyPlot.cla()
-#
-#                 splot_fun(x1,x2)    = @mlv x1
-#                 PlotNodes(splot_fun, solver, PlotVars[ii])
-#                 xlabel(latexstring("x_1"), fontsize=10)
-#                 title(latexstring(LatexString(model, PlotVars[ii]),
-#                                   "; t^n=", sprintf1("%.2e", solver.t)),
-#                 fontsize=10)
-#             end
-#             if SaveFig
-#                 savefig("$(VideosUbi)Sod_Problem_Pts$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-#             end
-
+            
         end
         return
 
@@ -206,7 +179,7 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
         ct_SaveRes      += 1
         if SaveRes && ( solver.t-t_lastRes>=Deltat_SaveRes ||
                         ct_SaveRes==Nt_SaveRes || solver.t==tf || solver.t==0.0 )
-            save("$(ResUbi)LIRKHyp_SC$(SC)_$(nb_SaveRes).jld2", "StudyCase", "Dambreak",
+            save("$(ResUbi)LIRKHyp_SC$(SC)_$(nb_SaveRes).jld2", "StudyCase", "MosesRod",
                 "ConvFlag", ConvFlag, "solver", save(solver),
                  "TolS", TolS, "TolT", TolT)
             t_lastRes   += Deltat_SaveRes
@@ -229,7 +202,15 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
             break
         end
 
-
+        #Compute minimum h:
+        hSWE_qp             = DepVars(model, solver.t, solver.Integ2D.x, 
+                                SolutionCompute(solver.u, solver.fes, 
+                                                solver.Integ2D.QRule.xi), 
+                                ["h"])[1][1]
+        hSWE_min            = minimum(hSWE_qp)
+        push!(tv, solver.t)
+        push!(hminv, hSWE_min)
+    
         PlotSol()
         SaveSol()
 

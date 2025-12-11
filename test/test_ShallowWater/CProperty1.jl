@@ -37,7 +37,8 @@ function CProperty1(hp0::Float64, FesOrder::Int;
     model.g             = g
     model.CSS           = CSS
 #     model.b             = FW1( (x)-> @. 0.8*exp(-5*(x[1]+0.1)^2-50*x[2]^2) )
-    av                  = rand(4)
+#     av                  = rand(4)
+    av                  = [0.56, 0.71, 0.13, 0.29]
     model.b             = FW1( (x)-> @. av[1]*sin(2*pi*x[1])+av[2]*cos(4*pi*x[1]) + 
                                         av[3]*sin(3*pi*x[2])+av[4]*cos(5*pi*x[1]) - eta0 ) 
     function u0fun(x::Vector{Matrix{Float64}})
@@ -110,7 +111,8 @@ function CProperty1(hp0::Float64, FesOrder::Int;
     if solver.u[1][1] == 0.0
         solver.u[1][1:solver.fes.PSpace.nDof]   .+= eta0
     end
-
+#     solver.u[1][1:solver.fes.PSpace.nDof]   .+= 1e-6
+    
     #Function to plot solution:
     figv                = Vector{Figure}(undef,2)
     if PlotFig
@@ -163,57 +165,12 @@ function CProperty1(hp0::Float64, FesOrder::Int;
                 fontsize=10)
             end
             if SaveFig
-                savefig("$(VideosUbiTFG)CProperty1_Pts$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbiTFG)CProperty1Nodes$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
-
-
-#=
-            figure(figv[2].number)
-            PyPlot.cla()
-            PlotContour(solver.u[1], solver.fes)
-            PlotMesh!(solver.mesh, color="w")
-            if SaveFig
-                savefig("$(VideosUbi)Sod_Problem_Mesh$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-            end
-
-            figure(figv[3].number)
-            PyPlot.cla()
-            semilogy(solver.tv, solver.etaSv, ".-b")
-            semilogy(solver.tv, solver.etaTv, ".-g")
-            semilogy(solver.tv, solver.etaAv, ".-r")
-            if true
-                validv  = solver.validv .== 1
-                semilogy(solver.tv[validv], solver.etaSv[validv], "sb")
-                semilogy(solver.tv[validv], solver.etaTv[validv], "sg")
-                semilogy(solver.tv[validv], solver.etaAv[validv], "sr")
-            end
-            legend(["space", "time", "algebraic"])
-            xlabel(L"t")
-            if SaveFig && solver.t==tf
-                savefig("$(VideosUbi)Sod_Problem_Errors$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-            end=#
 
             t_lastFig           += Deltat_SaveFig
             ct_SaveFig          = 0
             nb_SaveFig          += 1
-
-#             figure(figv[4].number)
-#
-#             #Loop plot variables:
-#             for ii=1:length(PlotVars)
-#                 PyPlot.subplot(mFig, nFig, ii)
-#                 PyPlot.cla()
-#
-#                 splot_fun(x1,x2)    = @mlv x1
-#                 PlotNodes(splot_fun, solver, PlotVars[ii])
-#                 xlabel(latexstring("x_1"), fontsize=10)
-#                 title(latexstring(LatexString(model, PlotVars[ii]),
-#                                   "; t^n=", sprintf1("%.2e", solver.t)),
-#                 fontsize=10)
-#             end
-#             if SaveFig
-#                 savefig("$(VideosUbi)Sod_Problem_Pts$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-#             end
 
         end
         return
@@ -253,15 +210,60 @@ function CProperty1(hp0::Float64, FesOrder::Int;
 #     solver.nFacts[2]    = 1.0
 #     solver.nFacts[3]    = 1.0
     
-    #DEBUG:
-    u_eq                = 0.0*solver.uv
-    u_eq_views          = GetViews(u_eq, solver.nVars, solver.fes.nDof)
-    #Correct eta and b:
-    u_eq_views[1][1:solver.fes.PSpace.nDof]     .= eta0
-    u_eq_views[4]                               .= solver.u[4]
-    
     while solver.t<tf
     
+        #Allocate equilibrium solution:
+        u_eq                = 0.0*solver.uv
+        u_eq_views          = GetViews(u_eq, solver.nVars, solver.fes.nDof)
+        
+        #Interpolate unit function:
+        u1_terp             = zeros(solver.fes.nDof)
+        u1_terp[1:solver.fes.PSpace.nDof]  .= 1.0
+        
+        #Compute approximation to eta_average:
+#         eta_approx          = dot(u1_terp, solver.MII, solver.u[1])/
+#                                 dot(u1_terp, solver.MII, u1_terp)
+        eta_approx          = 1.0
+#         eta_approx          = eta0
+        
+        #DEBUG:
+#         b1_proj2            = zeros(solver.fes.nDof)
+#         Integ2D             = TrInt(solver.mesh, solver.AMA_ProjOrder, N=solver.AMA_ProjN)
+#         L2Projection!(Integ2D, FW11((x) -> [ 0.0*x[1].+eta_approx ]), 
+#                         solver.fes, [b1_proj2])
+#         b1_proj2            *= 1.0
+        
+        #Project eta_approx onto fes:
+        b1_proj             = zeros(solver.fes.nDof)
+        Integ2D             = TrInt(solver.mesh, solver.AMA_ProjOrder, N=solver.AMA_ProjN)
+        L2Projection!(Integ2D, FW11((x) -> [ 0.0*x[1].+1.0 ]), 
+                        solver.fes, [b1_proj])
+        b1_proj             *= eta_approx
+        u1_proj             = zeros(solver.fes.nDof)
+        Interpolate!(FW11((x) -> [ 0.0*x[1].+eta_approx ]), [ u1_proj ] , solver.fes)
+        flag, nIter, etaA_I = LS_gmres!(solver.MII_LS, u1_proj, b1_proj, 
+                                AbsTol=solver.TolA_min*eta_approx, Display="notify")
+#         display(norm(b1_proj-b1_proj2))
+#         figure()
+#         plot(b1_proj-b1_proj2, ".b")
+        
+        #Correction factor corr_fact such that eta_eq = c_fact * eta_approx and 
+        #mass of eta_eq = mass of solution
+        corr_fact           = dot(u1_terp, solver.MII, solver.u[1])/
+                                dot(u1_terp, solver.MII, u1_proj) 
+        println("corr_fact=", corr_fact, ", eta_eq=", eta_approx*corr_fact)
+        
+        #Correct eta and b:
+        u_eq_views[1]       .= corr_fact*u1_proj
+        u_eq_views[4]       .= solver.u[4]
+                
+#         figure()
+#         plot(u_eq_views[1]-solver.u[1], "g")
+#         plot(u_eq_views[1][1:solver.fes.PSpace.nDof]-solver.u[1][1:solver.fes.PSpace.nDof], "b")
+#         plot(u_eq_views[1][1:solver.fes.PSpace.nDofU]-solver.u[1][1:solver.fes.PSpace.nDofU], "g")
+#         error("")
+        
+        #March in time:
 #         ConvFlag    = LIRKHyp_Step!(solver)
         ConvFlag    = WB_LIRKHyp_Step!(solver, u_eq)
         
@@ -287,3 +289,56 @@ function CProperty1(hp0::Float64, FesOrder::Int;
     return solver
 
 end
+
+#= 
+
+        #Interpolate unit function:
+        u_proj1_terp                            = zeros(solver.fes.nDof)
+        u_proj1_terp[1:solver.fes.PSpace.nDof]  .= 1.0
+        
+        #Compute average eta:
+        eta_average         = dot(u_proj1_terp, solver.MII, solver.u[1])/
+                                dot(u_proj1_terp, solver.MII, u_proj1_terp)
+        eta_average         = eta0
+        
+        #Project function 1:
+        Integ2D             = TrInt(solver.mesh, solver.AMA_ProjOrder, N=solver.AMA_ProjN)
+        b_proj1_L2          = zeros(solver.fes.nDof)
+#         L2Projection!(Integ2D, FW11((x) -> [ 0.0*x[1].+eta_average ]), solver.fes, [b_proj1_L2])
+        L2Projection!(Integ2D, FW11((x) -> [ 0.0*x[1].+1.0 ]), solver.fes, [b_proj1_L2]) 
+        b_proj1_L2          *= eta_average
+        #Initial condition for linear solver:
+        u_proj1_L2          = zeros(solver.fes.nDof)
+        Interpolate!(FW11((x) -> [ 0.0*x[1].+eta_average ]), [ u_proj1_L2 ] , solver.fes)
+#         Interpolate!(FW11((x) -> [ 0.0*x[1].+1.0 ]), [ u_proj1_L2 ] , solver.fes)
+#         u_proj1_L2          *= eta_average
+        flag, nIter, etaA_I = LS_gmres!(solver.MII_LS, u_proj1_L2, b_proj1_L2, 
+                                AbsTol=solver.TolA_min*solver.nFacts[1], Display="notify")
+#         u_proj1_L2          *= eta_average
+        
+#         figure()
+#         plot(solver.u[1]./u_proj1_L2)
+#         
+#         figure()
+#         plot(solver.u[1]/eta0, "b")
+#         plot(u_proj1_L2, "r")
+        
+        #Correct eta and b:
+#         u_eq_views[1]       .= eta_average*u_proj1_terp
+#         u_eq_views[1]       .= eta_average*u_proj1_L2
+        u_eq_views[1]       .= u_proj1_L2
+        u_eq_views[4]       .= solver.u[4]
+    
+        display(norm(u_eq_views[1][1:solver.fes.PSpace.nDof]-solver.u[1][1:solver.fes.PSpace.nDof],Inf))
+        display(norm(u_eq_views[1]-solver.u[1],Inf))
+        
+#         figure()
+#         plot(u_eq, "b")
+#         plot(solver.uv, "r")
+        figure()
+        plot(u_eq_views[1]-solver.u[1], "g")
+        plot(u_eq_views[1][1:solver.fes.PSpace.nDof]-solver.u[1][1:solver.fes.PSpace.nDof], "b")
+        error("")
+        
+        
+=#

@@ -183,7 +183,7 @@ function FluxSource!(model::SWE, _qp::TrIntVars, ComputeJ::Bool)
     epsilon_qp          = @tturbo @. model.epsilon + 0.0*u[1]
     epsilonFlux!(model, epsilon_qp, du, ComputeJ, f, _qp.df_dgradu, IIv=Vector{Int}(1:3))
     #   
-    tau_char            = Inf*_qp.Deltat_CFL
+    tau_char            = 10.0*_qp.Deltat_CFL
     Source!(model, x, tau_char, u, du, ComputeJ, Q, dQ_du, dQ_du_dx)
 
     #Subgrid viscosity:
