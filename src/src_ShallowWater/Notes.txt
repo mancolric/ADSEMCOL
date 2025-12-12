@@ -29,6 +29,9 @@ que lleva a la ecuación A*(U-Ue) = b(U) - b(Ue), y dar una discretización dire
 
 -Para WB, se puede definir Ue como q_i=0, eta=eta_0 tal que min((eta_0*1(x) - eta(x))^2) = 0, lo cual lleva a que eta_0 = int(eta(x))/int(1).
 
+-Ue puede ser discontinua aunque se utilice CG. Si aplicamos formulación DG, aparecen unas integrales en el esqueleto de la malla en las que interviene el salto de psi. Por tanto, si psi es continua, dichos términos desaparecen, y quedaría una integral extendida a todo el dominio, exceptuando las singularidades en el esqueleto (que aparecen si hay términos difusivos). 
+
+
 ---
 
 Queda pendiente projectar bfun y no bh al cambiar de malla.
