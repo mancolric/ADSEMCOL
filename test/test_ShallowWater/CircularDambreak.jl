@@ -33,7 +33,8 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
     function u0fun(x::Vector{Matrix{Float64}})
 
         r               = @tturbo @. sqrt(x[1]^2 + x[2]^2)
-        h               = @tturbo @. SmoothHeaviside(r-r0, delta, 0.8, 0.5)
+#         h               = @tturbo @. SmoothHeaviside(r-r0, delta, 0.8, 0.5)
+        h               = @tturbo @. SmoothHeaviside(r-r0, delta, 1.0, 1e-3)
         b               = model.b(x)
         eta             = h + b
         q1              = @tturbo @. 0.0*x[1]
@@ -123,7 +124,7 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
                 println(PlotVars[ii], ": min=", minimum(v_plot), ", max=", maximum(v_plot))
             end
             if SaveFig
-                savefig("$(VideosUbiTFG)Dambreak$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbi)Dambreak$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
             figure(figv[2].number)
             #Loop plot variables:
@@ -139,7 +140,7 @@ function CircularDambreak(hp0::Float64, FesOrder::Int;
                 fontsize=10)
             end
             if SaveFig
-                savefig("$(VideosUbiTFG)DambreakRadial$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+                savefig("$(VideosUbi)DambreakRadial$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
 
 

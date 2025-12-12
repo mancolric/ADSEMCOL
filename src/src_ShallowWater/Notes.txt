@@ -5,3 +5,48 @@ Model 2: hyperbolic flux is convective, source term is -g*h*nabla eta
 
 -Travelling vortex. With model 2, outlet is unstable (both for subsonic and supersonic outlet conditions).
 
+---
+
+SWE:
+
+-No es posible obtener eta=cte como condición inicial. Al proyectar, ya se cometen algunos errores numéricos que luego modifican el valor de qi.
+
+-Incluso si se fuerza eta=cte, ¿el sistema permanece en estado estacionario?
+
+-Debido a errores numéricos, la proyección de eta0(=cte) no es lo mismo que eta0*proyección(1). Por eso proyectar 1 sobre el espacio de elementos finitos no soluciona el problema.
+
+-Si tenemos un sistema de la forma  A*(U-Ue) = b(U) - b(Ue), y U está muy cerca de U=Ue, es posible que el resolvedor lineal se salga con la condición inicial, al ser el residuo muy pequeño, y por tanto nunca se alcanza el estacionario. Hay que dar al menos una iteración. Por otra parte, si el resolvedor es directo, se tendrá U-Ue=algo pequeño... ¿será eso suficiente para converger a Ue poco a poco?
+
+-¿Se puede forzar U a Ue con una relajación tipo Baumgarte?
+
+-Si intentamos resolver int(F(Ue) psi dOmega) = 0 con una formulación débil, seguramente lleguemos a una solución estacionaria del método, que puede no ser la correcta (eta=cte), sino una con ruido numérico del orden de TolS. Además, al sustraer términos A*U^e y b(U^e), estaríamos añadiendo un término nulo a la ecuación A*U = b(U), cuando la idea es corregir esta ecuación con su residuo para una U^e que represente mejor la solución estacionaria.
+
+-Quizás lo más correcto sería, en la formulación variacional, sumar
+	0 = - div f(u^e) + Q(u^e)
+que lleva a la ecuación A*(U-Ue) = b(U) - b(Ue), y dar una discretización directamente para U^e. (Es decir, definir Ue como la solución de cierto problema y caracterizar esta variable.)
+
+-¿Qué sucede si se reduce la tolerancia algebraica y se reducen los factores de normalización para g o h0 altos? Quizás se reduce el error, pero a costa de más iteraciones.
+
+-Para WB, se puede definir Ue como q_i=0, eta=eta_0 tal que min((eta_0*1(x) - eta(x))^2) = 0, lo cual lleva a que eta_0 = int(eta(x))/int(1).
+
+---
+
+Queda pendiente projectar bfun y no bh al cambiar de malla.
+
+---
+
+Ejemplos:
+
+-WB con onda que sale de un dominio (CProperty 2). Quizás habría que añadir esponja (fricción gamma(x)*(u-uref)), gamma lineal o cuadrática, para que no haya rebotes en la pared. 
+
+-Torbellino móvil: convergencia 
+
+-Torbellino móvil: difusión del pico para t grande
+
+-Torbellino estacionario (ver que el máximo no decrece - sería quizás con fully WB?)
+
+-Rotura de presa circular
+
+-Vara de Moisés
+
+

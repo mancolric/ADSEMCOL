@@ -569,3 +569,143 @@ function bflux!(model::SWE, BC::Union{DoNothing1,SupersonicOutlet1},
     return
 
 end
+
+#Subsonic/supersonic outlet. If normal velocity<0, subsonic inlet conditions
+#are applied:
+#   normal diff flux for eta    = 0
+#   q1                          = q1_BC
+#   q2                          = q2_BC
+#Otherwise, subsonic conditions are applied:
+#   eta                         = eta_BC
+#   normal diff flux for q1     = 0
+#   normal diff flux for q2     = 0
+function bflux!(model::SWE, BC::SubsonicInOutlet1,
+                _bqp::TrBintVars, ComputeJ::Bool)
+   
+    nVars                   = model.nVars
+
+    nb                      = _bqp.nb
+    tb                      = _bqp.tb
+    t                       = _bqp.t
+    x                       = _bqp.x
+    u                       = _bqp.u
+    du                      = _bqp.gradu
+    ParentElems             = _bqp.Binteg2D.bmesh.ParentElems
+    metric                  = _bqp.Binteg2D.mesh.metric
+    bflux                   = _bqp.f
+    dbflux_du               = _bqp.df_du
+    dbflux_dgradu           = _bqp.df_dgradu
+    h                       = 1.0./sqrt.(metric.lambda_bar[ParentElems])*ones(1,_bqp.nqp) #OJO que esto es el tamaño de los elementos
+    hp                      = @tturbo @. h/_bqp.FesOrder
+    
+    #----------------------------------------------------------------
+    #Hyperbolic flux. Impose conditions on "u":
+
+    #Evaluate h at the boundary:
+    uDir                    = BC.fun(t, x)
+
+    #Detect inlet:
+    q1                      = u[2]
+    q2                      = u[3]
+    qn                      = @tturbo @. q1*nb[1]+q2*nb[2]
+    inlet                   = @tturbo @. 1.0*(qn<0.0)
+    outlet                  = @tturbo @. 1.0-inlet
+    
+    #Impose BC:
+    uBC                     = Vector{Matrix{Float64}}(undef,nVars)
+    uBC[1]                  = @tturbo @. u[1]*inlet + uDir[1]*outlet
+    uBC[2]                  = @tturbo @. u[2]*outlet + uDir[2]*inlet
+    uBC[3]                  = @tturbo @. u[3]*outlet + uDir[3]*inlet
+    uBC[4]                  = @tturbo @. u[4]
+    
+    #Derivatives:
+    duBC_du                 = Matrix{Matrix{Float64}}(undef,nVars,nVars)
+    if ComputeJ
+    
+        alloc!(duBC_du, size(u[1]))
+        @tturbo @. duBC_du[1,1]     += inlet
+        @tturbo @. duBC_du[2,2]     += outlet
+        @tturbo @. duBC_du[3,3]     += outlet
+        @tturbo @. duBC_du[4,4]     += 1.0
+        
+    end
+
+    #Compute hyperbolic flux and project onto normal vector:
+    flux, dflux_duBC, dflux_dgraduBC    = FluxAllocate(nVars, size(u[1]), ComputeJ)
+    HyperbolicFlux!(model, uBC, ComputeJ, flux, dflux_duBC)
+    fn, dfn_duBC, dfn_dgraduBC          = ProjectFlux(flux, dflux_duBC, dflux_dgraduBC,
+                                                      nb, ComputeJ)
+
+    #Update boundary flux.
+    #Note that
+    #   df_I/du_J = df_I/duBC_K * duBC_K/du_J:
+    for II=1:nVars
+        @tturbo @. bflux[II]                += fn[II]
+        if ComputeJ
+            for JJ=1:nVars, KK=1:nVars
+                @tturbo @. dbflux_du[II,JJ] += dfn_duBC[II,KK]*duBC_du[KK,JJ]
+            end
+        end
+    end
+
+    return
+    
+    #----------------------------------------------------------------
+    #Viscous flux. Impose null normal flux for q1 and q2:
+    
+    #Change pointers and reset fluxes:
+    dflux_du        = dflux_duBC
+    dflux_dgradu    = dflux_dgraduBC
+    zero!(flux)
+    if ComputeJ
+        zero!(dflux_du)
+        zero!(dflux_dgradu)
+    end
+    
+    #Compute viscous flux:
+    epsilon                     = @tturbo @. model.epsilon + 0.0*u[1]
+    epsilonFlux!(model, epsilon, du, ComputeJ, flux, dflux_dgradu, IIv=1:3)
+    g, dg_du, dg_dgradu         = ProjectFlux(flux, dflux_du, dflux_dgradu, nb, ComputeJ) 
+    
+    #Cancel fluxes according to boundary condition:
+    gBC                         = Vector{Matrix{Float64}}(undef, model.nVars)
+    alloc!(gBC, size(u[1]))
+    @tturbo @. gBC[1]           = outlet*g[1]    
+    @tturbo @. gBC[2]           = inlet*g[2]    
+    @tturbo @. gBC[3]           = inlet*g[3]    
+    @tturbo @. gBC[4]           = g[4]
+    
+    #Compute derivatives:
+    dgBC_dg                     = Matrix{Matrix{Float64}}(undef, nVars, nVars)
+    if ComputeJ
+        dgBC_dg[1,1]            = outlet
+        dgBC_dg[2,2]            = inlet
+        dgBC_dg[3,3]            = inlet
+        dgBC_dg[4,4]            = zeros(size(u[1]))
+    end
+    
+    #Update boundary flux.
+    #Note that
+    #   dfBC_I/du_J         = dfBC_I/df_K * df_K/du_J:
+    #   dfBC_I/d(du_J/dx_j) = dfBC_I/df_K * df_K/d(du_J/dx_j)
+    for II=1:nVars
+        @tturbo @. bflux[II]                        += gBC[II]
+        if ComputeJ
+            for JJ=1:nVars
+                @tturbo @. dbflux_du[II,JJ]         += dgBC_dg[II,II] * dg_du[II,JJ]
+            end
+            for JJ=1:nVars, kk=1:2
+                @tturbo @. dbflux_dgradu[II,JJ,kk]  += dgBC_dg[II,II] * dfn_dgradu[II,JJ,kk]
+            end
+        end
+    end
+    
+    #------------------------------------------------------------------------------
+    #Penalty terms:
+    
+    #Add penalty terms:
+    penalty!(model, hp, u, uBC, duBC_du, ComputeJ, bflux, dbflux_du)
+    
+    return
+
+end

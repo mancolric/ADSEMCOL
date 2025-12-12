@@ -35,7 +35,7 @@ function MosesRod(hp0::Float64, FesOrder::Int;
     function u0fun(x::Vector{Matrix{Float64}})
 
         eta             = @tturbo @. 0.0*x[1] + 10.0
-        q1              = @. SmoothHeaviside(x[1]-50/3, delta, -350.0, 350.0)
+        q1              = @. SmoothHeaviside(x[1], delta, -350.0, 350.0)
         q2              = @tturbo @. 0.0*x[1]
         b               = model.b(x)
 
@@ -48,9 +48,9 @@ function MosesRod(hp0::Float64, FesOrder::Int;
 
     #Mesh:
     MeshFile                = "$(@__DIR__)/../../temp/MosesRod$(SC).geo"
-    NX                      = Int(ceil(25.0/(hp0*FesOrder)))
+    NX                      = Int(ceil(200.0/(hp0*FesOrder)))
     NY                      = Int(ceil(1.0/(hp0*FesOrder)))
-    TrMesh_Rectangle_Create!(MeshFile, 0.0, 25.0, NX, -0.5, 0.5, NY)
+    TrMesh_Rectangle_Create!(MeshFile, -100.0, 100.0, NX, -0.5, 0.5, NY)
 
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
     solver                  = LIRKHyp_Start(model)
@@ -151,8 +151,8 @@ function MosesRod(hp0::Float64, FesOrder::Int;
             #Loop plot variables:
             for ii=1:length(PlotVars)
                 cla()
-                plot(tv, hminv, "-b")
-                plot(tv, 0.0*tv, "--r")
+                semilogy(tv, hminv, "-b")
+#                 plot(tv, 0.0*tv, "--r")
                 xlabel(latexstring("t"), fontsize=10)
                 ylabel(latexstring("h_{\\min}"), fontsize=10, rotation=0)
             end

@@ -58,6 +58,19 @@ mutable struct DoNothing1 <: BoundConds
 
 end
 
+#Subsonic/supersonic outlet. If normal velocity<0, subsonic inlet conditions
+#are applied:
+#   normal diff flux for eta    = 0
+#   q1                          = q1_BC
+#   q2                          = q2_BC
+#Otherwise, subsonic conditions are applied:
+#   eta                         = eta_BC
+#   normal diff flux for q1     = 0
+#   normal diff flux for q2     = 0
+mutable struct SubsonicInOutlet1 <: BoundConds
+    fun             ::FWt11     #must return [h, q1, q2]
+end
+
 #-------------------------------------------------------------------------------
 #LOAD AUXILIARY FUNCTIONS:
 
@@ -74,6 +87,7 @@ function DepVars(model::SWE, t::Float64, x::Vector{<:AMF64},
     q2          = u[3]
     b           = u[4]
     h           = eta-b
+#     h           = abs.(eta-b)
     nout        = length(vout)
     xout        = Vector{Vector{Array{Float64,ndims(q1)}}}(undef,nout)
     for ivar in eachindex(vout)
@@ -159,6 +173,7 @@ function FluxSource!(model::SWE, _qp::TrIntVars, ComputeJ::Bool)
     q2              = u[3]
     b               = u[4]
     h               = eta-b
+#     h               = abs.(eta-b)
     v1              = @tturbo @. q1/h
     v2              = @tturbo @. q2/h
     g               = model.g
@@ -170,6 +185,9 @@ function FluxSource!(model::SWE, _qp::TrIntVars, ComputeJ::Bool)
     hp_min          = _hmin(_qp.Integ2D.mesh)./_qp.FesOrder * ones(1, _qp.nqp)
     
     #Characteristic velocity:
+    if any(h.<0.0)
+        error("Water thickness is negative; minimum value is $(minimum(h))")
+    end
     lambda              = @tturbo @. sqrt(v1*v1 + v2*v2) + sqrt(g*h)
     
     #CFL number:
