@@ -127,6 +127,7 @@ Base.@kwdef mutable struct GasFXP <: ReactiveGas
 
     
 end
+include("GasFXP_reac.jl")
 
 Base.@kwdef mutable struct GasH2 <: ReactiveGas
 
@@ -571,7 +572,7 @@ function DepVars(model::GasFXP, t::Float64, x::Vector{<:AMF64},
             xout[ivar][2]   = fill(model.D, size(u[1]))
             xout[ivar][3]   = fill(model.D, size(u[1]))
         elseif vble=="mdot_i"
-            xout[ivar]      = calc_mdot(model,u[1:nSpecies],T)
+            xout[ivar]      = calc_mdot(model,u[1:nSpecies],RT)
         elseif vble=="dmdot_ij"
         
             #Allocate:

@@ -1,7 +1,7 @@
 include("test_CompressibleFlow.jl")
 include("InputData/ReactiveGasAuxFunctions.jl")
 
-function ShockFlame_FXP(FesOrder::Int;
+function ShockFlame_FXP(; FesOrder::Int=5, 
     tf::Float64=20.0, RKMethod::String="Ascher3",
     epsilon::Float64=1e-2, nu::Float64=0e-3, kappa_rho_cv::Float64=0e-6, 
     Pr::Float64=0.73, Le::Float64=1.0, YF0::Float64=1.0, 
@@ -51,6 +51,13 @@ function ShockFlame_FXP(FesOrder::Int;
     u0              = uL
     RTR             = pR/rhoR
     
+    #Chapman--Jouget state with same incoming conditions:
+    Min, rhoin, uin, pin, rhoCJ, uCJ, pCJ, _ = ChapmanJouget(gamma,q)
+    rhoCJ           *= rho0/rhoin
+    pCJ             *= p0/pin
+    RTCJ            = pCJ/rhoCJ
+    uCJ             *= sqrt(p0/rho0) / sqrt(pin/rhoin)
+    
     #Define gas:
     GasModel                = GasFXP()
     GasModel.epsilon        = epsilon
@@ -64,9 +71,9 @@ function ShockFlame_FXP(FesOrder::Int;
     GasModel.D              = nu/Pr/Le
     GasModel.BR             = 1.0   #tc = BR^{-1} 
     GasModel.BI             = BIhat * GasModel.BR 
-    GasModel.BB             = BBhat * GasModel.BR/rhoR
-    GasModel.RTI            = RThatI * RTR
-    GasModel.RTB            = RThatB * RTR
+    GasModel.BB             = BBhat * GasModel.BR/rhoCJ
+    GasModel.RTI            = RThatI * RTCJ
+    GasModel.RTB            = RThatB * RTCJ
     
     #Define domain:
     x2                  = Lx
@@ -80,15 +87,16 @@ function ShockFlame_FXP(FesOrder::Int;
     function u0fun(x::Vector{Matrix{Float64}})
         
         rhoYF           = @mlv SmoothHeaviside(x[1]-x0_flame, delta_flame, rho0*YF0, 0.0)
-        rhoYP           = @mlv SmoothHeaviside(x[1]-x0_flame, delta_flame, rho0*(1.0-YF0), rhoL) + 
+        rhoYX           = @mlv SmoothHeaviside(x[1]-x0_flame, delta_flame, rho0*(1.0-YF0), 0.0)
+        rhoYP           = @mlv SmoothHeaviside(x[1]-x0_flame, delta_flame, 0.0, rhoL) + 
                                 SmoothHeaviside(x[1]-x0_shock, delta_shock, 0.0, rhoR-rhoL)
         rhovx           = @mlv SmoothHeaviside(x[1]-x0_flame, delta_flame, rho0*u0, rhoL*uL) + 
                                 SmoothHeaviside(x[1]-x0_shock, delta_shock, 0.0, rhoR*uR-rhoL*uL)
         rhovy           = @mlv 0.0*x[1]
         rhoE            = @mlv (SmoothHeaviside(x[1]-x0_flame, delta_flame, p0, pL) + 
                                 SmoothHeaviside(x[1]-x0_shock, delta_shock, 0.0, pR-pL)) / (gamma-1.0) + 
-                                0.5*rhovx^2/(rhoYF+rhoYP) + rhoYF*Q0
-        return [rhoYF, rhoYP, rhovx, rhovy, rhoE]
+                                0.5*rhovx^2/(rhoYF+rhoYX+rhoYP) - rhoYP*Q0
+        return [rhoYF, rhoYX, rhoYP, rhovx, rhovy, rhoE]
         
     end
 
@@ -102,12 +110,7 @@ function ShockFlame_FXP(FesOrder::Int;
     end
     function uInlet(t::Float64, x::Vector{Matrix{Float64}})
         
-        rhoYF       = @mlv 0.0*x[1] + rho0*YF0
-        rhoYP       = @mlv 0.0*x[1] + rho0*(1.0-YF0)
-        rhovx       = @mlv 0.0*x[1] + rho0*u0
-        rhovy       = @mlv 0.0*x[1]
-        rhoE        = @mlv p0/(gamma-1.0) + 0.5*rho0*u0^2 + rhoYF*GasModel.hfF + rhoYP*GasModel.hfP
-        return [rhoYF, rhoYP, rhovx, rhovy, rhoE]
+        return u0fun(x)
         
     end
 #     BC_outlet       = SubsonicOutlet1(FWt11((t,x)->pOutlet(t,x)))
@@ -145,7 +148,9 @@ function ShockFlame_FXP(FesOrder::Int;
     
     #Compute initial condition:
     ConvFlag            = LIRKHyp_InitialCondition!(solver)
-
+    CheckJacobian(solver, Plot_dQ_du=true, Plot_dQ_dgradu=true)
+    return
+    
     #Function to plot solution:
     figv                = Vector{Figure}(undef,3)
     if PlotFig
@@ -233,6 +238,7 @@ function ShockFlame_FXP(FesOrder::Int;
                 "beta", beta, "q", q, "ML", ML,
                 "D", GasModel.D, "BI", GasModel.BI, "BR", GasModel.BR, 
                 "RTI", GasModel.RTI, "RTB", GasModel.RTB, "Q0", -GasModel.hfP, 
+                "rhoCJ", rhoCJ, "pCJ", pCJ, "RTCJ", RTCJ, "uCJ", uCJ, 
                 "x2", x2, "y2", y2,
                 "TolS", TolS, "TolT", TolT)
             t_lastRes   += Deltat_SaveRes
