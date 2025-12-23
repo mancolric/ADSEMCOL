@@ -65,11 +65,11 @@ Base.@kwdef mutable struct GasFP <: ReactiveGas
     CW              ::Float64           = 50.0  #Boundary penalty (50.0-200.0 for IIPG)
     
     #Reaction's characteristic fields:
-    hfF             ::Float64   = 500.0 #Q0=hFF-hFP=gamma/(gamma-1)*(RTf-RT0)/YF0
-    hfP             ::Float64   = 0.0
-    D               ::Float64   = kappa_rho_cv / gamma / 1.0
-    B               ::Float64   = 1000*exp(10)
-    RTa             ::Float64   = 10*6
+    hfF             ::Float64           = 500.0 #Q0=hFF-hFP=gamma/(gamma-1)*(RTf-RT0)/YF0
+    hfP             ::Float64           = 0.0
+    D               ::Float64           = kappa_rho_cv / gamma / 1.0
+    B               ::Float64           = 1000*exp(10)
+    RTa             ::Float64           = 10*6
     
     #Dependent variables. NOTE: DepVars contains variables to be evaluated when
     #Jacobian is not necessary. DepVarsJ contains variables to be evaluated when
@@ -102,15 +102,15 @@ Base.@kwdef mutable struct GasFXP <: ReactiveGas
     CW              ::Float64           = 50.0  #Boundary penalty (50.0-200.0 for IIPG)
     
     #Reaction's characteristic fields:
-    hfF             ::Float64   = 0.0 
-    hfX             ::Float64   = 0.0
-    hfP             ::Float64   = NaN
-    D               ::Float64   = kappa_rho_cv / gamma / 1.0
-    BI              ::Float64   = NaN
-    BB              ::Float64   = NaN
-    BR              ::Float64   = NaN
-    RTI             ::Float64   = NaN
-    RTB             ::Float64   = NaN
+    hfF             ::Float64           = 0.0 
+    hfX             ::Float64           = 0.0
+    hfP             ::Float64           = NaN
+    D               ::Float64           = kappa_rho_cv / gamma / 1.0
+    BI              ::Float64           = NaN
+    BB              ::Float64           = NaN
+    BR              ::Float64           = NaN
+    RTI             ::Float64           = NaN
+    RTB             ::Float64           = NaN
     
     #Dependent variables. NOTE: DepVars contains variables to be evaluated when
     #Jacobian is not necessary. DepVarsJ contains variables to be evaluated when

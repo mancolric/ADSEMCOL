@@ -1,3 +1,5 @@
+include("../../../src/AuxiliaryFunctions/ODESolvers.jl")
+
 function ChapmanJouget(gamma::Float64, q::Float64)
 
     #We assume the state at the end p2=1, rho2=1, u2=sqrt(gamma), YF2=0.
@@ -13,13 +15,13 @@ function ChapmanJouget(gamma::Float64, q::Float64)
     #   ((1+q)*gamma/(gamma-1)*p0 + 0.5*rho0*u0^2)*u0           = HU
     #If we write the equations in terms of u0:
     #A u0^2 + B*u0 + HU = 0
-    M   = rho2*u2
-    P   = p2+rho2*u2^2
-    HU  = (gamma/(gamma-1.0)*p2 + 0.5*rho2*u2^2)*u2
+    M       = rho2*u2
+    P       = p2+rho2*u2^2
+    HU      = (gamma/(gamma-1.0)*p2 + 0.5*rho2*u2^2)*u2
     #
-    A   = ((1.0+q)*gamma/(gamma-1.0)-0.5)*M
-    B   = -(1.0+q)*gamma/(gamma-1.0)*P
-    C   = HU
+    A       = ((1.0+q)*gamma/(gamma-1.0)-0.5)*M
+    B       = -(1.0+q)*gamma/(gamma-1.0)*P
+    C       = HU
     #
     u0      = (-B+sqrt(B^2-4*A*C))/(2*A)
     rho0    = M/u0
@@ -193,7 +195,7 @@ function FP_ChapmanJouget(gamma::Float64, q::Float64, beta0::Float64;
 end
 
 function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0, 
-    RThatI::Float64=10.0, RThatB::Float64=1.0, #RThat=RT_a/RT_1, #1: means post-shock condition
+    RThatI::Float64=10.0, RThatB::Float64=10.0, #RThat=RT_a/RT_1, #1: means post-shock condition
     BIhat::Float64=2.5e-3, BBhat::Float64=4.4e5, 
     Deltax::Float64=1e-3, xf::Float64=20.0, YF0::Float64=0.01, YX0::Float64=0.0, 
     PlotRes::Bool=false)
@@ -207,7 +209,8 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
     rhoc            = rho1
     uc              = u1
     pc              = rhoc*uc^2
-    #tc=1 via BR
+    tc              = 1.0
+    lc              = uc*tc
     
     #Scale pre and post shock conditions:
 #     rho0            /= rhoc
@@ -228,7 +231,7 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
     Q               = gamma/(gamma-1)*RT0/YF0*q     #F and X formation mass enthalpy 
     RTI             = RThatI*RT1                    #Activation temperature
     RTB             = RThatB*RT1                    #Activation temperature
-    BR              = 1.0                           #t_c = B_R^{-1} = 1.0
+    BR              = 1.0/tc                        #t_c = B_R^{-1} = 1.0
     BI              = BIhat * BR
     BB              = BBhat * BR/rho1
                         
@@ -265,7 +268,7 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
     end
     
     #Function to march flux variables in space:
-    function dF_dx(Fv::Vector{Float64})
+    function dF_dx(Fv::Vector{Float64}, ComputeJ::Bool)
     
         rho, u, p, YF, YX   = ExtractVars(Fv)
         RT                  = p/rho
@@ -274,7 +277,22 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
         kR                  = BR
         mFdot               = - kI*rho*YF - kB*rho^2*YF*YX
         mXdot               =   kI*rho*YF + kB*rho^2*YF*YX - kR*rho*YX
-        return [ mFdot; mXdot; 0; 0; 0 ]
+        
+        f                   = [ mFdot; mXdot; 0; 0; 0 ]
+        J                   = zeros(0,0)
+        if ComputeJ
+            nVars           = length(Fv)
+            J               = zeros(nVars, nVars)
+            delta           = 1e-5
+            for JJ=1:nVars
+                Fpert       = copy(Fv)
+                Fpert[JJ]   += delta
+                fpert       = dF_dx(Fpert, false)[1]
+                J[:,JJ]     = (fpert-f)/delta 
+            end
+        end
+        
+        return f, J
         
     end
     
@@ -295,6 +313,7 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
     RK              = RK_Coefficients("Ascher3")
     NF              = length(F_n)
     fm              = zeros(NF, RK.stages)
+    JFm             = zeros(NF, RK.stages)
     F_np1           = zeros(NF)
     xv              = [ -xf*0.1, x_n, x_n ]
     rhov            = [ rho0, rho0, rho1 ]
@@ -308,14 +327,17 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
         println("x_n=", x_n)
         
         #Compute next stage:
-        fm[:,1]         = dF_dx(F_n)
+        fm[:,1], J      = dF_dx(F_n, true)
+        JFm[:,1]        = J*F_n
+        A_F             = factorize(eye(5)-Deltax*RK.AI[2,2]*J)
         for ii=2:RK.stages
             S           = zeros(NF)
             for jj=1:ii-1
-                S       += RK.AE[ii,jj]*fm[:,jj]
+                S       += RK.AE[ii,jj]*fm[:,jj] + (RK.AI[ii,jj]-RK.AE[ii,jj])*JFm[:,jj]
             end
-            F_np1       .= F_n + Deltax*S
-            fm[:,ii]    = dF_dx(F_np1)
+            F_np1       .= A_F\(F_n + Deltax*S)
+            fm[:,ii]    = dF_dx(F_np1, false)[1]
+            JFm[:,ii]   = J*F_np1
         end
         
         #Update solution:
@@ -336,50 +358,20 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
     #Compute Mach number:
     Mv      = @. uv/sqrt(gamma*pv/rhov)
     
-    #Plot results:
-    if false
-    
-        Nx      = length(xv)
-        display("theoretical")
-        display((rho2, u2, p2, 0.0, 1.0))
-        display("numerical")
-        display((rhov[Nx], uv[Nx], pv[Nx], YFv[Nx], Mv[Nx]))
-        
-        figure()
-        plot(xv, rhov, "b")
-        plot(xv, uv, "g")
-        plot(xv, pv, "c")
-        plot(xv, pv./rhov, "r")
-        plot(xv, YFv, color="orange")
-        plot(xv, YXv, color="yellow")
-        plot(xv, Mv, "k")
-        legend([latexstring("\\rho"), 
-                latexstring("u"), 
-                latexstring("p"),
-                latexstring("T"), 
-                latexstring("Y_{F}"), 
-                latexstring("Y_{X}"),
-                latexstring("M") ], 
-                loc="best")
-        xlabel("x/L") #Here, L=u1 exp(beta1)/(beta1*BB)
-        grid("on")
-        
-    end
     #Plot each variable scaled with post-shock conditions (1):
     if PlotRes
     
         Nx      = length(xv)
-        display("theoretical")
-        display((rho2, u2, p2, 0.0, 1.0))
-        display("numerical")
-        display((rhov[Nx], uv[Nx], pv[Nx], YFv[Nx], Mv[Nx]))
+        println("Theoretical solution: rho2=$rho2, u2=$u2, p2=$p2, YF2=0.0, M2=1.0")
+        println("Numerical solution: rho2=$(rhov[Nx]), u2=$(uv[Nx]), p2=$(pv[Nx]), ", 
+                "YF2=$(YFv[Nx]), M2=$(Mv[Nx])")
         
         figure()
-        plot(xv, rhov/rho1, "b")
-        plot(xv, uv/u1, "g")
-        plot(xv, pv/p1, "c")
-        plot(xv, (pv./rhov)/RT1, "r")
-        plot(xv, Mv, "k")
+        plot(xv/lc, rhov/rho1, "b")
+        plot(xv/lc, uv/u1, "g")
+        plot(xv/lc, pv/p1, "c")
+        plot(xv/lc, (pv./rhov)/RT1, "r")
+        plot(xv/lc, Mv, "k")
         legend([latexstring("\\rho"), 
                 latexstring("u"), 
                 latexstring("p"),
@@ -390,9 +382,9 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
         grid("on")
         
         figure()
-        plot(xv, YFv, color="b")
-        plot(xv, YXv, color="orange")
-        plot(xv, 1.0.-YFv.-YXv, color="g")
+        plot(xv/lc, YFv, color="b")
+        plot(xv/lc, YXv, color="orange")
+        plot(xv/lc, 1.0.-YFv.-YXv, color="g")
         legend([latexstring("Y_{F}"), 
                 latexstring("Y_{X}"),
                 latexstring("Y_{P}")], 
