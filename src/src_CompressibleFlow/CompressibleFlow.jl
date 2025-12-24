@@ -581,12 +581,13 @@ function DepVars(model::GasFXP, t::Float64, x::Vector{<:AMF64},
             
             # Derivatives of mdot w.r.t. rhoYi, RT:
             dm_drhoYi, dm_drhoRT        = calc_dmdot(model,u[1:nSpecies],RT)
-        
+
             #Internal energy for each specie:
-            e_i         = [ @. hfF + RT/(gamma-1.0), 
-                            @. hfX + RT/(gamma-1.0), 
-                            @. hfP + RT/(gamma-1.0) ]
-                            
+            e_i         = Vector{Matrix{Float64}}(undef,nSpecies)
+            e_i[1]      = @tturbo @. hfF + RT/(gamma-1.0)
+            e_i[2]      = @tturbo @. hfX + RT/(gamma-1.0)
+            e_i[3]      = @tturbo @. hfP + RT/(gamma-1.0)
+            
             # Derivatives w.r.t. conservative variables applying chain rule.
             # Note that 
             #   dRT/drhoY_k = (gamma-1)/rho * (v^2/2 - e_k)
@@ -594,15 +595,15 @@ function DepVars(model::GasFXP, t::Float64, x::Vector{<:AMF64},
             #   dRT/drhoE   = (gamma-1)/rho
             for II=1:model.nSpecies
                 for JJ=1:model.nSpecies
-                    @tturbo @. dmdot_ij[II,JJ]  = dm_drhoYi[II,JJ] + 
-                                                    dm_drhoRT[II]*(gamma-1.0)/rho*
-                                                        ((vx^2+vy^2)/2-e_i[JJ])
+                    @tturbo @. dmdot_ij[II,JJ]      = dm_drhoYi[II,JJ] + 
+                                                        dm_drhoRT[II]*(gamma-1.0)/rho*
+                                                        ((rhovx*rhovx+rhovy*rhovy)/(2*rho*rho)-e_i[JJ])
                 end
-                @tturbo @. dmdot_ij[II,nSpecies+1]  = - dm_drhoRT[II]*(gamma-1.0)/rho*vx
-                @tturbo @. dmdot_ij[II,nSpecies+2]  = - dm_drhoRT[II]*(gamma-1.0)/rho*vy
+                @tturbo @. dmdot_ij[II,nSpecies+1]  = - dm_drhoRT[II]*(gamma-1.0)/(rho*rho)*rhovx
+                @tturbo @. dmdot_ij[II,nSpecies+2]  = - dm_drhoRT[II]*(gamma-1.0)/(rho*rho)*rhovy
                 @tturbo @. dmdot_ij[II,nSpecies+3]  = dm_drhoRT[II]*(gamma-1.0)/rho
             end
-                                                    
+            
             #Reshape output into vector:
             xout[ivar]          = reshape(dmdot_ij, :)
             
@@ -898,7 +899,7 @@ function FluxSource!(model::GasModel, _qp::TrIntVars, ComputeJ::Bool)
     _qp.Deltat_CFL      = min(Deltat_CFL_lambda, Deltat_CFL_D, Deltat_CFL_reac)
     #Print info:
     if ComputeJ
-        println("Deltat_conv=", sprintf1("%.2E", Deltat_CFL_lambda), 
+        println("Deltat_hyp=", sprintf1("%.2E", Deltat_CFL_lambda), 
                 ", Deltat_diff=", sprintf1("%.2E", Deltat_CFL_D),
                 ", Deltat_source=", sprintf1("%.2E", Deltat_CFL_reac))
     end

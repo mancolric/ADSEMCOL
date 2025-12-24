@@ -371,6 +371,13 @@ function LS_gmres!(LS::LinearSystem1, u::GenVector{Float64}, b::GenVector{Float6
     #uhat, bhat: permuted vectors. uhat is also scaled by LS.scalP
     #bred: statically condensed permuted vector 
     
+    #Exit early if there are NaNs or Infs in b:
+    if !all(isfinite.(b))
+        display("eeh")
+        display(b)
+        return -1, 0, Inf   #flag, nIters, etaA
+    end
+        
     #Extract variables:
     F               = LS.Pl
     scaleP          = LS.scaleP
@@ -1026,6 +1033,10 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     
     #Initialize monitor:
     solver.monitor  = Vector{Matrix{Float64}}(undef,0)
+    
+    #flag=1 if there are no NaNs nor Infs in the fluxes and source terms,
+    #flag=-1 otherwise
+    flag        = 1
 
     #----------------------------------------------------------------
     #Variables for domain integral:
@@ -1090,13 +1101,16 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     #Check NaN's:
     for II=1:solver.nVars
         if !all(isfinite.(_qp.f[II]))
-            error("flux $(II) is not finite")
+#             error("flux $(II) is not finite")
+            flag    = -1
         end
         if !all(isfinite.(_qp.fB[II]))
-            error("bubble flux $(II) is not finite")
+#             error("bubble flux $(II) is not finite")
+            flag    = -1
         end
         if !all(isfinite.(_qp.Q[II]))
-            error("source term $(II) is not finite")
+#             error("source term $(II) is not finite")
+            flag    = -1
         end
     end
     
@@ -1198,6 +1212,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         for II=1:solver.nVars
             if !all(isfinite.(_bqp.f[II]))
                 error("flux $(II) for boundary $(bound_id) is not finite")
+                flag                = -1
             end
         end
         tB4                         += time()-t_ini2
@@ -1267,7 +1282,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     
 #     error("")
     
-    return _qp.Deltat_CFL
+    return flag, _qp.Deltat_CFL
     
 end
 

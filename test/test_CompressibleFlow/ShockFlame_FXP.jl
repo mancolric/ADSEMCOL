@@ -148,8 +148,8 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     
     #Compute initial condition:
     ConvFlag            = LIRKHyp_InitialCondition!(solver)
-    CheckJacobian(solver, Plot_dQ_du=true, Plot_dQ_dgradu=true)
-    return
+#     CheckJacobian(solver, Plot_dQ_du=true)
+#     return
     
     #Function to plot solution:
     figv                = Vector{Figure}(undef,3)
@@ -169,6 +169,8 @@ function ShockFlame_FXP(; FesOrder::Int=5,
         if PlotFig && ( solver.t-t_lastFig>=Deltat_SaveFig || 
                         ct_SaveFig==Nt_SaveFig || solver.t==tf || solver.t==0.0 )
         
+            println("Plotting")
+            
             figure(figv[1].number)
     
             #Loop plot variables:
@@ -215,6 +217,8 @@ function ShockFlame_FXP(; FesOrder::Int=5,
             ct_SaveFig          = 0
             nb_SaveFig          += 1
             
+            println("Plot finished")
+            
         end
         return
         
@@ -235,7 +239,7 @@ function ShockFlame_FXP(; FesOrder::Int=5,
                 "epsilon", epsilon, "nu", nu, "kappa_rho_cv", kappa_rho_cv,
                 "Pr", Pr, "Le", Le, "YF0", YF0,
                 "delta_flame", delta_flame, "delta_shock", delta_shock, 
-                "beta", beta, "q", q, "ML", ML,
+                "q", q, "ML", ML,
                 "D", GasModel.D, "BI", GasModel.BI, "BR", GasModel.BR, 
                 "RTI", GasModel.RTI, "RTB", GasModel.RTB, "Q0", -GasModel.hfP, 
                 "rhoCJ", rhoCJ, "pCJ", pCJ, "RTCJ", RTCJ, "uCJ", uCJ, 
@@ -260,6 +264,7 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     while solver.t<tf
     
         ConvFlag    = LIRKHyp_Step!(solver)
+#         ConvFlag    = IRK_Step!(solver)
         
         if ConvFlag<=0
             break

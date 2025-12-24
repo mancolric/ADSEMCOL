@@ -8,8 +8,8 @@ function calc_mdot(model::GasFXP, rhoY::Vector{Matrix{Float64}}, RT::Matrix{Floa
     #mdot:
     mdot        = Vector{Matrix{Float64}}(undef, model.nSpecies)
     mdot[1]     = @tturbo @. - rhoY[1]*kI - rhoY[1]*rhoY[2]*kB
-    mdot[2]     = @tturbo @.   rhoY[1]*kI + rhoY[1]*rhoY[2]*kB - rhoY[3]*kR
-    mdot[3]     = @tturbo @.                                   + rhoY[3]*kR
+    mdot[2]     = @tturbo @.   rhoY[1]*kI + rhoY[1]*rhoY[2]*kB - rhoY[2]*kR
+    mdot[3]     = @tturbo @.                                   + rhoY[2]*kR
     
     return mdot
     
@@ -46,7 +46,7 @@ function calc_dmdot(model::GasFXP, rhoY::Vector{Matrix{Float64}}, RT::Matrix{Flo
 
     RT_pert     = @tturbo @. RT-delta
     f_neg       = calc_mdot(model, rhoY, RT_pert)
-    RT_pert     = @tturbo @. T+delta
+    RT_pert     = @tturbo @. RT+delta
     f_pos       = calc_mdot(model, rhoY, RT_pert)
     # Finite differences:
     for i=1:N

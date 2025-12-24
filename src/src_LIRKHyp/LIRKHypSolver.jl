@@ -413,12 +413,12 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
     solver.tAlloc       += time()-t_ini
     
     #Set algebraic tolerance:
-    TolA            = max(solver.TolA_min, solver.CA*min(etaS_np1_est, etaT_np1_est, etaS_n))
+    TolA                = max(solver.TolA_min, solver.CA*min(etaS_np1_est, etaT_np1_est, etaS_n))
     
     #Flux and Jacobian for first stage:
     t_ini                   = time()
     println("Computing Jacobian")
-    Deltat_CFL              = Rhs!(solver, t_n, u_n, true, 
+    flag, Deltat_CFL        = Rhs!(solver, t_n, u_n, true, 
                                 view(solver.f_RK,:,1), solver.Jm)
     solver.tJm              += time()-t_ini
     printstyled("Jacobian computed in ", time()-t_ini, " seconds, nnz=", 
@@ -435,7 +435,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
     etaS_elems_np1      = zeros(0)
     urec_np1            = Vector{VectorView{Float64}}(undef,solver.nVars)
     etaT_np1            = 0.0
-    etaA_np1            = 0.0
+    etaA_np1            = NaN
     
     #Loop stages until algebraic and time tolerances are met:
     RepeatTA            = true
@@ -476,13 +476,14 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                                                 $view(solver.Ju_RK,:,ll) + 
                                         solver.RK.AE[kk,ll]*$view(solver.f_RK,:,ll))
             end
-            if any(isnan.(solver.bv))
-                display(kk)
-                display(norm(b_1))
-                display(norm(solver.f_RK))
-                display(norm(solver.Ju_RK))
-                error("NaNs in solver.bv")
-            end
+#             if any(isnan.(solver.bv))
+#                 display(kk)
+#                 display(norm(b_1))
+#                 display(norm(solver.f_RK))
+#                 display(norm(solver.Ju_RK))
+#                 display(Deltat_n)
+#                 error("NaNs in solver.bv")
+#             end
             solver.tb               += time()-t_ini
             
             #Save linear system to discuss role of CA:
@@ -501,9 +502,13 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
             LSFlag      = LSOutput[1]
             LSIter      = LSOutput[2]
             etaA_np1    = LSOutput[3]
-            if LSFlag<=0
-#                 printstyled("Linear solver did not converge\n", color=:light_yellow)
-                break #loop for kk=1:nStages
+            if LSFlag<0
+                #LS did not converge because something went wrong with the rhs vector
+                etaA_np1        = Inf   #In this way, time step is decreased as maximum as possible
+                break #loop for kk=2:nStages
+            elseif LSFlag==0
+                #LS reached maximum of iterations
+                break #loop for kk=2:nStages
             else
 #                 println("Stage $kk, linear solver converged in $(LSIter) iterations")
             end
@@ -512,7 +517,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
             
             #Compute flux and save derivatives:
             t_ini                   = time()
-            Rhs!(solver, t_k, u_k, false, view(solver.f_RK,:,kk), solver.Jm)
+            flag,                   = Rhs!(solver, t_k, u_k, false, view(solver.f_RK,:,kk), solver.Jm)
             solver.tRhs             += time()-t_ini
 #             println("Rhs vector = ", time()-t_ini)
             view(solver.Ju_RK,:,kk) .= solver.Jm*u_k
@@ -1205,7 +1210,7 @@ function LIRKHyp_Step_Post_Dolejsi!(solver::SolverData)
         #Flux and Jacobian for first stage:
         t_ini                   = time()
         println("Computing Jacobian")
-        Deltat_CFL              = Rhs!(solver, t_n, solver.uv, true, 
+        flag, Deltat_CFL        = Rhs!(solver, t_n, solver.uv, true, 
                                     view(solver.f_RK,:,1), solver.Jm)
         solver.tJm              += time()-t_ini
         printstyled("Jacobian computed in ", time()-t_ini, " seconds, nnz=", 
@@ -1873,7 +1878,7 @@ function IRK_Step!(solver::SolverData)
     #Flux and Jacobian for first stage:
     t_ini                   = time()
     println("Computing Jacobian")
-    Deltat_CFL              = Rhs!(solver, t_n, u_n, true, 
+    flag, Deltat_CFL        = Rhs!(solver, t_n, u_n, true, 
                                 view(solver.f_RK,:,1), solver.Jm)
     solver.tJm              += time()-t_ini
     printstyled("Jacobian computed in ", time()-t_ini, " seconds, nnz=", 
@@ -1888,7 +1893,7 @@ function IRK_Step!(solver::SolverData)
     etaS_elems_np1      = zeros(0)
     urec_np1            = Vector{VectorView{Float64}}(undef,solver.nVars)
     etaT_np1            = 0.0
-    etaA_np1            = 0.0
+    etaA_np1            = Inf
     
     #Save M*u[1]:
     b1                  = solver.Mm*u_n
@@ -1915,8 +1920,8 @@ function IRK_Step!(solver::SolverData)
             if kk==2 || solver.RK.AI[kk,kk]!=solver.RK.AI[kk-1,kk-1]
                 println("Setting up linear system")
                 t_ini                   = time()
-                @mlv solver.Am.nzval    = solver.Mm.nzval - 
-                                            (Deltat_n*solver.RK.AI[kk,kk])*solver.Jm.nzval
+                BLAS.axpby!(1.0, solver.Mm.nzval, 0.0, solver.Am.nzval)
+                BLAS.axpby!(-Deltat_n*solver.RK.AI[kk,kk], solver.Jm.nzval, 1.0, solver.Am.nzval)
                 LinearSystem!(solver.Am_LS)                
                 solver.tSCILU           += time()-t_ini
                 printstyled("Linear system set up in ", time()-t_ini, " seconds \n", color=:cyan)
@@ -1930,23 +1935,27 @@ function IRK_Step!(solver::SolverData)
             for ll=1:kk-1
                 @mlv solver.bv      += (Deltat_n*solver.RK.AI[kk,ll])*$view(solver.f_RK,:,ll)
             end
-            if any(isnan.(solver.bv))
-                display(kk)
-                display(norm(b_1))
-                display(norm(solver.f_RK))
-                display(norm(solver.Ju_RK))
-                error("NaNs in solver.bv")
-            end
+#             if any(isnan.(solver.bv))
+#                 display(kk)
+#                 display(norm(b1))
+#                 display(norm(solver.f_RK[:,1:kk-1]))
+#                 display(norm(solver.Ju_RK))
+#                 display(Deltat_n)
+#                 error("NaNs in solver.bv")
+#             end
             solver.tb               += time()-t_ini
             
             #Define preconditioned residual:
-            etaA_np1        = NaN
             function QNResidual1!(u::Vector{Float64}, gres::Vector{Float64})
                 
                 #Compute flux and save derivatives:
 #                 t_ini                   = time()
-                Rhs!(solver, t_k, u, false, view(solver.f_RK,:,kk), solver.Jm)
+                flag,       = Rhs!(solver, t_k, u, false, 
+                                view(solver.f_RK,:,kk), solver.Jm)
 #                 solver.tRhs             += time()-t_ini
+                if flag<0
+                    return flag
+                end
                 
                 #Compute residual f:
                 #   f = D*(M*(Du) - b - Deltat*a_kk*f_k(Du))
@@ -1960,7 +1969,7 @@ function IRK_Step!(solver::SolverData)
                                 Display="notify", MaxIter=solver.LS_iters_max)
                 #Returns flag, nIters, etaA
                 flag        = LSOutput[1]
-                etaA_np1    = LSOutput[3]
+#                 etaA_np1    = LSOutput[3]
                 
                 return flag
                 
@@ -1970,22 +1979,23 @@ function IRK_Step!(solver::SolverData)
             t_ini       = time()
             LSOutput    = Anderson(FW_NLS((u,gres)->QNResidual1!(u,gres)), 
                             u_k, 
-                            AbsTolX=1.0*sqrt(length(u_k))*TolA, RelTolX=0.0, 
-                            AbsTolG=0.0*sqrt(length(u_k))*TolA, RelTolG=0.0, 
-                            memory=100, MaxIter=solver.LS_iters_max, Display="final")
+                            AbsTolX=1.0*TolA, RelTolX=0.0, 
+                            AbsTolG=0.0*TolA, RelTolG=0.0, 
+                            NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
+                            memory=100, MaxIter=solver.LS_iters_max, 
+                            history=true, Display="final")
             solver.tLS  += time()-t_ini
             u_k         .= LSOutput[1]
             LSFlag      = LSOutput[2].flag
-            if LSFlag<=0
-                @warn "LSFlag"
-                LSFlag      = 1
-                etaA_np1    = 0.0 
-            end
             LSIter      = LSOutput[2].nIter
-            #etaA_np1 is computed in the last call to QNResidual1
-            if LSFlag<=0
-#                 printstyled("Linear solver did not converge\n", color=:light_yellow)
-                break #loop for kk=1:nStages
+            etaA_np1    = LSOutput[2].pnorms[ length(LSOutput[2].pnorms) ]
+            if LSFlag<0
+                #NLS did not converge because something went wrong with the residual function
+                etaA_np1        = Inf   #In this way, time step is decreased as maximum as possible
+                break #loop for kk=2:nStages
+            elseif LSFlag==0
+                #NLS reached maximum of iterations
+                break #loop for kk=2:nStages
             else
 #                 println("Stage $kk, linear solver converged in $(LSIter) iterations")
             end
