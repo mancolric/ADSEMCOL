@@ -7,7 +7,7 @@ function GasFXP_ShockFlame(SC::Int, nb::Int)
     #Define gas:
     GasModel                = GasFXP()
     GasModel.epsilon        = load(FileName, "epsilon")
-    GasModel.gamma          = 1.4#load(FileName, "gamma")
+    GasModel.gamma          = load(FileName, "gamma")
     GasModel.nu             = load(FileName, "nu")
     GasModel.beta           = 0.0
     GasModel.kappa_rho_cv   = load(FileName, "kappa_rho_cv")
@@ -17,7 +17,7 @@ function GasFXP_ShockFlame(SC::Int, nb::Int)
     GasModel.D              = load(FileName, "D")
     GasModel.BR             = load(FileName, "BR")
     GasModel.BI             = load(FileName, "BI")
-#     GasModel.BB             = load(FileName, "BB")
+    GasModel.BB             = load(FileName, "BB")
     GasModel.RTI            = load(FileName, "RTI")
     GasModel.RTB            = load(FileName, "RTB")
     
@@ -171,11 +171,11 @@ function Video_ShockFlame(SC::Int;
     
     tPlot_nFig  = tPlot/(nbMax-n1)
     
-    #Track shock and flame positions:
-    pref,YFref  = pYref_ShockFlame(SC)
-    tv          = zeros(0)
-    xsv         = zeros(0)
-    xfv         = zeros(0)
+    #Shock and flame locations:
+    tv          = load(FileName, "tv")
+    xsv         = load(FileName, "xsv")
+    xfv         = load(FileName, "xfv")
+    xsdotv      = xdotfun(tv, xsv)
     
 #     fig         = PyPlotSubPlots(mFig, nFig, w=w, h=h, top=1.0)
     fig         = PyPlotSubPlots(mFig, nFig, w=w, h=h, top=0.1, right=0.1, left=1.8, bottom=0.1, tTitle=0.8, bTitle=1.0)
@@ -188,17 +188,12 @@ function Video_ShockFlame(SC::Int;
         solver      = GetSolver(SC, nb)
         
         #Get positions of shock and flame
-        xs, xf      = xsxf_ShockFlame(solver, GasModel, pref, YFref)
-        push!(tv, solver.t)
-        push!(xsv, xs)
-        push!(xfv, xf)
+        Nt          = length(load(FileName, "tv"))
+        xs          = xsv[Nt]
+        xf          = xfv[Nt]
+        xsdot       = xsdotv[Nt]
         
-        #Shock speed:
-        xsdot       = 0.0
-        if kSave>0
-            xsdot   = (xsv[kSave+1]-xsv[kSave])/(tv[kSave+1]-tv[kSave])
-        end
-        
+        #Plot:
         for ii=1:length(PlotVars)
             subplot(mFig, nFig, ii)
             cla()
@@ -237,7 +232,7 @@ function Video_ShockFlame(SC::Int;
             ylabel(latexstring(vbleString), rotation=0, fontsize=10, labelpad=10)
 
         end
-        suptitle(latexstring("\\mathcal{Q}=", q, ", M=", ML, 
+        suptitle(latexstring("\\mathcal{Q}=", q, ", M_i=", ML, 
                     ", t=", sprintf1("%.2e", solver.t)), fontsize=10)
         
         if SaveFig
@@ -248,7 +243,7 @@ function Video_ShockFlame(SC::Int;
         
         t1          = time()
         
-        pause(max(0.01, tPlot_nFig-(t1-t0)))
+        pause(min(max(0.01, tPlot_nFig-(t1-t0)),0.5))
         
     end
     
@@ -261,75 +256,35 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
     nbMax       = load("$(ResUbi)LIRKHyp_SC$(SC)_info.jld2", "nb_SaveRes")
     
     FileName    = GetFileName(SC, nbMax)
-    solver      = GetSolver(SC, nbMax)
     q           = load(FileName, "q")
-    beta        = load(FileName, "beta")
     ML          = load(FileName, "ML")
-    GasModel    = GasFXP_ShockFlame(SC,nbMax)
-    
-    #Track shock and flame positions, as well as incoming (transmitted) relative Mach number:
-    pref,YFref  = pYref_ShockFlame(SC)
-    tv          = zeros(0)
-    xsv         = zeros(0)
-    xfv         = zeros(0)
-    Mtv         = zeros(0)
-    for nb=0:nbMax
-    
-        FileName    = GetFileName(SC, nb)
-        solver      = GetSolver(SC, nb)
-    
-        #Get positions of shock and flame:
-        xs, xf      = xsxf_ShockFlame(solver, GasModel, pref, YFref)
-        push!(tv, solver.t)
-        push!(xsv, xs)
-        push!(xfv, xf)
-        
-        #Shock velocity:
-        xsdot       = NaN
-        if nb==0
-            xsdot   = 0.0
-        elseif nb==1
-            xsdot   = (xsv[nb+1]-xsv[nb])/(tv[nb+1]-tv[nb])
-        else
-            xsdot   = (3*xsv[nb+1]-4*xsv[nb]+xsv[nb-1])/(3*tv[nb+1]-4*tv[nb]+tv[nb-1])
-        end
-        
-        #Relative Mach number:
-        if false && xf<xs #not working if flame does not pass shock (e.g. q=1, M=10)
-            Mtv         = push!(Mtv, NaN)
-        else
-            Mrelv       = SolutionAtNodes_MRel(solver, GasModel, xsdot)
-            x1v         = solver.mesh.NodesCoords[:,1]
-            sortv       = sortperm(x1v)
-            x1v         = x1v[sortv]
-            Mrelv       = Mrelv[sortv]
-            aux         = findfirst(x1v.>0.0)
-            Mtv         = push!(Mtv, Mrelv[aux])
-        end
-        
-    end
+    tv          = load(FileName, "tv")
+    xsv         = load(FileName, "xsv")
+    xfv         = load(FileName, "xfv")
+    Mtv         = load(FileName, "Mrelv")
     
     #Plot xs(t) and xf(t):
     PyPlotFigure(w=w, h=h, top=1.0, bottom=1.0, left=1.5, right=0.2)
-    plot(tv, xsv, "b")
+    plot(tv, xsv, "x-b")
     plot(tv, xfv, "r")
     tick_params(axis="both", which="both", labelsize=TickSize)
     xlabel(latexstring("t"), fontsize=10)
     ylabel(latexstring("x_1"), fontsize=10, rotation=0)    
     legend(["shock", "flame"], fontsize=8)
-    title(latexstring("\\mathcal{Q}=", q, ", \\beta=", beta, ", \\mathcal{M}_i=", ML), fontsize=10)
+    title(latexstring("\\mathcal{Q}=", q, ", \\mathcal{M}_i=", ML), fontsize=10)
     if SaveFig
         savefig("$(FigUbi)SC$(SC)_TrackShockFlame.png", dpi=800, pad_inches=0)
     end
     
     #Plot xf(t)-xs(t):
-    if false
+    if true
+        xsdotv      = xdotfun(tv, xsv)
         PyPlotFigure(w=w, h=h, top=1.0, bottom=1.0, left=1.5, right=0.2)
-        plot(tv, xfv-xsv, "g")
+        plot(tv, xsdotv, "g")
         tick_params(axis="both", which="both", labelsize=TickSize)
         xlabel(latexstring("t"), fontsize=10)
-        ylabel(latexstring("x_f-x_s"), fontsize=10, rotation=0)    
-        title(latexstring("\\mathcal{Q}=", q, ", \\beta=", beta, ", \\mathcal{M}_i=", ML), fontsize=10)
+#         ylabel(latexstring("x_f-x_s"), fontsize=10, rotation=0)    
+        title(latexstring("\\mathcal{Q}=", q, ", \\mathcal{M}_i=", ML), fontsize=10)
         if SaveFig
             savefig("$(FigUbi)SC$(SC)_TrackShockFlame2.png", dpi=800, pad_inches=0)
         end
@@ -341,58 +296,12 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
     tick_params(axis="both", which="both", labelsize=TickSize)
     xlabel(latexstring("t"), fontsize=10)
     ylabel(latexstring("\\mathcal{M}_t"), fontsize=10, rotation=0)    
-    title(latexstring("\\mathcal{Q}=", q, ", \\beta=", beta, ", \\mathcal{M}_i=", ML), fontsize=10)
+    title(latexstring("\\mathcal{Q}=", q, ", \\mathcal{M}_i=", ML), fontsize=10)
     if SaveFig
         savefig("$(FigUbi)SC$(SC)_Mt.png", dpi=800, pad_inches=0)
     end
     
     return
-    
-end
-
-function xsxf_ShockFlame(solver::SolverDataSave, GasModel::GasFXP,
-    pref::Float64, YFref::Float64)
-
-    #Pressure and YF at mesh nodes:
-    x1v         = solver.mesh.NodesCoords[:,1]
-    pv          = SolutionAtNodes(solver,GasModel,"p")
-    YFv         = SolutionAtNodes(solver,GasModel,"Y_F")
-        
-    #Sort by x1 coordinate:
-    sortv       = sortperm(x1v)
-    x1v         = x1v[sortv]
-    pv          = pv[sortv]
-    YFv         = YFv[sortv]
-    
-    #Get shock and flame positions:
-    xf          = NaN
-    T           = findlast(YFv.>YFref)
-    if T<length(x1v)
-        xf      = x1v[T] + (x1v[T+1]-x1v[T])*(YFref-YFv[T])/(YFv[T+1]-YFv[T])
-    end
-    #
-    xs          = NaN
-    T           = findlast(pv.<pref)
-    if T<length(x1v)
-        xs      = x1v[T] + (x1v[T+1]-x1v[T])*(pref-pv[T])/(pv[T+1]-pv[T])
-    end
-        
-    return xs, xf
-    
-end
-
-function pYref_ShockFlame(SC::Int)
-
-    solver      = GetSolver(SC,0)
-    GasModel    = GasFXP_ShockFlame(SC,0)
-    
-    pv          = SolutionAtNodes(solver,GasModel,"p")
-    YFv         = SolutionAtNodes(solver,GasModel,"Y_F")
-    
-    pref        = 0.5*(maximum(pv)+minimum(pv))
-    YFref       = 0.5*(maximum(YFv)+minimum(YFv))
-   
-    return pref, YFref
     
 end
 
@@ -624,6 +533,26 @@ function MtMrShock(Mi::Float64, gamma::Float64, q::Float64)
     
 end
 
+#Compute shock and flame velocities:
+function xdotfun(tv::Vector{Float64}, xv::Vector{Float64})
+
+    N       = length(tv)
+    if N==1
+        return [ 0.0 ]
+    end
+    
+    xdotv           = zeros(N)
+    xdotv[1]        = (xv[2]-xv[1])/(tv[2]-tv[1])
+    xdotv[2]        = (xv[2]-xv[1])/(tv[2]-tv[1])
+    for ii=3:N
+        xdotv[ii]   = (3*xv[ii]-4*xv[ii-1]+xv[ii-2])/(3*tv[ii]-4*tv[ii-1]+tv[ii-2])
+#         xdotv[ii]   = (xv[ii]-xv[ii-1])/(tv[ii]-tv[ii-1])
+    end
+    
+    return xdotv
+    
+end
+
 #NOTAS:
 #   -¿Se podría definir de forma más rigurosa la posición de la llama y de la onda?
 #   -¿Sería necesario hacerlo para reducir las oscilaciones?
@@ -632,3 +561,52 @@ end
 #   -Hay casos en los que la llama se separa de la onda al principio y luego
 #   se junta (utilizando el modelo de Arrhenius). Sería importante limitar el dominio
 #   o el tiempo.
+
+#=
+function pYref_ShockFlame(SC::Int)
+
+    solver      = GetSolver(SC,0)
+    GasModel    = GasFXP_ShockFlame(SC,0)
+    
+    pv          = SolutionAtNodes(solver,GasModel,"p")
+    YFv         = SolutionAtNodes(solver,GasModel,"Y_F")
+    
+    pref        = 0.5*(maximum(pv)+minimum(pv))
+    YFref       = 0.5*(maximum(YFv)+minimum(YFv))
+   
+    return pref, YFref
+    
+end
+
+function xsxf_ShockFlame(solver::SolverDataSave, GasModel::GasFXP,
+    pref::Float64, YFref::Float64)
+
+    #Pressure and YF at mesh nodes:
+    x1v         = solver.mesh.NodesCoords[:,1]
+    pv          = SolutionAtNodes(solver,GasModel,"p")
+    YFv         = SolutionAtNodes(solver,GasModel,"Y_F")
+        
+    #Sort by x1 coordinate:
+    sortv       = sortperm(x1v)
+    x1v         = x1v[sortv]
+    pv          = pv[sortv]
+    YFv         = YFv[sortv]
+    
+    #Get shock and flame positions:
+    xf          = NaN
+    T           = findlast(YFv.>YFref)
+    if T<length(x1v)
+        xf      = x1v[T] + (x1v[T+1]-x1v[T])*(YFref-YFv[T])/(YFv[T+1]-YFv[T])
+    end
+    #
+    xs          = NaN
+    T           = findlast(pv.<pref)
+    if T<length(x1v)
+        xs      = x1v[T] + (x1v[T+1]-x1v[T])*(pref-pv[T])/(pv[T+1]-pv[T])
+    end
+        
+    return xs, xf
+    
+end
+
+=#

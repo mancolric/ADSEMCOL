@@ -15,7 +15,7 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     #
     TolT::Float64=1e-5, Deltat0::Float64=1e-6,
     #
-    PlotFig::Bool=false, wFig::Float64=9.50, hFig::Float64=6.50, 
+    PlotFig::Bool=false, MarkSF::Bool=true, wFig::Float64=9.50, hFig::Float64=6.50, 
     PlotVars::Vector{String}=String[], PlotCode::Vector{String}=fill("nodes", length(PlotVars)), 
     SaveFig::Bool=false, Nt_SaveFig::Int=5, Deltat_SaveFig::Float64=Inf,
     mFig::Int=max(1,length(PlotCode)), nFig::Int=Int(ceil(length(PlotCode)/mFig)), cmap::String="jet",
@@ -151,6 +151,17 @@ function ShockFlame_FXP(; FesOrder::Int=5,
 #     CheckJacobian(solver, Plot_dQ_du=true)
 #     return
     
+    #Reference values of p and YF:
+    pref, YFref         = pYref_ShockFlame(solver)
+    
+    #Location of shock and flame and relative Mach number:
+    xs, xf              = xsxf_ShockFlame(solver, pref, YFref)
+    tv                  = [ 0.0 ]
+    xsv                 = [ xs ]
+    xfv                 = [ xf ]
+    Mrel                = Mrel_ShockFlame(solver, tv, xsv, xfv)
+    Mrelv               = [ Mrel ]
+    
     #Function to plot solution:
     figv                = Vector{Figure}(undef,3)
     if PlotFig
@@ -175,15 +186,22 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     
             #Loop plot variables:
             for ii=1:length(PlotVars)
+            
                 PyPlot.subplot(mFig, nFig, ii)
                 PyPlot.cla()
 
                 splot_fun(x1,x2)    = @mlv x1
-                PlotNodes(splot_fun, solver, PlotVars[ii])
+                v_plot              = PlotNodes(splot_fun, solver, PlotVars[ii])
                 xlabel(latexstring("x_1"), fontsize=10)
                 title(latexstring(LatexString(GasModel, PlotVars[ii]),
                     "; t^n=", sprintf1("%.2e", solver.t)), 
                     fontsize=10)
+                    
+                if MarkSF
+                    plot([xf, xf], [0.9*minimum(v_plot), 1.1*maximum(v_plot)], "--r")
+                    plot([xs, xs], [0.9*minimum(v_plot), 1.1*maximum(v_plot)], "--g")
+                end
+                
             end
             if SaveFig
                 savefig("$(VideosUbi)ShockFlame_FXP_SC$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
@@ -244,7 +262,8 @@ function ShockFlame_FXP(; FesOrder::Int=5,
                 "RTI", GasModel.RTI, "RTB", GasModel.RTB, "Q0", -GasModel.hfP, 
                 "rhoCJ", rhoCJ, "pCJ", pCJ, "RTCJ", RTCJ, "uCJ", uCJ, 
                 "x2", x2, "y2", y2,
-                "TolS", TolS, "TolT", TolT)
+                "TolS", TolS, "TolT", TolT, 
+                "tv", tv, "xsv", xsv, "xfv", xfv, "Mrelv", Mrelv)
             t_lastRes   += Deltat_SaveRes
             ct_SaveRes  = 0
             nb_SaveRes  += 1
@@ -270,11 +289,107 @@ function ShockFlame_FXP(; FesOrder::Int=5,
             break
         end
         
+        #Location of shock and flame, and relative Mach number to the shock speed:
+        xs, xf              = xsxf_ShockFlame(solver, pref, YFref)
+        push!(tv, solver.t)
+        push!(xsv, xs)
+        push!(xfv, xf)
+        Mrel                = Mrel_ShockFlame(solver, tv, xsv, xfv)
+        push!(Mrelv, Mrel)
+        
         PlotSol()
         SaveSol()
         
     end
     
     return solver
+    
+end
+
+#--------------------------------------------------------------------------
+
+function pYref_ShockFlame(solver::SolverData)
+
+    GasModel    = solver.model
+    
+    pv          = SolutionAtNodes(solver,GasModel,"p")
+    YFv         = SolutionAtNodes(solver,GasModel,"Y_F")
+    
+    pref        = 0.5*(maximum(pv)+minimum(pv))
+    YFref       = 0.5*(maximum(YFv)+minimum(YFv))
+   
+    return pref, YFref
+    
+end
+
+function xsxf_ShockFlame(solver::SolverData, pref::Float64, YFref::Float64)
+
+    GasModel    = solver.model
+    
+    #Pressure and YF at mesh nodes:
+    x1v         = solver.mesh.NodesCoords[:,1]
+    pv          = SolutionAtNodes(solver,GasModel,"p")
+    YFv         = SolutionAtNodes(solver,GasModel,"Y_F")
+        
+    #Sort by x1 coordinate:
+    sortv       = sortperm(x1v)
+    x1v         = x1v[sortv]
+    pv          = pv[sortv]
+    YFv         = YFv[sortv]
+    
+    #Get shock and flame positions:
+    xf          = NaN
+    T           = findlast(YFv.>YFref)
+    if T<length(x1v)
+        xf      = x1v[T] + (x1v[T+1]-x1v[T])*(YFref-YFv[T])/(YFv[T+1]-YFv[T])
+    end
+    #
+    xs          = NaN
+    T           = findlast(pv.<pref)
+    if T<length(x1v)
+        xs      = x1v[T] + (x1v[T+1]-x1v[T])*(pref-pv[T])/(pv[T+1]-pv[T])
+    end
+        
+    return xs, xf
+    
+end
+
+function Mrel_ShockFlame(solver::SolverData, tv::Vector{Float64}, 
+    xsv::Vector{Float64}, xfv::Vector{Float64})
+
+    Nt          = length(tv)
+    
+    #Check if this is not the first time level:
+    if Nt==1
+        return NaN
+    end
+    
+    #Check that flame has passed the shock:
+    if xfv[Nt]<xsv[Nt]
+        return NaN
+    end
+    
+    #Compute shock speed:
+    if Nt>2
+        xsdot   = (3*xsv[Nt]-4*xsv[Nt-1]+xsv[Nt-2])/(3*tv[Nt]-4*tv[Nt-1]+tv[Nt-2])
+    else
+        xsdot   = (xsv[Nt]-xsv[Nt-1])/(tv[Nt]-tv[Nt-1])
+    end
+    
+    #Compute relative Mach number at mesh nodes:
+    GasModel    = solver.model
+    vx          = SolutionAtNodes(solver, GasModel, "vx")
+    vy          = SolutionAtNodes(solver, GasModel, "vy")
+    a           = SolutionAtNodes(solver, GasModel, "a")
+    Mrel        = @tturbo @. sqrt((vx-xsdot)^2 + vy^2)/a
+    
+    #Get Mrel at left boundary:
+    x1v         = solver.mesh.NodesCoords[:,1]
+    sortv       = sortperm(x1v)
+    x1v         = x1v[sortv]
+    Mrel        = Mrel[sortv]
+    aux         = findfirst(x1v.>0.0)
+    
+    return Mrel[aux]
     
 end
