@@ -261,11 +261,18 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
     tv          = load(FileName, "tv")
     xsv         = load(FileName, "xsv")
     xfv         = load(FileName, "xfv")
-    Mtv         = load(FileName, "Mrelv")
+    gamma       = load(FileName, "gamma")
+#     Mtv         = load(FileName, "Mrelv")
+
+    #Relative Mach number:
+    u0          = ML*sqrt(gamma*(1.0+q))    #u0=uL, RT0=1, RTL=RT0*(1+q)
+    a0          = sqrt(gamma*1.0)
+    xsdotv      = xdotfun(tv, xsv)
+    Mtv         = @. (u0-xsdotv)/a0
     
     #Plot xs(t) and xf(t):
     PyPlotFigure(w=w, h=h, top=1.0, bottom=1.0, left=1.5, right=0.2)
-    plot(tv, xsv, "x-b")
+    plot(tv, xsv, "b")
     plot(tv, xfv, "r")
     tick_params(axis="both", which="both", labelsize=TickSize)
     xlabel(latexstring("t"), fontsize=10)
@@ -288,6 +295,7 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
         if SaveFig
             savefig("$(FigUbi)SC$(SC)_TrackShockFlame2.png", dpi=800, pad_inches=0)
         end
+        ylim(-0.5, 2.5)
     end
     
     #Plot Mrel(t):
@@ -459,10 +467,9 @@ function MtMrDeton(Mi::Float64, gamma::Float64, q::Float64)
     Mt0         = Mi+Mcj
     
     #Call Anderson's method:
-    NLS_output  = Anderson(FW_NLS((u,f,g)->ResidualFun!(u,f,g)), 
+    NLS_output  = Anderson(FW_NLS((u,g)->ResidualFun!(u,[0.0],g)), 
                     [Mt0], 
                     AbsTolX=0.0, RelTolX=0.0, 
-                    AbsTolF=0e-14, RelTolF=0.0,
                     AbsTolG=1e-4, RelTolG=0.0,
                     Display="notify", MaxIter=100, memory=0)
     Mt          = NLS_output[1][1]
@@ -516,10 +523,9 @@ function MtMrShock(Mi::Float64, gamma::Float64, q::Float64)
     Mr0         = sqrt( (Mt0^2*(gamma+1)+Mi^2*(gamma-1)+(gamma-1))/(1.0+gamma*(2.0*Mi^2-1)) )
     
     #Call Anderson's method:
-    NLS_output  = Anderson(FW_NLS((u,f,g)->ResidualFun!(u,f,g)), 
+    NLS_output  = Anderson(FW_NLS((u,g)->ResidualFun!(u,[0.0, 0.0],g)), 
                     [Mt0, Mr0], 
                     AbsTolX=0.0, RelTolX=0.0, 
-                    AbsTolF=0e-14, RelTolF=0.0,
                     AbsTolG=1e-4, RelTolG=0.0,
                     Display="notify", MaxIter=100)
     Mt          = NLS_output[1][1]
@@ -535,6 +541,12 @@ end
 
 #Compute shock and flame velocities:
 function xdotfun(tv::Vector{Float64}, xv::Vector{Float64})
+#     return xdotfun_nofilter(tv, xv)
+#     return xdotfun_filter1(tv, xv)
+    return xdotfun_filter2(tv, xv)
+end
+
+function xdotfun_nofilter(tv::Vector{Float64}, xv::Vector{Float64})
 
     N       = length(tv)
     if N==1
@@ -548,6 +560,110 @@ function xdotfun(tv::Vector{Float64}, xv::Vector{Float64})
         xdotv[ii]   = (3*xv[ii]-4*xv[ii-1]+xv[ii-2])/(3*tv[ii]-4*tv[ii-1]+tv[ii-2])
 #         xdotv[ii]   = (xv[ii]-xv[ii-1])/(tv[ii]-tv[ii-1])
     end
+    
+    return xdotv
+    
+end
+
+function xdotfun_filter1(tv::Vector{Float64}, xv::Vector{Float64})
+
+    N               = length(tv)
+    if N==1
+        return [ 0.0 ]
+    end
+    
+    #Evaluate mean position at t^(n+1/2):
+    t12v            = 0.5*(tv[1:N-1]+tv[2:N])
+    x12v            = 0.5*(xv[1:N-1]+xv[2:N])
+    
+    #Velocities from linear interpolation of mean position:
+    xdotv           = zeros(N)
+    xdotv[1]        = NaN
+    for ii=2:N-1
+        xdotv[ii]   = (x12v[ii]-x12v[ii-1])/(t12v[ii]-t12v[ii-1])
+    end
+    xdotv[N]        = NaN
+    
+    return xdotv
+    
+end
+
+function xdotfun_filter2(tv::Vector{Float64}, xv::Vector{Float64}; 
+    DeltaN::Int=10, Nfilter::Int=1)
+    
+    N       = length(tv)
+    if N==1
+        return [ 0.0 ]
+    end
+    
+    #Compute velocities with second order formula. The result is noisy:
+    xdotv           = zeros(N)
+    xdotv[1]        = (xv[2]-xv[1])/(tv[2]-tv[1])
+    xdotv[2]        = (xv[2]-xv[1])/(tv[2]-tv[1])
+    for ii=3:N
+        xdotv[ii]   = (3*xv[ii]-4*xv[ii-1]+xv[ii-2])/(3*tv[ii]-4*tv[ii-1]+tv[ii-2])
+    end
+    xdot0v          = 1.0*xdotv
+    
+    #Filter velocities:
+    for ifilter=1:Nfilter
+        mass            = 0.0
+        inertia1        = 0.0
+        tbar            = 0.0
+        xdothatv        = 0.0*xdotv
+        for ii=2:1:N
+        
+            #Update length and barycenter and inertia:
+            i0              = max(1, ii+1-DeltaN)
+            L_new           = tv[ii]-tv[i0]
+            tbar_new        = 0.5*(tv[i0]+tv[ii])
+            inertia1_new    = inertia1 + mass*(tbar-tbar_new)
+            mass_new        = mass
+            
+            #Update mass and momentum respect to center of time interval [t_(i-1), t_i] 
+            #with new element:
+            h               = tv[ii]-tv[ii-1]
+            Delta_mass      = 0.5*h*xdotv[ii-1] + 0.5*h*xdotv[ii]
+            mass_new        += Delta_mass
+            inertia1_new    += h*h/12*(xdotv[ii]-xdotv[ii-1]) + 
+                                Delta_mass*(0.5*(tv[ii]+tv[ii-1])-tbar_new)
+            
+            #Update mass and momentum respect to center of time interval [t_(i-1), t_i] 
+            #with outgoing element:
+            if ii>DeltaN
+                h               = tv[ii-DeltaN+1]-tv[ii-DeltaN]
+                Delta_mass      = 0.5*h*xdotv[ii-DeltaN+1] + 0.5*h*xdotv[ii-DeltaN]
+                mass_new        -= Delta_mass
+                inertia1_new    -= h*h/12*(xdotv[ii-DeltaN+1]-xdotv[ii-DeltaN]) + 
+                                    Delta_mass*(0.5*(tv[ii-DeltaN+1]+tv[ii-DeltaN])-tbar_new)
+            end
+            
+            #Seek linear xdothat such that mass and momentum are the same in
+            #the interval [tv[1], tv[ii]]:
+            #   0.5*L*v1 + 0.5*L*v2     = mass_new
+            #   -L^2/12*v1 + L^2/12*v2  = inertia1_new
+            #v1 and v2 are the values of xdothat at tv[1] and tv[ii]
+            #   v1 + v2                 = mass_new/(0.5*L)
+            #   -v1 + v2                = inertia1_new*12/L^2
+            xdothatv[ii]    = 0.5*( mass_new/(0.5*L_new) + inertia1_new*12/L_new^2 )
+        
+            #Update mass and inertia1:
+            mass            = mass_new
+            inertia1        = inertia1_new
+            tbar            = tbar_new
+            
+        end
+        xdotv               .= xdothatv
+    end
+    
+    #NaNs for first time steps:
+    xdotv[1:DeltaN]     .= NaN
+        
+    figure()
+    plot(tv, xdot0v, "x-g")
+    plot(tv, xdotv, "+-r")
+    ylim(-0.5, 2.5)
+    error("")
     
     return xdotv
     

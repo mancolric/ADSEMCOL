@@ -16,9 +16,9 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     TolT::Float64=1e-5, Deltat0::Float64=1e-6,
     #
     PlotFig::Bool=false, MarkSF::Bool=true, wFig::Float64=9.50, hFig::Float64=6.50, 
-    PlotVars::Vector{String}=String[], PlotCode::Vector{String}=fill("nodes", length(PlotVars)), 
+    PlotVars::Vector{String}=String[], 
     SaveFig::Bool=false, Nt_SaveFig::Int=5, Deltat_SaveFig::Float64=Inf,
-    mFig::Int=max(1,length(PlotCode)), nFig::Int=Int(ceil(length(PlotCode)/mFig)), cmap::String="jet",
+    mFig::Int=max(1,length(PlotVars)), nFig::Int=Int(ceil(length(PlotVars)/mFig)), cmap::String="jet",
     #
     SaveRes::Bool=false, Nt_SaveRes::Int=typemax(Int), Deltat_SaveRes::Float64=0.1, 
     #
@@ -159,8 +159,10 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     tv                  = [ 0.0 ]
     xsv                 = [ xs ]
     xfv                 = [ xf ]
-    Mrel                = Mrel_ShockFlame(solver, tv, xsv, xfv)
+    #Mrel and xsdot are not smoothed here:
+    Mrel                = NaN
     Mrelv               = [ Mrel ]
+    xsdotv              = [ NaN ]
     
     #Function to plot solution:
     figv                = Vector{Figure}(undef,3)
@@ -214,19 +216,36 @@ function ShockFlame_FXP(; FesOrder::Int=5,
                 savefig("$(VideosUbi)ShockFlame_FXP_Mesh$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
             
+#             figure(figv[3].number)
+#             PyPlot.cla()
+#             semilogy(solver.tv, solver.etaSv, ".-b")
+#             semilogy(solver.tv, solver.etaTv, ".-g")
+#             semilogy(solver.tv, solver.etaAv, ".-r")
+#             if true
+#                 validv  = solver.validv .== 1
+#                 semilogy(solver.tv[validv], solver.etaSv[validv], "sb")
+#                 semilogy(solver.tv[validv], solver.etaTv[validv], "sg")
+#                 semilogy(solver.tv[validv], solver.etaAv[validv], "sr")
+#             end
+#             legend(["space", "time", "algebraic"])
+#             xlabel(L"t")
+#             if SaveFig && solver.t==tf
+#                 savefig("$(VideosUbi)ShockFlame_FXP_Errors$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+#             end
+            
             figure(figv[3].number)
             PyPlot.cla()
-            semilogy(solver.tv, solver.etaSv, ".-b")
-            semilogy(solver.tv, solver.etaTv, ".-g")
-            semilogy(solver.tv, solver.etaAv, ".-r")
-            if true
-                validv  = solver.validv .== 1
-                semilogy(solver.tv[validv], solver.etaSv[validv], "sb")
-                semilogy(solver.tv[validv], solver.etaTv[validv], "sg")
-                semilogy(solver.tv[validv], solver.etaAv[validv], "sr")
-            end
-            legend(["space", "time", "algebraic"])
+            #
+            PyPlot.subplot(1, 2, 1)
+            plot(tv, xsdotv, "-xg")
+            ylim(-0.5, 2.5)
             xlabel(L"t")
+            #
+            PyPlot.subplot(1, 2, 2)
+            plot(tv, Mrelv, "-xb")
+            ylim(-0.5, 1.5*sqrt(gamma*RT0))
+            xlabel(L"t")
+            #
             if SaveFig && solver.t==tf
                 savefig("$(VideosUbi)ShockFlame_FXP_Errors$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
@@ -269,7 +288,6 @@ function ShockFlame_FXP(; FesOrder::Int=5,
             nb_SaveRes  += 1
         end
         if SaveRes && solver.t==tf
-#             save("$(ResUbi)../../ShockFlame_FXP/LIRKHyp_SC$(SC)_info.jld2", "nb_SaveRes", nb_SaveRes-1)
             save("$(ResUbi)LIRKHyp_SC$(SC)_info.jld2", "nb_SaveRes", nb_SaveRes-1)
         end
         return
@@ -290,11 +308,23 @@ function ShockFlame_FXP(; FesOrder::Int=5,
         end
         
         #Location of shock and flame, and relative Mach number to the shock speed:
+#         xs                  = 0.0
+#         xf                  = 0.0
+#         Nlambda             = 50
+#         lambdav             = linspace(0.2, 1.2, Nlambda)
+#         for ii=1:Nlambda
+#             xs_i, xf_i      = xsxf_ShockFlame(solver, 1.0+lambdav[ii]*(pref-1.0), YFref)
+#             xs              += xs_i/Nlambda
+#             xf              += xf_i/Nlambda
+#         end
         xs, xf              = xsxf_ShockFlame(solver, pref, YFref)
         push!(tv, solver.t)
         push!(xsv, xs)
         push!(xfv, xf)
-        Mrel                = Mrel_ShockFlame(solver, tv, xsv, xfv)
+        Nt                  = length(tv)
+        xsdot               = (xsv[Nt]-xsv[Nt-1])/(tv[Nt]-tv[Nt-1])
+        Mrel                = (u0-xsdot)/sqrt(gamma*RT0)
+        push!(xsdotv, xsdot)
         push!(Mrelv, Mrel)
         
         PlotSol()
@@ -326,6 +356,7 @@ function xsxf_ShockFlame(solver::SolverData, pref::Float64, YFref::Float64)
 
     GasModel    = solver.model
     
+    #=
     #Pressure and YF at mesh nodes:
     x1v         = solver.mesh.NodesCoords[:,1]
     pv          = SolutionAtNodes(solver,GasModel,"p")
@@ -336,6 +367,24 @@ function xsxf_ShockFlame(solver::SolverData, pref::Float64, YFref::Float64)
     x1v         = x1v[sortv]
     pv          = pv[sortv]
     YFv         = YFv[sortv]
+    =#
+    
+    #Get domain limits:
+    x11         = minimum(solver.mesh.NodesCoords[:,1])
+    x12         = maximum(solver.mesh.NodesCoords[:,1])
+    x21         = minimum(solver.mesh.NodesCoords[:,2])
+    x22         = maximum(solver.mesh.NodesCoords[:,2])
+    
+    #Define center line:
+    x1v         = sort(solver.mesh.NodesCoords[:,1])
+    x2v         = fill(0.5*(x21+x22), length(x1v))
+    
+    #Interpolate solution:
+    u_terp,     = SolutionCompute(solver.u, solver.fes, [x1v, x2v])
+    v_terp      = DepVars(GasModel, solver.t, Vector{<:AMF64}([ x1v, x2v ]), 
+                    Vector{<:AMF64}(u_terp), ["p", "Y_F"])
+    pv          = v_terp[1][1][:]
+    YFv         = v_terp[2][1][:]
     
     #Get shock and flame positions:
     xf          = NaN
