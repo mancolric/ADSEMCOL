@@ -7,7 +7,7 @@
 # Editable options:
 #SBATCH --job-name=ShockFlame
 #SBATCH --partition=cn1
-#SBATCH --array=1-10%10
+#SBATCH --array=1-11%11
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=15G
 
