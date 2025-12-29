@@ -41,9 +41,6 @@ function x1Plot_ShockFlame(SC::Int, nb::Int;
     q           = load(FileName, "q")
     ML          = load(FileName, "ML")
     
-    #Detect shock and flame positions:
-    pref,YFref  = pYref_ShockFlame(SC)
-    
     #No zoom - loop plot variables:
 #     fig         = PyPlotSubPlots(mFig, nFig, w=w, h=h, top=1.0, right=0.1, left=2.0, bottom=0.7)
 #     fig         = PyPlotSubPlots(mFig, nFig, w=w, h=h, top=1.0, right=0.1)
@@ -76,7 +73,10 @@ function x1Plot_ShockFlame(SC::Int, nb::Int;
             
         #Get positions of shock and flame:
         if MarkSF
-            xs, xf      = xsxf_ShockFlame(solver, GasModel, pref, YFref)
+            xsv         = load(FileName, "xsv")
+            xfv         = load(FileName, "xfv")
+            xs          = xsv[length(xsv)]
+            xf          = xfv[length(xfv)]
             plot([xf, xf], [0.9*minimum(v_plot), 1.1*maximum(v_plot)], "--r")
             plot([xs, xs], [0.9*minimum(v_plot), 1.1*maximum(v_plot)], "--g")
         end
@@ -265,10 +265,11 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
 #     Mtv         = load(FileName, "Mrelv")
 
     #Relative Mach number:
-    u0          = ML*sqrt(gamma*(1.0+q))    #u0=uL, RT0=1, RTL=RT0*(1+q)
-    a0          = sqrt(gamma*1.0)
-    xsdotv      = xdotfun(tv, xsv)
-    Mtv         = @. (u0-xsdotv)/a0
+    u0              = ML*sqrt(gamma*(1.0+q))    #u0=uL, RT0=1, RTL=RT0*(1+q)
+    a0              = sqrt(gamma*1.0)
+    xsdotv          = xdotfun(tv, xsv)
+    Mtv             = @. (u0-xsdotv)/a0
+    Mtv[xfv.<xsv]   .= NaN
     
     #Plot xs(t) and xf(t):
     PyPlotFigure(w=w, h=h, top=1.0, bottom=1.0, left=1.5, right=0.2)
@@ -283,19 +284,18 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
         savefig("$(FigUbi)SC$(SC)_TrackShockFlame.png", dpi=800, pad_inches=0)
     end
     
-    #Plot xf(t)-xs(t):
-    if true
-        xsdotv      = xdotfun(tv, xsv)
-        PyPlotFigure(w=w, h=h, top=1.0, bottom=1.0, left=1.5, right=0.2)
-        plot(tv, xsdotv, "g")
-        tick_params(axis="both", which="both", labelsize=TickSize)
-        xlabel(latexstring("t"), fontsize=10)
-#         ylabel(latexstring("x_f-x_s"), fontsize=10, rotation=0)    
-        title(latexstring("\\mathcal{Q}=", q, ", \\mathcal{M}_i=", ML), fontsize=10)
-        if SaveFig
-            savefig("$(FigUbi)SC$(SC)_TrackShockFlame2.png", dpi=800, pad_inches=0)
-        end
-        ylim(-0.5, 2.5)
+    #Plot xsdot:
+    xsdotv      = xdotfun(tv, xsv)
+    PyPlotFigure(w=w, h=h, top=1.0, bottom=1.0, left=1.5, right=0.2)
+    plot(tv, xsdotv, "g")
+    tick_params(axis="both", which="both", labelsize=TickSize)
+    xlabel(latexstring("t"), fontsize=10)
+    #         ylabel(latexstring("x_f-x_s"), fontsize=10, rotation=0)    
+    ylabel(latexstring("\\dot{x}_s"), fontsize=10, rotation=0)
+    ylim(-0.1, 1.2*maximum(xsdotv[.!isnan.(xsdotv)]))
+    title(latexstring("\\mathcal{Q}=", q, ", \\mathcal{M}_i=", ML), fontsize=10)
+    if SaveFig
+        savefig("$(FigUbi)SC$(SC)_TrackShockFlame2.png", dpi=800, pad_inches=0)
     end
     
     #Plot Mrel(t):
@@ -305,6 +305,7 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
     xlabel(latexstring("t"), fontsize=10)
     ylabel(latexstring("\\mathcal{M}_t"), fontsize=10, rotation=0)    
     title(latexstring("\\mathcal{Q}=", q, ", \\mathcal{M}_i=", ML), fontsize=10)
+    ylim(-0.1, 1.2*maximum(Mtv[.!isnan.(Mtv)]))
     if SaveFig
         savefig("$(FigUbi)SC$(SC)_Mt.png", dpi=800, pad_inches=0)
     end
@@ -543,7 +544,8 @@ end
 function xdotfun(tv::Vector{Float64}, xv::Vector{Float64})
 #     return xdotfun_nofilter(tv, xv)
 #     return xdotfun_filter1(tv, xv)
-    return xdotfun_filter2(tv, xv)
+#     return xdotfun_filter2(tv, xv)
+    return xdotfun_filter3(tv, xv)
 end
 
 function xdotfun_nofilter(tv::Vector{Float64}, xv::Vector{Float64})
@@ -659,12 +661,31 @@ function xdotfun_filter2(tv::Vector{Float64}, xv::Vector{Float64};
     #NaNs for first time steps:
     xdotv[1:DeltaN]     .= NaN
         
-    figure()
-    plot(tv, xdot0v, "x-g")
-    plot(tv, xdotv, "+-r")
-    ylim(-0.5, 2.5)
-    error("")
+#     figure()
+#     plot(tv, xdot0v, "x-g")
+#     plot(tv, xdotv, "+-r")
+#     ylim(-0.5, 2.5)
+#     error("")
     
+    return xdotv
+    
+end
+
+function xdotfun_filter3(tv::Vector{Float64}, xv::Vector{Float64};
+    DeltaN::Int=20)
+    
+    #Compute velocities with second order formula. The result is noisy:
+    N               = length(xv)
+    xdotv           = zeros(N)
+    xdotv[1]        = NaN
+    for ii=2:N
+        jmax            = min(DeltaN,ii-1)
+        for jj=1:jmax
+            xdotv[ii]   += (xv[ii]-xv[ii-jj])/(tv[ii]-tv[ii-jj])
+        end
+        xdotv[ii]       /= jmax
+    end
+        
     return xdotv
     
 end
