@@ -208,6 +208,12 @@ mutable struct SolverData{ConstModel<:ConstModels}
     Ju_RK           :: Matrix{Float64}
     fNStab_RK       :: Matrix{Float64}
     
+    #Approximate Jacobian?
+    JType           :: String
+    Jm_ilocal       :: Vector{Int}
+    Jm_jlocal       :: Vector{Int}
+    Jm_diagterms    :: Int
+    
     #Matrices/vectors:
     Integ2D         :: TrInt
     Binteg2D        :: Vector{TrBint}
@@ -217,7 +223,7 @@ mutable struct SolverData{ConstModel<:ConstModels}
     MII_LS          :: LinearSystem1
     bv              :: Vector{Float64}
     b               :: Vector{VectorView{Float64}}
-    Mm              :: SparseMatrixCSC{Float64,Int}     #Full mass matrix
+    Mm              :: SparseMatrixCSC{Float64,Int}     #JType part (complete or block Jacobi) of the mass matrix
     Jm              :: SparseMatrixCSC{Float64,Int}
     Jm_pinv         :: Matrix{Vector{Int}}              #Matrix nVars*nVars with vectors for fast assembly
     Am              :: SparseMatrixCSC{Float64,Int}
@@ -325,6 +331,9 @@ mutable struct SolverDataSave{ConstModel<:ConstModels}
     CFL             :: Float64  
     tf              :: Float64  
     TimeAdapt       :: Bool   
+    
+    #Approximate Jacobian?
+    JType           :: String
     
     #Monitor variables at quadrature nodes:
     monitor         :: Vector{Matrix{Float64}}

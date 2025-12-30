@@ -46,7 +46,7 @@ function PlotNodes(sfun::Function, solver::SolverData, vble::String;
     
 end
 
-function PlotNodes(sfun::Function, solver::SolverDataSave, model::ConstModels,
+function PlotNodes(sfun::Function, solver::Any, model::ConstModels,
     vble::String; color="b", marker=".", markersize=0.5)
     
     uNodes      = SolutionAtNodes(solver.u, solver.fes)

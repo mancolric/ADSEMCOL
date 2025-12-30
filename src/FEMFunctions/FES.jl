@@ -28,15 +28,30 @@ end
 
 #Given two matrices A(N,m) B(N,n), return a matrix C(N,m*n) such that 
 #C(:,ii+(jj-1)*m)=A(:,ii)*B(:,jj):
-function UpsilonCompute(A::AbstractMatrix{Float64}, B::AbstractMatrix{Float64})
+function UpsilonCompute(A::AbstractMatrix{Float64}, B::AbstractMatrix{Float64};
+    iv::Vector{Int}=zeros(Int,0), jv::Vector{Int}=zeros(Int,0))
 
+    #Default values for iv and jv:
+    if length(iv)==0 || length(jv)==0
+        imat, jmat  = ndgrid(1:size(A,2), 1:size(B,2))
+        iv          = imat[:]
+        jv          = jmat[:]
+    end
+    mn              = length(iv)
+    
+    #Get sizes:
     N       = size(A,1)
     m       = size(A,2)
     n       = size(B,2)
-    C       = zeros(typeof(A[1,1]),N,m*n)
-    for jj=1:n, ii=1:m
-        @mlv   C[:,ii+(jj-1)*m] = A[:,ii]*B[:,jj]
+    C       = zeros(typeof(A[1,1]),N,mn)
+    
+    #Compute product:
+    for kk=1:mn
+        ii              = iv[kk]
+        jj              = jv[kk]
+        @mlv   C[:,kk]  = A[:,ii]*B[:,jj]
     end
+
     return C
     
 end
@@ -55,22 +70,35 @@ end
 =#
 
 #Given two FES FES_I and FES_J, we can compute two matrices, imat and jmat, with
-#the indices (ii,jj) associated with NComputeMerge.
+#the indices (ii,jj) associated with UpsilonCompute.
 #The following function returns two matrices imat' and jmat' such that 
 #imat'[ii,jj]=imat(FES_I,FES_J), (idem jmat').
 #
 #The numbering of imat' and jmat' is local. And offset must be added to assemble
 #matrices.
-function ElemsDofCompute(FES1::FES_Union, FES2::FES_Union; elems::AbstractVector{Int}=1:FES1.mesh.nElems)
-
+function ElemsDofCompute(FES1::FES_Union, FES2::FES_Union; 
+    elems::AbstractVector{Int}=1:FES1.mesh.nElems, 
+    iv::Vector{Int}=zeros(Int,0), jv::Vector{Int}=zeros(Int,0))
+    
+    #Get dofs for each space:
     ElemsDof1       = FES1.ElemsDof[elems, :]
     ElemsDof2       = FES2.ElemsDof[elems, :]
-    nElems, nDof1   = size(ElemsDof1)
-    nDof2           = size(ElemsDof2,2)
-    imat            = zeros(Int, nElems, nDof1*nDof2)
-    jmat            = zeros(Int, nElems, nDof1*nDof2)
-    for jj=1:nDof2, ii=1:nDof1
-        kk                  = ii+(jj-1)*nDof1
+    nElems          = length(elems)
+    
+    #Default values for iv and jv:
+    if length(iv)==0 || length(jv)==0
+        imat, jmat  = ndgrid(1:size(ElemsDof1,2), 1:size(ElemsDof2,2))
+        iv          = imat[:]
+        jv          = jmat[:]
+    end
+    mn              = length(iv)
+    
+    #Get dofs associated with product of shape functions:
+    imat            = zeros(Int, nElems, mn)
+    jmat            = zeros(Int, nElems, mn)
+    for kk=1:mn
+        ii                  = iv[kk]
+        jj                  = jv[kk]
         @mlv   imat[:,kk]   = ElemsDof1[:,ii]
         @mlv   jmat[:,kk]   = ElemsDof2[:,jj]
     end

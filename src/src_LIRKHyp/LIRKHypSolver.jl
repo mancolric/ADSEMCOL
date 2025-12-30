@@ -28,6 +28,10 @@ function LIRKHyp_Start(model::ConstModel) where {ConstModel<:ConstModels}
     #Reconstruction:
     #Unassigned
     
+    #Approximate Jacobian?
+    solver.JType        = "Complete"
+    #Jm_ilocal, Jm_jlocal will be allocated in initial condition
+    
     #Time integration method:
     #t
     #Nt
@@ -115,7 +119,7 @@ function ReadMesh!(solver::SolverData)
     solver.rec_fes      = TrQSpace(solver.mesh, solver.FesOrder+2)
     
     #Condense and precondition mass matrix. Note that 
-    solver.MII_LS           = LinearSystem1(solver.MII, solver, [1.0])
+    solver.MII_LS       = LinearSystem1(solver.MII, solver, [1.0])
     LinearSystem!(solver.MII_LS)
     
     return
@@ -137,7 +141,7 @@ function RKAlloc!(solver::SolverData)
 #     println("Matrices allocate = ", time()-t_ini)
     
     #Allocate linear system:
-    solver.Am_LS        = LinearSystem1(solver.Am, solver, solver.nFacts)
+    solver.Am_LS        = LinearSystem1(solver.Am, solver, solver.nFacts, JType=solver.JType)
 #     println("allocate LS = ", time()-t_ini)
     
     return
@@ -214,6 +218,21 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
     solver.nDofv        = zeros(Int,0)
     solver.CFLv         = zeros(0)
     solver.validv       = zeros(Int,0)
+    
+    #Set variables for ElemsDofCompute and UpsilonCompute:
+    if uppercase(solver.JType)=="COMPLETE"
+        #compute all products in Jacobian matrix:
+        solver.Jm_ilocal        = zeros(Int, 0)     
+        solver.Jm_jlocal        = zeros(Int, 0)   
+        solver.Jm_diagterms     = solver.fes.DofPerElem*solver.fes.DofPerElem
+    elseif uppercase(solver.JType)=="BLOCKJACOBI"
+        #compute only products concerning the same dof:
+        solver.Jm_ilocal        = 1:solver.fes.DofPerElem
+        solver.Jm_jlocal        = 1:solver.fes.DofPerElem
+        solver.Jm_diagterms     = solver.fes.DofPerElem
+    else
+        error("Unknown option $(solver.JType). Available options are: Complete, BlockJacobi.")
+    end
     
     #--------------------------------------------------------
     #Initial condition:
@@ -430,7 +449,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
     
     #Allocate variables:
     u_k                 = zeros(size(u_n))
-    b_1                 = solver.Mm*u_n
+    b_1                 = MuProduct(solver.MII, u_n, solver.nVars)
     etaS_np1            = 0.0
     etaS_elems_np1      = zeros(0)
     urec_np1            = Vector{VectorView{Float64}}(undef,solver.nVars)
@@ -458,8 +477,6 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
             if kk==2 || solver.RK.AI[kk,kk]!=solver.RK.AI[kk-1,kk-1]
                 println("Setting up linear system")
                 t_ini                   = time()
-#                 @mlv solver.Am.nzval    = solver.Mm.nzval - 
-#                                             (Deltat_n*solver.RK.AI[kk,kk])*solver.Jm.nzval
                 BLAS.axpby!(1.0, solver.Mm.nzval, 0.0, solver.Am.nzval)
                 BLAS.axpby!(-Deltat_n*solver.RK.AI[kk,kk], solver.Jm.nzval, 1.0, solver.Am.nzval)
                 LinearSystem!(solver.Am_LS)
@@ -1246,7 +1263,7 @@ function LIRKHyp_Step_Post_Dolejsi!(solver::SolverData)
         
         #Allocate variables:
         u_np1               = zeros(size(solver.uv))
-        b_1                 = solver.Mm*solver.uv
+        b_1                 = MuProduct(solver.MII, solver.uv, solver.nVars)
         
         #Loop stages until algebraic and time tolerances are met:
         RepeatTA            = true
@@ -1896,7 +1913,7 @@ function IRK_Step!(solver::SolverData)
     etaA_np1            = Inf
     
     #Save M*u[1]:
-    b1                  = solver.Mm*u_n
+    b1                  = MuProduct(solver.MII, u_n, solver.nVars)
 
     #Loop stages until algebraic and time tolerances are met:
     RepeatTA            = true
@@ -1959,7 +1976,8 @@ function IRK_Step!(solver::SolverData)
                 
                 #Compute residual f:
                 #   f = D*(M*(Du) - b - Deltat*a_kk*f_k(Du))
-                fres        = solver.Mm*u - solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
+                fres        = MuProduct(solver.MII, u, solver.nVars) - 
+                                    solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
                                     view(solver.f_RK,:,kk)
                 
                 #Compute preconditioned residual:

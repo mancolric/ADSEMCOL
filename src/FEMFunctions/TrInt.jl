@@ -275,12 +275,14 @@ end
 #INTEGRALS THAT MAY BE USEFUL AS EXAMPLES:
 
 #Compute mass matrix for given FES: PSpace+BSpace:
-function MassMatrix(Integ2D::TrInt, FES::TrFES)
+function MassMatrix(Integ2D::TrInt, FES::TrFES; 
+    iv::Vector{Int}=zeros(Int,0), jv::Vector{Int}=zeros(Int,0))
 
-    return MassMatrix(Integ2D, FES, FES)
+    return MassMatrix(Integ2D, FES, FES, iv=iv, jv=jv)
     
 end
-function MassMatrix(Integ2D::TrInt, fes1::TrFES, fes2::TrFES)
+function MassMatrix(Integ2D::TrInt, fes1::TrFES, fes2::TrFES;
+    iv::Vector{Int}=zeros(Int,0), jv::Vector{Int}=zeros(Int,0))
 
     nElems          = Integ2D.mesh.nElems
     nqp             = Integ2D.QRule.nqp
@@ -289,13 +291,13 @@ function MassMatrix(Integ2D::TrInt, fes1::TrFES, fes2::TrFES)
     #Create matrices Upsilon_IJ=N_I*N_J:
     N1m             = NCompute(fes1, xim)
     N2m             = NCompute(fes2, xim)
-    Upsilon         = UpsilonCompute(N1m, N2m)
+    Upsilon         = UpsilonCompute(N1m, N2m, iv=iv, jv=jv)
     
     #Create matrix with nnz elements:
     smat            = Integ2D.wdetJ*Upsilon
     
     #Indices:
-    imat,jmat       = ElemsDofCompute(fes1, fes2)
+    imat,jmat       = ElemsDofCompute(fes1, fes2, iv=iv, jv=jv)
     
     #Construct sparse matrix:
     Mm              = sparse(imat[:], jmat[:], smat[:])

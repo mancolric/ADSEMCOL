@@ -98,6 +98,7 @@ function SmoothVortex(hp::Float64, FesOrder::Int, tfv::Array{Float64,1};
     solver.TolT             = TolT
     solver.SpaceAdapt       = SpaceAdapt
     solver.TimeAdapt        = TimeAdapt
+#     solver.JType            = "BlockJacobi"
     
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> utheor(0.0, x)) 

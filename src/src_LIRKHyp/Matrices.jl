@@ -226,68 +226,20 @@ function SolutionNorm(MII::SparseMatrixCSC{Float64,Int}, x::Vector{Float64},
     
 end
 
-#LinearSystem1. Set nFacts=[1.0] to solve only one block.
-#=
 function LinearSystem1(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
-    nFacts::Vector{Float64})
-
-    t_ini           = time()
+    nFacts::Vector{Float64}; JType::String="Complete")
     
-    #Create linear system:
-    LS              = LinearSystem1()
-    
-    #Save pointer to original matrix:
-    LS.A            = A
-    
-    #Nb of variables, master dof and slave dof:
-    nVars           = length(nFacts)
-    nMaster         = maximum(view(solver.fes.ElemsDof,:,1:3*solver.fes.order))
-    nDof            = solver.fes.nDof
-    nSlaves         = nDof-nMaster
-    
-    #Optimal ordering for the degrees of freedom:
-    dof_RCM         = symrcm(solver.MII)
-    #original dof ii goes to position dof_RCM_inv[ii]
-    dof_RCM_inv     = invperm(dof_RCM)
-    dof_RCM_inv_m   = view(dof_RCM_inv, 1:nMaster)
-    dof_RCM_inv_s   = view(dof_RCM_inv, nMaster+1:nMaster+nSlaves)
-    
-    #Order new positions of master dof from nSlaves+1:nSlaves+nMaster,
-    #and slave dof from 1:nSlaves:
-    sortv                   = sortperm(dof_RCM_inv_s)
-    dof_RCM_inv_s[sortv]    .= 1:nSlaves
-    sortv                   = sortperm(dof_RCM_inv_m)
-    dof_RCM_inv_m[sortv]    .= nSlaves+1:nSlaves+nMaster
-    dof_RCM                 = invperm(dof_RCM_inv)
-    
-    #For a single variable, dof "idof" goes to new position jdof=dof_RCM_inv[idof].
-    #On the other hand, dof jdof of vble II goes to position
-    #   (jdof-1)*nVars + II:
-    LS.pinv                 = zeros(Int, nVars*nDof)
-    LS.scaleP               = zeros(Float64, nVars*nDof)
-    @inbounds for II=1:nVars, ii=1:nDof
-        ii_new                      = dof_RCM_inv[ii]
-        iiII_new                    = (ii_new-1)*nVars+II
-        LS.pinv[(II-1)*nDof+ii]     = iiII_new
-        LS.scaleP[iiII_new]         = nFacts[II]*1.0+0.0
+    if uppercase(JType)=="COMPLETE"
+        return LinearSystem1_Complete(A, solver, nFacts)
+    elseif uppercase(JType)=="BLOCKJACOBI"
+        return LinearSystem1_BlockJacobi(A, solver, nFacts)
+    else
+        error("Unknown option")
     end
-    LS.p            = invperm(LS.pinv)
-    LS.scaleP_m     = LS.scaleP[nSlaves*nVars+1:(nSlaves+nMaster)*nVars]
-    
-    #Allocate permuted matrix and ILU factorization:
-    iv,jv,          = findnz(A)
-    S_aux           = sparse(LS.pinv[iv], LS.pinv[jv], 1:length(iv))
-    LS.ssPP_ss      = S_aux.nzval
-    LS.APP          = SparseMatrixCSC{Float64,Int}(S_aux.m, S_aux.n, S_aux.colptr, 
-                        S_aux.rowval, A.nzval[LS.ssPP_ss])
-    LS.Pl           = SCILU0_alloc(LS.APP, nSlaves*nVars)
-    
-    return LS
     
 end
-=#
-
-function LinearSystem1(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
+    
+function LinearSystem1_Complete(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
     nFacts::Vector{Float64})
 
     t_ini           = time()
@@ -319,7 +271,7 @@ function LinearSystem1(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
         ii_new                      = dof_RCM_inv[ii]
         iiII_new                    = (ii_new-1)*nVars+II
         LS.pinv[(II-1)*nDof+ii]     = iiII_new
-        LS.scaleP[iiII_new]         = nFacts[II]*1.0+0.0
+        LS.scaleP[iiII_new]         = nFacts[II]
     end
     LS.p            = invperm(LS.pinv)
     LS.scaleP_m     = LS.scaleP[nSlaves*nVars+1:(nSlaves+nMaster)*nVars]
@@ -332,6 +284,54 @@ function LinearSystem1(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
                         S_aux.rowval, A.nzval[LS.ssPP_ss])
     LS.Pl           = SCILU0_alloc(LS.APP, nSlaves*nVars)
     
+    return LS
+    
+end
+
+function LinearSystem1_BlockJacobi(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
+    nFacts::Vector{Float64})
+
+    t_ini           = time()
+    
+    #Create linear system:
+    LS              = LinearSystem1()
+    
+    #Save pointer to original matrix:
+    LS.A            = A
+    
+    #Nb of variables, master dof and slave dof:
+    nVars           = length(nFacts)
+    nMaster         = 0
+    nDof            = solver.fes.nDof
+    nSlaves         = nDof-nMaster
+    
+    #Due to the structure of the matrix, it is not necessary to permute.
+    #Nevertheless, variables are permuted so as to cluster more elements close to the 
+    #diagonal (mayble this improves performance):
+    dof_RCM_inv             = 1:nDof
+    
+    #For a single variable, dof "idof" goes to new position jdof=dof_RCM_inv[idof].
+    #On the other hand, dof jdof of vble II goes to position
+    #   (jdof-1)*nVars + II:
+    LS.pinv                 = zeros(Int, nVars*nDof)
+    LS.scaleP               = zeros(Float64, nVars*nDof)
+    @inbounds for II=1:nVars, ii=1:nDof
+        ii_new                      = dof_RCM_inv[ii]
+        iiII_new                    = (ii_new-1)*nVars+II
+        LS.pinv[(II-1)*nDof+ii]     = iiII_new
+        LS.scaleP[iiII_new]         = nFacts[II]
+    end
+    LS.p            = invperm(LS.pinv)
+    LS.scaleP_m     = LS.scaleP[nSlaves*nVars+1:(nDof)*nVars]
+    
+    #Allocate permuted matrix and ILU factorization:
+    iv,jv,          = findnz(A)
+    S_aux           = sparse(LS.pinv[iv], LS.pinv[jv], 1:length(iv))
+    LS.ssPP_ss      = S_aux.nzval
+    LS.APP          = SparseMatrixCSC{Float64,Int}(S_aux.m, S_aux.n, S_aux.colptr, 
+                        S_aux.rowval, A.nzval[LS.ssPP_ss])
+    LS.Pl           = SCILU0_alloc(LS.APP, nSlaves*nVars)
+
     return LS
     
 end
@@ -353,12 +353,9 @@ function LinearSystem!(LS::LinearSystem1)
 #     println("Updating preconditioner: ", time()-t_ini)
     
     #Set norm of master dof vector for stopping condition:
-#     LS.NormFun      = FW_NLS_norm((x)->norm(x))                     #Impose Linf norm < L2 norm < Tol
     aux_norm        = sqrt(LS.Pl.nMasters)
     LS.NormFun      = FW_NLS_norm((x)->norm(x)/aux_norm)    #Impose L2 average of the master dof < Tol
-#     CorrFact        = L1Norm_CorrFactor(LS.Pl)
-#     LS.NormFun      = FW_NLS_norm((x)->dot(LS.normvPP, abs.(x)))    #Impose approx of etaA
-    
+ 
     return LS
     
 end
@@ -373,8 +370,6 @@ function LS_gmres!(LS::LinearSystem1, u::GenVector{Float64}, b::GenVector{Float6
     
     #Exit early if there are NaNs or Infs in b:
     if !all(isfinite.(b))
-        display("eeh")
-        display(b)
         return -1, 0, Inf   #flag, nIters, etaA
     end
         
@@ -392,6 +387,13 @@ function LS_gmres!(LS::LinearSystem1, u::GenVector{Float64}, b::GenVector{Float6
     bred            = ReduceRhs(F, bhat)
     bred_m          = bred[F.nSlaves+1:F.N]
     uhat_m          = uhat[F.nSlaves+1:F.N]
+    
+    #Exit early if there are no master dofs:
+    if F.nMasters==0
+        ldiv_slave!(uhat, F, bred)
+        @mlv u[LS.p]    = uhat
+        return 1, 0, 0.0   #flag, nIters, etaA
+    end
     
     #DEBUG:
     t_mult          = 0.0
@@ -458,6 +460,7 @@ function LS_gmres!(LS::LinearSystem1, u::GenVector{Float64}, b::GenVector{Float6
     
 end
 
+#=
 function JacobianAllocate(nVars::Int, fes1::TrFES, fes2::TrFES)
 
     #(i,j) values for nnz numbers for one variable:
@@ -591,6 +594,7 @@ function MassMatrixExpand!(solver::SolverData)
     return
     
 end
+=#
 
 #Allocate full mass matrix, jacobian matrix and linear system matrix:
 function MatricesAllocate!(solver::SolverData)
@@ -600,12 +604,20 @@ function MatricesAllocate!(solver::SolverData)
     nVars           = solver.nVars
     
     #(i,j) values for nnz numbers for one variable:
-    imat, jmat      = ElemsDofCompute(fes, fes)
+    imat, jmat      = ElemsDofCompute(fes, fes, iv=solver.Jm_ilocal, jv=solver.Jm_jlocal)
     
     #Construct sparse matrix and get fast-assembly index vector:
     JII, JII_pinv   = SpAlloc(Float64, imat, jmat)
     JII_nnz         = JII.colptr[JII.n+1]-1
-    MII_nzval       = solver.MII.nzval
+    MII_nzval       = zeros(0)
+    if uppercase(solver.JType)=="COMPLETE"
+        MII_nzval   = solver.MII.nzval
+    elseif uppercase(solver.JType)=="BLOCKJACOBI"
+        MII         = MassMatrix(solver.Integ2D, solver.fes, iv=solver.Jm_ilocal, jv=solver.Jm_jlocal)
+        MII_nzval   = MII.nzval
+    else
+        error("Unknown option")
+    end
     
     #Allocate pinv vectors:
     Jm_pinv         = Matrix{Vector{Int}}(undef, nVars, nVars)
@@ -669,33 +681,6 @@ function MatricesAllocate!(solver::SolverData)
     return
     
 end
-
-#=
-function FluxAllocate(nVars::Int, udims::Tuple{Int,Int}, ComputeJ::Bool)
-
-    flux_qp         = Matrix{Matrix{Float64}}(undef,nVars,2) #f[I,j] = f_Ij
-    for II=1:nVars, jj=1:2
-        flux_qp[II,jj]                      = zeros(udims)
-    end
-    dflux_du_qp     = Array{Matrix{Float64},3}(undef,nVars,2,nVars) #df[I,j,J] = df_{Ij}/du_J
-    dflux_duB_qp    = Array{Matrix{Float64},3}(undef,nVars,2,nVars) #df[I,j,J] = df_{Ij}/du_J
-    dflux_dgradu_qp = Array{Matrix{Float64},4}(undef,nVars,2,nVars,2) #df[I,j,J,k] = df_{Ij}/(du_J/dx_k)
-    dflux_dgraduB_qp= Array{Matrix{Float64},4}(undef,nVars,2,nVars,2) #df[I,j,J,k] = df_{Ij}/(du_J/dx_k) 
-    if ComputeJ
-        for II=1:nVars, jj=1:2, JJ=1:nVars
-            dflux_du_qp[II,jj,JJ]           = zeros(udims)
-            dflux_duB_qp[II,jj,JJ]          = zeros(udims)
-        end
-        for II=1:nVars, jj=1:2, JJ=1:nVars, kk=1:2
-            dflux_dgradu_qp[II,jj,JJ,kk]    = zeros(udims)
-            dflux_dgraduB_qp[II,jj,JJ,kk]   = zeros(udims)
-        end
-    end
-    
-    return flux_qp, dflux_du_qp, dflux_duB_qp, dflux_dgradu_qp, dflux_dgraduB_qp
-    
-end 
-=#
 
 function FluxAllocate(nVars::Int, udims::Tuple{Int,Int}, ComputeJ::Bool)
 
@@ -788,7 +773,9 @@ function Rhs_Flux!(
     gradNm_alpha    ::Vector{Matrix{Float64}},
     Nm_beta         ::Matrix{Float64},
     gradNm_beta     ::Vector{Matrix{Float64}},
-    ComputeJ        ::Bool              )
+    ComputeJ        ::Bool, 
+    Jm_ilocal       ::Vector{Int}, 
+    Jm_jlocal       ::Vector{Int} )
     
     t_ini           = time()
     
@@ -820,7 +807,8 @@ function Rhs_Flux!(
         #Matrices UpsilonGN:
         UpsilonGN           = Vector{Matrix{Float64}}(undef,2)
         for ii=1:2
-            UpsilonGN[ii]   = UpsilonCompute(gradNm_alpha[ii], Nm_beta)    #Upsilon[ii][:,(II.JJ) = gradNm[ii][:,II]*Nm[:,JJ]
+            #Upsilon[ii][:,(II.JJ) = gradNm[ii][:,II]*Nm[:,JJ]
+            UpsilonGN[ii]   = UpsilonCompute(gradNm_alpha[ii], Nm_beta, iv=Jm_ilocal, jv=Jm_jlocal)    
         end
         
 #         println("Upsilon GN  = ", time()-t_ini)
@@ -848,7 +836,8 @@ function Rhs_Flux!(
         #Matrices UpsilonGG:
         UpsilonGG           = Matrix{Matrix{Float64}}(undef,2,2)
         for ii=1:2, jj=1:2
-            UpsilonGG[ii,jj]= UpsilonCompute(gradNm_alpha[ii], gradNm_beta[jj])    #Upsilon[ii][:,(II.JJ) = gradNm[ii][:,II]*Nm[:,JJ]
+            #Upsilon[ii][:,(II.JJ) = gradNm[ii][:,II]*Nm[:,JJ]
+            UpsilonGG[ii,jj]= UpsilonCompute(gradNm_alpha[ii], gradNm_beta[jj], iv=Jm_ilocal, jv=Jm_jlocal)
         end
         
         #Sum for j,l  and assemble:
@@ -878,7 +867,9 @@ function Rhs_Source!(
     Nm_alpha        ::Matrix{Float64},
     Nm_beta         ::Matrix{Float64},
     gradNm_beta     ::Vector{Matrix{Float64}},
-    ComputeJ        ::Bool              )
+    ComputeJ        ::Bool, 
+    Jm_ilocal       ::Vector{Int}, 
+    Jm_jlocal       ::Vector{Int}              )
     
     nVars           = size(Q,1)
     Jinvm           = Integ2D.Jinv
@@ -899,7 +890,7 @@ function Rhs_Source!(
         dflux_IJ                = flux_I   
         
         #Matrices UpsilonNN:
-        UpsilonNN               = UpsilonCompute(Nm_alpha, Nm_beta)    #Upsilon[ii][:,(II.JJ) = gradflucNm[ii][:,II]*Nm[:,JJ]
+        UpsilonNN               = UpsilonCompute(Nm_alpha, Nm_beta, iv=Jm_ilocal, jv=Jm_jlocal)    #Upsilon[ii][:,(II.JJ) = gradflucNm[ii][:,II]*Nm[:,JJ]
         
         #Assemble:
         for JJ=1:nVars, II=1:nVars
@@ -920,7 +911,7 @@ function Rhs_Source!(
         #Matrices UpsilonNG:
         UpsilonNG               = Vector{Matrix{Float64}}(undef,2)
         for ii=1:2
-            UpsilonNG[ii]       = UpsilonCompute(Nm_alpha, gradNm_beta[ii])
+            UpsilonNG[ii]       = UpsilonCompute(Nm_alpha, gradNm_beta[ii], iv=Jm_ilocal, jv=Jm_jlocal)
         end
         
         #Assemble:
@@ -948,7 +939,9 @@ function Rhs_bFlux!(
     Nm_alpha        ::Matrix{Float64},
     Nm              ::Matrix{Float64},
     gradNm          ::Vector{Matrix{Float64}},
-    ComputeJ        ::Bool
+    ComputeJ        ::Bool, 
+    Jm_ilocal       ::Vector{Int}, 
+    Jm_jlocal       ::Vector{Int}
     )
     
     nVars           = length(f)
@@ -970,7 +963,7 @@ function Rhs_bFlux!(
         bflux_IJ        = bflux_I
         
         #Matrix UpsilonNN:
-        UpsilonNN       = UpsilonCompute(Nm_alpha, Nm)
+        UpsilonNN       = UpsilonCompute(Nm_alpha, Nm, iv=Jm_ilocal, jv=Jm_jlocal)
         
         #Assemble:
         for JJ=1:nVars, II=1:nVars
@@ -991,7 +984,7 @@ function Rhs_bFlux!(
         #Matrix UpsilonNG:
         UpsilonNG       = Vector{Matrix{Float64}}(undef,2)
         for kk=1:2
-            UpsilonNG[kk]   = UpsilonCompute(Nm_alpha, gradNm[kk])
+            UpsilonNG[kk]   = UpsilonCompute(Nm_alpha, gradNm[kk], iv=Jm_ilocal, jv=Jm_jlocal)
         end
         
         #Sum for k=1,2 and assemble:
@@ -1080,7 +1073,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     J_ElemsDof                  = Matrix{Matrix{Float64}}(undef,nVars,nVars)
     if ComputeJ
         for JJ=1:nVars, II=1:nVars
-            J_ElemsDof[II,JJ]   = zeros(solver.mesh.nElems, fes.DofPerElem*fes.DofPerElem)
+            J_ElemsDof[II,JJ]   = zeros(solver.mesh.nElems, solver.Jm_diagterms)
         end
     end
     flux_Ik                     = zeros(solver.mesh.nElems, Integ2D.QRule.nqp)
@@ -1089,9 +1082,6 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     
     #----------------------------------------------------------------
     #Contribution of flux and source terms in the domain:
-    
-    #NOTE: Here flux_res, J_res are the fluxes in the computation of the residual,
-    #i.e., all the fluxes except the DC flux.
     
     #Evaluate flux and source term:
     t_ini           = time()
@@ -1120,15 +1110,16 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     #with u the total (large+fine scale) solution and uB the bubble terms.
     Rhs_Flux!(flux_ElemsDof, J_ElemsDof, flux_Ik, Integ2D, 
         _qp.f, _qp.df_du, _qp.df_dgradu,
-        gradNm, Nm, gradNm, ComputeJ)
+        gradNm, Nm, gradNm, ComputeJ, solver.Jm_ilocal, solver.Jm_jlocal)
     Rhs_Flux!(flux_ElemsDof, J_ElemsDof, flux_Ik, Integ2D, 
         _qp.fB, _qp.dfB_du, _qp.dfB_dgraduB, 
-        gradflucNm, Nm, gradflucNm, ComputeJ)
+        gradflucNm, Nm, gradflucNm, ComputeJ, solver.Jm_ilocal, solver.Jm_jlocal)
         
     #Source:
     flux_I      = flux_Ik   #Change nomenclature for pointer
     Rhs_Source!(flux_ElemsDof, J_ElemsDof, flux_I, Integ2D, 
-                _qp.Q, _qp.dQ_du, _qp.dQ_dgradu, Nm, Nm, gradNm, ComputeJ)
+                _qp.Q, _qp.dQ_du, _qp.dQ_dgradu, Nm, Nm, gradNm, 
+                ComputeJ, solver.Jm_ilocal, solver.Jm_jlocal)
     
 #     println("Flux and source terms * shape functions = ", time()-t_ini)
     
@@ -1196,7 +1187,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         J_BElemsDof                 = Matrix{Matrix{Float64}}(undef,nVars,nVars)
         if ComputeJ
             for JJ=1:nVars, II=1:nVars
-                J_BElemsDof[II,JJ]  = zeros(bmesh.nElems, fes.DofPerElem*fes.DofPerElem)
+                J_BElemsDof[II,JJ]  = zeros(bmesh.nElems, solver.Jm_diagterms)
             end
         end
         bflux_I                     = zeros(bmesh.nElems, Binteg2D.QRule.nqp)
@@ -1221,7 +1212,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         #Compute contribution of boundary term:
         Rhs_bFlux!(flux_BElemsDof, J_BElemsDof, bflux_I, Binteg2D,
             _bqp.f, _bqp.df_du, _bqp.df_dgradu, 
-            Nm, Nm, gradNm, ComputeJ)
+            Nm, Nm, gradNm, ComputeJ, solver.Jm_ilocal, solver.Jm_jlocal)
         tB5                         += time()-t_ini2
         
         #Update global values for flux_ElemsDof and J_ElemsDof:
@@ -1231,9 +1222,9 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
             flux_ElemsDof[II][parent_elem, iDof]    += flux_BElemsDof[II][iElem, iDof]
         end
         if ComputeJ
-            @inbounds for JJ=1:nVars, II=1:nVars, iDof2=1:fes.DofPerElem^2, iElem=1:bmesh.nElems
+            @inbounds for JJ=1:nVars, II=1:nVars, iJ=1:solver.Jm_diagterms, iElem=1:bmesh.nElems
                 parent_elem                         = bmesh.ParentElems[iElem]
-                J_ElemsDof[II,JJ][parent_elem,iDof2]+= J_BElemsDof[II,JJ][iElem, iDof2]
+                J_ElemsDof[II,JJ][parent_elem,iJ]   += J_BElemsDof[II,JJ][iElem, iJ]
             end
         end
         tB6                         += time()-t_ini2
@@ -1283,120 +1274,6 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
 #     error("")
     
     return flag, _qp.Deltat_CFL
-    
-end
-
-#Check Jacobian for ib-th boundary condition:
-function BC_CheckJacobian(solver::SolverData, t::Float64, uv::Vector{Float64}, ib::Int;
-    delta::Float64=1e-5)
-
-    #Extract variables:
-    fes                 = solver.fes
-    fes_dof             = fes.nDof
-    nVars               = solver.nVars
-    u                   = GetViews(uv, nVars, fes_dof)
-    Binteg2D            = solver.Binteg2D[ib]
-    bmesh               = Binteg2D.bmesh
-    Jinvm               = Binteg2D.Jinv
-    wdetJ               = Binteg2D.wdetJ
-    
-    #Compute variables at quadrature nodes:
-    _bqp                = TrBintVars()
-    _bqp.Binteg2D       = Binteg2D
-    _bqp.nElems         = bmesh.nElems
-    _bqp.nqp            = Binteg2D.QRule.nqp
-    _bqp.FesOrder       = solver.FesOrder
-    _bqp.nFacts         = solver.nFacts
-    _bqp.tb             = Binteg2D.t_qp
-    _bqp.nb             = Binteg2D.n_qp
-    #
-    _bqp.t              = t
-    _bqp.x              = QuadNodesCoords(Binteg2D)
-    _bqp.u              = SolutionCompute(Binteg2D, u, fes)
-    _bqp.gradu          = Solution_gradCompute(Binteg2D, u, fes)
-    #
-    _bqp.f, _bqp.df_du, 
-        _bqp.df_dgradu  = bFluxAllocate(nVars, (_bqp.nElems, _bqp.nqp), true)
-    
-    #Evaluate flux at the boundary:
-    bflux!(solver.model, solver.BC[ib].BC, _bqp, true)
-    for II=1:solver.nVars, JJ=1:solver.nVars
-#         println("II=$II, JJ=$JJ, |df_du|=",norm(_bqp.df_du[II,JJ],Inf))
-    end
-    
-    #Save initial pointer:
-    _bqp0               = _bqp
-    
-    #Perturb u and compute derivatives:
-    for JJ=1:solver.nVars
-        
-        _bqp            = deepcopy(_bqp0)
-        @mlv _bqp.u[JJ] -= delta
-        zero!(_bqp.f)
-        bflux!(solver.model, solver.BC[ib].BC, _bqp, false)
-        f1              = deepcopy(_bqp.f)
-        #
-        _bqp            = deepcopy(_bqp0)
-        @mlv _bqp.u[JJ] += delta
-        zero!(_bqp.f)
-        bflux!(solver.model, solver.BC[ib].BC, _bqp, false)
-        f2              = deepcopy(_bqp.f)
-        for II=1:solver.nVars
-            df_du_num       = @mlv (f2[II]-f1[II])/(2*delta)
-            err_num         = norm(_bqp0.df_du[II,JJ]-df_du_num,Inf)
-            println("II=$II, JJ=$JJ, error in |df_du|=", err_num)
-#             if err_num>1e-8
-#                 display(_bqp0.df_du[II,JJ])
-#                 display(df_du_num)
-#                 display(_bqp0.f[II])
-#                 display(f2[II])
-#             end
-            if false && II==3 && JJ==4
-                figure()
-                plot(reshape(_bqp0.df_du[II,JJ],:), "xb", markersize=0.5)
-                plot(reshape(df_du_num,:), "+g", markersize=0.5)
-                title("II=$II, JJ=$JJ")
-                
-#                 display(_bqp0.df_du[II,JJ])
-#                 display(df_du_num)
-                
-#                 display(_bqp0.nb[1])
-#                 display(_bqp0.nb[2])
-#                 display(f1[II])
-#                 display(f2[II])
-                
-            end
-        end
-    end
-    
-    #Perturb gradu and compute derivatives:
-    for KK=1:2, JJ=1:solver.nVars
-        
-        _bqp                    = deepcopy(_bqp0)
-        @mlv _bqp.gradu[JJ,KK]  -= delta
-        zero!(_bqp.f)
-        bflux!(solver.model, solver.BC[ib].BC, _bqp, false)
-        f1                      = deepcopy(_bqp.f)
-        #
-        _bqp                    = deepcopy(_bqp0)
-        @mlv _bqp.gradu[JJ,KK]  += delta
-        zero!(_bqp.f)
-        bflux!(solver.model, solver.BC[ib].BC, _bqp, false)
-        f2                      = deepcopy(_bqp.f)
-        for II=1:solver.nVars
-            df_du_num           = @mlv (f2[II]-f1[II])/(2*delta)
-            println("II=$II, JJ=$JJ, KK=$KK, error in |df_du|=", 
-                norm(_bqp0.df_dgradu[II,JJ,KK]-df_du_num,Inf))
-            if false
-                figure()
-                plot(reshape(_bqp0.df_dgradu[II,JJ,KK],:), "xb", markersize=0.5)
-                plot(reshape(df_du_num,:), "+g", markersize=0.5)
-                title("II=$II, JJ=$JJ, KK=$KK")
-            end
-        end
-    end
-        
-    return
     
 end
 
@@ -1806,5 +1683,21 @@ function errL2L2_(t_n::Float64, errL2L2::Float64, t_np1::Float64, e_np1::Float64
 
     errL2L2     = sqrt((errL2L2^2*t_n + e_np1^2*(t_np1-t_n))/t_np1)
     return errL2L2
+    
+end
+
+#Compute mass*u product. Note that solver.Mm may not be the mass matrix, put only the 
+#Jacobi part:
+function MuProduct(MII::SparseMatrixCSC{Float64,Int}, uv::Vector{Float64}, nVars::Int)
+
+    bv          = zeros(size(uv))
+    b_views     = GetViews(bv, nVars, size(MII,1))
+    u_views     = GetViews(uv, nVars, size(MII,1))
+    
+    for II=1:nVars
+        b_views[II]     .= MII*u_views[II]
+    end
+    
+    return bv
     
 end
