@@ -651,6 +651,101 @@ end
 #-----------------------------------------------------------------------------
 #Bubble space:
 
+#Create BSpace of given order associated with given mesh:
+function TrBSpace(mesh::TrMesh, order::Int)
+    
+    BSpace              = TrBSpace()
+    BSpace.mesh         = mesh
+    BSpace.order        = order
+    if order==0
+        error("Unable to construct bubble space of order 0")
+    elseif order==1
+        BSpace.DofPerElem   = 2*order+1
+    else
+        #Multiply "b" only by PKD functions of degree p-2, p-1 and p:
+        BSpace.DofPerElem   = 3*order
+    end
+    BSpace.ElemsDof     = zeros(Int, mesh.nElems, BSpace.DofPerElem)
+    for iElem=1:mesh.nElems, iDof=1:BSpace.DofPerElem
+        BSpace.ElemsDof[iElem,iDof]     = (iElem-1)*BSpace.DofPerElem + iDof
+    end
+    BSpace.nDof         = mesh.nElems*BSpace.DofPerElem
+    
+    #Chebyshev nodes of spaces P_p and P_(p+3):
+    xi_p                = TrElem_ChebyshevNodes(order)
+    xi_pp3              = TrElem_ChebyshevNodes(order+3)
+    
+    #The bubble space is to be defined by the Lagrangian shape functions associated
+    #with the two outer "layers" of nodes of degree (p+3), and the inner nodes of 
+    #degree p:
+    aux_pp3a            = 1:3*(order+3)
+    aux_pp3b            = 3*(order+3)+1:3*(order+3)+3*order
+    aux_p               = 3*order+1:size(xi_p,1)
+    BSpace.xi           = vcat( xi_pp3[aux_pp3a,:], xi_pp3[aux_pp3b,:], xi_p[aux_p,:] )
+    if false
+        figure()
+        plot(xi_p[aux_p,1], xi_p[aux_p,2], "xb")
+        plot(xi_pp3[aux_pp3a,1], xi_pp3[aux_pp3a,2], "xk")
+        plot(xi_pp3[aux_pp3b,1], xi_pp3[aux_pp3b,2], "xr")
+        error("")
+    end
+    
+    #We consider shape functions that vanish at the boundary. Hence, the first
+    #3*(order+3) functions are disregarded. Also, we consider shape functions whose
+    #interpolation onto the Chebyshev nodes xi_p is zero. The interpolation onto the
+    #boundary nodes is zero because the shape functions cancel at the boundary. Also,
+    #by construction, the shape functions are zero at the inner nodes of the space P_p.
+    #Hence, we only need to consider the shape functions 3*(order+3)+1:3*(order+3)+3*order:
+    BSpace.Lag_PKD      = Lag_PKDCoefficients(order+3, BSpace.xi)[:,aux_pp3b]
+       
+    return BSpace
+    
+end
+
+function NCompute(FES::TrBSpace, xim::AbstractMatrix{Float64})  #FES=finite element space
+
+    NBm         = PKD_Nm(xim, FES.order+3)*FES.Lag_PKD
+    
+    return NBm
+
+end
+
+function gradNCompute(FES::TrBSpace, xim::AbstractMatrix{Float64})  #FES=finite element space
+
+    #Lagrangian functions:
+    gradN_PKD   = PKD_gradNm(xim, FES.order+3)
+    gradNBm     = [gradN_PKD[1]*FES.Lag_PKD, gradN_PKD[2]*FES.Lag_PKD]
+    
+    return gradNBm
+    
+end
+
+function PlotBX(order, iDof; Nxi::Int=100)
+
+    #Chebyshev nodes of spaces P_p and P_(p+3):
+    xi_p        = TrElem_ChebyshevNodes(order)
+    xi_pp3      = TrElem_ChebyshevNodes(order+3)
+    aux_pp3a    = 1:3*(order+3)
+    aux_pp3b    = 3*(order+3)+1:3*(order+3)+3*order
+    aux_p       = 3*order+1:size(xi_p,1)
+    BSpace_xi   = vcat( xi_pp3[aux_pp3a,:], xi_pp3[aux_pp3b,:], xi_p[aux_p,:] )
+    Lag_PKD     = Lag_PKDCoefficients(order+3, BSpace_xi)[:,aux_pp3b]
+    
+    xiplot      = TrElem_EquiNodes(Nxi)
+    NBm         = PKD_Nm(xiplot, order+3)*Lag_PKD
+    
+    figure()
+    plot3D(xiplot[:,1], xiplot[:,2], NBm[:,iDof], ".c")
+    plot3D(xi_p[aux_p,1], xi_p[aux_p,2], 0.0*xi_p[aux_p,1], ".k")
+    plot3D(xi_pp3[aux_pp3a,1], xi_pp3[aux_pp3a,2], 0.0*xi_pp3[aux_pp3a,1], ".r")
+    plot3D(xi_pp3[aux_pp3b,1], xi_pp3[aux_pp3b,2], 1.0*(aux_pp3b.==3*(order+3)+iDof), ".r")
+    
+end
+
+#=
+#-----------------------------------------------------------------------------
+#Bubble space:
+
 #Elementary bubble function:
 function TrElem_Bubble_Nm(xim::AbstractMatrix{Float64})
 
@@ -818,6 +913,7 @@ function gradNCompute(FES::TrBSpace, xim::AbstractMatrix{Float64})  #FES=finite 
     return [ gradNBm[1]-gradNPm[1]*FES.Bub_Lag, gradNBm[2]-gradNPm[2]*FES.Bub_Lag ]
     
 end
+=#
 
 #---------------------------------------------------------------------------------
 #Polynomial + bubble space:

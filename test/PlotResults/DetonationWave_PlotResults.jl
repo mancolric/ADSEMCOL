@@ -64,7 +64,10 @@ end
 
 function Mesh_DetonationWave(SC::Int, nb::Int; PlotVar::String = "T", SaveFig::Bool=false, w::Float64=15.0, h::Float64=4.50)
 
-
+    if nb==1000
+        nb      = load(GetFileName(SC, "info"), "nb_SaveRes")
+    end
+    
     FileName    = GetFileName(SC, nb)
     solver      = GetSolver(SC, nb)
 

@@ -2,7 +2,7 @@ include("test_CompressibleFlow.jl")
 
 #Section 5.3 in Johsonn and Kercher, JCP2020:
 
-function DetonationWave(; FesOrder::Int=3, 
+function DetonationWave(; FesOrder::Int=5, 
     tf::Float64=20.0, RKMethod::String="Ascher3", #"BPR3"
     delta::Float64=1e-3,
     epsilon::Float64=1000*delta,

@@ -125,19 +125,28 @@ function ESDIRK4_3_7L_2_SA()
     Am[7,5]     = 8860614275765/11425531467341
     Am[7,6]     = -3696041814078/6641566663007
  
-    bv          = zeros(7)
-    bv[2]       = 1/4
-    bv[3]       = 1200237871921/16391473681546
-    bv[4]       = 1/2
-    bv[5]       = 395/567
-    bv[6]       = 89/126
-    bv[7]       = 1.0
+    cv          = zeros(7)
+    cv[2]       = 1/4
+    cv[3]       = 1200237871921/16391473681546
+    cv[4]       = 1/2
+    cv[5]       = 395/567
+    cv[6]       = 89/126
+    cv[7]       = 1.0
     
     for ii=2:7
-        Am[ii,1]    = bv[ii]-sum(Am[ii,2:ii])
+        Am[ii,1]    = cv[ii]-sum(Am[ii,2:ii])
     end
     
-    return Am
+    bhat        = zeros(7)
+    bhat[1]     = -1517409284625/6267517876163
+    bhat[2]     = -1517409284625/6267517876163
+    bhat[3]     = 8291371032348/12587291883523
+    bhat[4]     = 5328310281212/10646448185159
+    bhat[5]     = 5405006853541/7104492075037
+    bhat[6]     = -4254786582061/7445269677723
+    bhat[7]     = 19/140
+    
+    return Am, bhat
     
 end
 
@@ -170,20 +179,31 @@ function ESDIRK5_4_8L_2_SA()
     Am[8,6]     = -1847934966618/8254951855109
     Am[8,7]     = 5186241678079/7861334770480
 
-    bv          = zeros(8)
-    bv[2]       = 2/7
-    bv[3]       = 5779892736881/11850239716711
-    bv[4]       = 150/203
-    bv[5]       = 27/46
-    bv[6]       = 473/532
-    bv[7]       = 30/83
-    bv[8]       = 1.0
+    cv          = zeros(8)
+    cv[2]       = 2/7
+    cv[3]       = 5779892736881/11850239716711
+    cv[4]       = 150/203
+    cv[5]       = 27/46
+    cv[6]       = 473/532
+    cv[7]       = 30/83
+    cv[8]       = 1.0
     
     for ii=2:8
-        Am[ii,1]    = bv[ii]-sum(Am[ii,2:ii])
+        Am[ii,1]    = Am[ii,2]
     end
     
-    return Am
+    bhat        = zeros(8)
+    bhat[2]     = 701879993119/7084679725724
+    bhat[3]     = -8461269287478/14654112271769
+    bhat[4]     = 6612459227430/11388259134383
+    bhat[5]     = 2632441606103/12598871370240
+    bhat[6]     = -2147694411931/10286892713802
+    bhat[7]     = 4103061625716/6371697724583
+#     bhat[8]     = 4103061625716/6371697724583
+    bhat[8]     = 36/233    #CAREFUL! There is a typo in the paper
+    bhat[1]     = bhat[2]
+        
+    return Am, bhat
     
 end
 
@@ -199,6 +219,20 @@ function RK_CheckLinearOrder(Am::Array{Float64,2},order::Int)
     end
 
 end
+
+function RK_CheckLinearOrder(Am::Array{Float64,2}, bhat::Vector{Float64}, order::Int)
+
+    #Nb of stages:
+    ss      = size(Am,1)
+    cv      = sum(Am,dims=2)
+    #Loop orders:
+    for kk=order
+        # println("$kk-th order conditions")
+        display(1.0^kk - dot(bhat, kk.*cv.^(kk-1)))
+    end
+
+end
+
 
 "
     RK_coeffs = RK_Coefficients(RKMethod)
@@ -608,20 +642,20 @@ function RK_Coefficients(RKMethod::String)
         RK.const_diag   = true
     elseif RKMETHOD=="KC35"
         RK.AI, RK.bhatI = ESDIRK3_2_5L_2_SA()
-        RK.AE           = NaN*RK.AI
+#         RK.AE           = NaN*RK.AI
         RK.order        = 3
         RK.GSA          = true
         RK.const_diag   = true
     elseif RKMETHOD=="KC47"
-        RK.AI           = ESDIRK4_3_7L_2_SA()
-        RK.AE           = NaN*RK.AI
+        RK.AI, RK.bhatI = ESDIRK4_3_7L_2_SA()
+#         RK.AE           = NaN*RK.AI
         RK.order        = 4
         RK.GSA          = true
         RK.const_diag   = true
     elseif RKMETHOD=="KC58"
         #Not I-stable:
-        RK.AI           = ESDIRK5_4_8L_2_SA()
-        RK.AE           = NaN*RK.AI
+        RK.AI, RK.bhatI = ESDIRK5_4_8L_2_SA()
+#         RK.AE           = NaN*RK.AI
         RK.order        = 5
         RK.GSA          = true
         RK.const_diag   = true

@@ -38,6 +38,8 @@ mutable struct TrBmesh_v1
 
 end
 
+const JLD2_Bmesh_v1 = JLD2.ReconstructedMutable{:TrBmesh, (:dim, :nElems, :nNodes, :nVerts, :nEdges, :NodesPerElem, :VertsPerElem, :order, :ElemsNodes, :NodesCoords, :ElemsCoords, :ParentEdges, :ParentNodes, :ParentElems, :ParentFaces, :Lag_Leg, :xi), Tuple{Int64, Int64, Int64, Int64, Int64, Int64, Int64, Int64, Vararg{Any, 9}}}
+
 const TrBmesh_v2    = TrBmesh
 
 import Base.convert
@@ -57,3 +59,14 @@ function convert(TrBmesh_v2, bmesh0::TrBmesh_v1)
     return bmesh
     
 end
+function convert(TrBmesh_v2, bmesh::JLD2_Bmesh_v1)
+
+    @warn "Unfinished"
+    
+    bmesh                   = TrBmesh()
+    
+    return bmesh
+    
+end
+
+

@@ -244,6 +244,7 @@ function SmoothVortex(hp::Float64, FesOrder::Int, tfv::Array{Float64,1};
     while solver.t<tfv[length(tfv)]
     
         ConvFlag            = LIRKHyp_Step!(solver)
+#         ConvFlag            = IRK_Step!(solver)
         
         if ConvFlag<=0
             break
@@ -281,34 +282,5 @@ function SmoothVortex(hp::Float64, FesOrder::Int, tfv::Array{Float64,1};
 #     end
     
     return solver
-    
-end
-
-function test_loop(MCv::AbstractVector{Int}, orderv::AbstractVector{Int})
-
-    Norder  = length(orderv)
-    colorv  = PyPlotColors("jet2", Norder)
-    
-    NMC         = length(MCv)
-    hpv         = zeros(NMC)
-    errv        = zeros(NMC)
-    errv_est    = zeros(NMC)
-    
-    figure()
-    leg         = String[]
-    for ii=1:Norder
-        for jj=1:NMC
-            hpv[jj], errv[jj], errv_est[jj]   = SmoothVortex(MCv[jj], orderv[ii], [0.0])
-        end
-        loglog(hpv*orderv[ii], errv, color=colorv[ii], linestyle="solid")
-        loglog(hpv*orderv[ii], errv_est, color=colorv[ii], linestyle="dashed")
-        leg     = vcat(leg, "p=$(orderv[ii])", "p=$(orderv[ii])")
-        EOCv    = @. log(abs($diff(errv))) / log(abs($diff(hpv)))
-        println(EOCv)
-    end
-    legend(leg)
-    grid("on")
-    
-    return
     
 end

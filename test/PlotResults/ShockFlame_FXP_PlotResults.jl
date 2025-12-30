@@ -251,7 +251,8 @@ function Video_ShockFlame(SC::Int;
     
 end
 
-function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Float64=10.0)
+function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Float64=10.0, 
+    Deltat::Float64=1.0)
 
     nbMax       = load("$(ResUbi)LIRKHyp_SC$(SC)_info.jld2", "nb_SaveRes")
     
@@ -267,9 +268,9 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
     #Relative Mach number:
     u0              = ML*sqrt(gamma*(1.0+q))    #u0=uL, RT0=1, RTL=RT0*(1+q)
     a0              = sqrt(gamma*1.0)
-    xsdotv          = xdotfun(tv, xsv)
+    xsdotv          = xdotfun(tv, xsv, Deltat=Deltat)
     Mtv             = @. (u0-xsdotv)/a0
-    Mtv[xfv.<xsv]   .= NaN
+#     Mtv[xfv.<xsv]   .= NaN
     
     #Plot xs(t) and xf(t):
     PyPlotFigure(w=w, h=h, top=1.0, bottom=1.0, left=1.5, right=0.2)
@@ -285,7 +286,6 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
     end
     
     #Plot xsdot:
-    xsdotv      = xdotfun(tv, xsv)
     PyPlotFigure(w=w, h=h, top=1.0, bottom=1.0, left=1.5, right=0.2)
     plot(tv, xsdotv, "g")
     tick_params(axis="both", which="both", labelsize=TickSize)
@@ -294,6 +294,7 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
     ylabel(latexstring("\\dot{x}_s"), fontsize=10, rotation=0)
     ylim(-0.1, 1.2*maximum(xsdotv[.!isnan.(xsdotv)]))
     title(latexstring("\\mathcal{Q}=", q, ", \\mathcal{M}_i=", ML), fontsize=10)
+    grid("on")
     if SaveFig
         savefig("$(FigUbi)SC$(SC)_TrackShockFlame2.png", dpi=800, pad_inches=0)
     end
@@ -303,12 +304,14 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
     plot(tv, Mtv, "b")
     tick_params(axis="both", which="both", labelsize=TickSize)
     xlabel(latexstring("t"), fontsize=10)
-    ylabel(latexstring("\\mathcal{M}_t"), fontsize=10, rotation=0)    
+    ylabel(latexstring("\\mathcal{M}_t"), fontsize=10, rotation=0, labelpad=10.0)    
     title(latexstring("\\mathcal{Q}=", q, ", \\mathcal{M}_i=", ML), fontsize=10)
     ylim(-0.1, 1.2*maximum(Mtv[.!isnan.(Mtv)]))
+    grid("on")
     if SaveFig
         savefig("$(FigUbi)SC$(SC)_Mt.png", dpi=800, pad_inches=0)
     end
+    println("M_rel=", Mtv)
     
     return
     
@@ -337,6 +340,15 @@ function MtPlot(q::Float64, beta::Float64;
     Mt1v    = []
     Mt2v    = []
     gamma   = 1.4
+    if q==5.0 && beta==10.0
+        Miv     = [2.0, 2.4, 2.8, 3.4, 4.0, 4.9, 8.4]#, 5.8, 6.9, 8.4, 10.0]
+        Mt1v    = [2.59, 3.26, 3.95, 5.84, 6.6, 8.0, 13.20] 
+        Mt2v    = copy(Mt1v)
+    else
+        error("Undefined case")
+    end
+    #OLD CASES:
+    #=
     if q==5.0 && beta==25.0
         Miv     = [2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 10.0]
         Mt1v    = [2.6, 5.2, 5.4, 5.99, 6.65, 8.08, 15.71 ]
@@ -353,6 +365,7 @@ function MtPlot(q::Float64, beta::Float64;
     else
         error("Undefined case")
     end
+    =#
     
     #Plot xs(t) and xf(t):
     PyPlotFigure(w=w, h=h, top=1.0, bottom=1.5, left=2.2, right=0.2)
@@ -541,11 +554,13 @@ function MtMrShock(Mi::Float64, gamma::Float64, q::Float64)
 end
 
 #Compute shock and flame velocities:
-function xdotfun(tv::Vector{Float64}, xv::Vector{Float64})
+function xdotfun(tv::Vector{Float64}, xv::Vector{Float64};
+    Deltat::Float64=1.0)
 #     return xdotfun_nofilter(tv, xv)
 #     return xdotfun_filter1(tv, xv)
 #     return xdotfun_filter2(tv, xv)
-    return xdotfun_filter3(tv, xv)
+#     return xdotfun_filter3(tv, xv)
+    return xdotfun_filter4(tv, xv; Deltat=Deltat)
 end
 
 function xdotfun_nofilter(tv::Vector{Float64}, xv::Vector{Float64})
@@ -672,9 +687,10 @@ function xdotfun_filter2(tv::Vector{Float64}, xv::Vector{Float64};
 end
 
 function xdotfun_filter3(tv::Vector{Float64}, xv::Vector{Float64};
-    DeltaN::Int=20)
+    DeltaN::Int=50)
     
-    #Compute velocities with second order formula. The result is noisy:
+    #Compute velocities with first order formula. Compute average of 
+    #DeltaN last time steps:
     N               = length(xv)
     xdotv           = zeros(N)
     xdotv[1]        = NaN
@@ -684,6 +700,37 @@ function xdotfun_filter3(tv::Vector{Float64}, xv::Vector{Float64};
             xdotv[ii]   += (xv[ii]-xv[ii-jj])/(tv[ii]-tv[ii-jj])
         end
         xdotv[ii]       /= jmax
+    end
+        
+    return xdotv
+    
+end
+
+function xdotfun_filter4(tv::Vector{Float64}, xv::Vector{Float64};
+    Deltat::Float64=1.0)
+    
+    #Compute velocities with first order formula. Take a minimum time step
+    #given by Deltat:
+    N               = length(xv)
+    xdotv           = zeros(N)
+    xdotv[1]        = NaN
+    for ii=2:N
+        
+        #Find maximum jj such that tv[ii]-tv[jj]>Deltat
+        jj          = ii-1
+        while true
+            if tv[ii]-tv[jj]>Deltat
+                break
+            end
+            if jj==1
+                break
+            end
+            jj      -= 1
+        end
+            
+        #Compute velocity:
+        xdotv[ii]   = (xv[ii]-xv[jj])/(tv[ii]-tv[jj])
+        
     end
         
     return xdotv
