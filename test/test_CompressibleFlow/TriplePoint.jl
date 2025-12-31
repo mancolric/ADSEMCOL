@@ -79,7 +79,7 @@ function TriplePoint(hp0::Float64, FesOrder::Int;
     solver.TolS_max         = TolS0
     solver.TolS_min         = 0.0*TolS
     solver.TolT             = TolT
-#     solver.LSType           = "BlockJacobi"
+    solver.LSType           = "BlockJacobi"
     
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x)) 

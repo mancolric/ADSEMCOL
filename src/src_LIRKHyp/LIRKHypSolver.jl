@@ -548,7 +548,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                     fres        = MuProduct(solver.MII, u, solver.nVars) - 
                                         solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
                                         MuProduct(solver.Jm, u, 1)
-                    
+                                        
                     #Compute preconditioned residual. LS_solve! scales gres, it is not necessary
                     #to scale it here:
                     LSOutput    = LS_solve!(solver.Am_LS.LS, gres, fres,  
@@ -566,7 +566,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                 
                 #Solve:
                 t_ini       = time()
-                LSOutput    = Anderson(FW_NLS((uhat,gres)->QNResidualKrylov!(uhat,gres)), 
+                LSOutput    = NLS_gmres(FW_NLS((uhat,gres)->QNResidualKrylov!(uhat,gres)), 
                                 u_k./scalv, 
                                 AbsTolX=1.0*TolA, RelTolX=0.0, 
                                 AbsTolG=0.0*TolA, RelTolG=0.0, 
@@ -605,7 +605,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                     #   f = M*u - b - Deltat*a_kk*J*u
                     fres        = MuProduct(solver.MII, u, solver.nVars) - 
                                         solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
-                                        MuProduct(solver.Jm, u, 1)
+                                        solver.Jm*u
                     
                     #Compute preconditioned residual. LS_solve! scales gres, it is not necessary
                     #to scale it here:
@@ -624,7 +624,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                 
                 #Solve:
                 t_ini       = time()
-                LSOutput    = Anderson(FW_NLS((uhat,gres)->QNResidualJ!(uhat,gres)), 
+                LSOutput    = NLS_gmres(FW_NLS((uhat,gres)->QNResidualJ!(uhat,gres)), 
                                 u_k./scalv, 
                                 AbsTolX=1.0*TolA, RelTolX=0.0, 
                                 AbsTolG=0.0*TolA, RelTolG=0.0, 

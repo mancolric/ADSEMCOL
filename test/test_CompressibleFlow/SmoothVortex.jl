@@ -99,6 +99,8 @@ function SmoothVortex(hp::Float64, FesOrder::Int, tfv::Array{Float64,1};
     solver.SpaceAdapt       = SpaceAdapt
     solver.TimeAdapt        = TimeAdapt
     solver.LSType           = "BlockJacobi"
+    solver.LS_iters_target  = typemax(Int)
+    solver.LS_iters_max     = 400
     
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> utheor(0.0, x)) 
