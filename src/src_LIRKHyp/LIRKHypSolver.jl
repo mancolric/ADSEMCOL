@@ -56,7 +56,7 @@ function LIRKHyp_Start(model::ConstModel) where {ConstModel<:ConstModels}
     solver.TolS_min         = 1e-3
     solver.TolS_max         = 1e-2
     solver.TolT             = 1e-4
-    solver.TolA_min         = 1e-12
+    solver.TolA_min         = NaN
     solver.CA               = 0.01
     solver.CA_max           = 0.05
     solver.AMA_MaxIter      = 20
@@ -185,6 +185,11 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
         solver.AMA_ProjOrder    = 2*(solver.FesOrder+2+1)
     end
     
+    #Minimal algebraic tolerance:
+    if isnan(solver.TolA_min)
+        solver.TolA_min         = 1e-3*min(solver.TolS_max, solver.TolT)
+    end
+    
     #Copy db file or create from geo. The input is solver.MeshFile.
     #The output (copied db file or new db file from geo) is solver.MeshFileSC.
     MeshFileGeo         = "$(@__DIR__)/../../temp/BamgSC$(solver.SC).geo"
@@ -230,6 +235,13 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
     elseif uppercase(solver.LSType)=="BLOCKJACOBI"
         solver.JType            = "BlockJacobi"
         solver.KrylovApprox     = false
+        #compute only products concerning the same dof:
+        solver.Jm_ilocal        = 1:solver.fes.DofPerElem
+        solver.Jm_jlocal        = 1:solver.fes.DofPerElem
+        solver.Jm_localterms    = solver.fes.DofPerElem
+    elseif uppercase(solver.LSType)=="BLOCKJACOBIKRYLOV"
+        solver.JType            = "BlockJacobi"
+        solver.KrylovApprox     = true
         #compute only products concerning the same dof:
         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
@@ -534,8 +546,12 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                 
             elseif solver.KrylovApprox
             
-                #Solve Mu = b + tau*a_ii*Ju
-                error("Unfinished")
+                @warn "This method does not perform well because the product Ju is not computed with sufficient accuracy"
+                
+                #Solve Mu - b - tau*a_ii*Ju = 0
+                #Ju is replaced by (f(u_n+epsilon*u)-f(u_n))/epsilon
+                Ju              = zeros(length(u_k))
+                epsilon_Krylov  = 1e-5
                 
                 #Define preconditioned residual:
                 function QNResidualKrylov!(uhat::Vector{Float64}, gres::Vector{Float64})
@@ -543,11 +559,19 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                     #Unscale u:
                     u           = @tturbo @. scalv*uhat
                     
+                    #Compute (f(t_n, u_n + epsilon*u)-f(t_n, u_n))/epsilon:
+                    flag,       = Rhs!(solver, t_n, u_n+epsilon_Krylov*u, false, 
+                                    Ju, solver.Jm)
+                    if flag<=0
+                        return flag
+                    end
+                    BLAS.axpby!(-1.0, view(solver.f_RK,:,1), 1.0, Ju)
+                    BLAS.scal!(Deltat_n*solver.RK.AI[kk,kk]/epsilon_Krylov, Ju)
+                    
                     #Compute residual f:
                     #   f = M*u - b - Deltat*a_kk*J*u
                     fres        = MuProduct(solver.MII, u, solver.nVars) - 
-                                        solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
-                                        MuProduct(solver.Jm, u, 1)
+                                    solver.bv - Ju
                                         
                     #Compute preconditioned residual. LS_solve! scales gres, it is not necessary
                     #to scale it here:
@@ -566,7 +590,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                 
                 #Solve:
                 t_ini       = time()
-                LSOutput    = NLS_gmres(FW_NLS((uhat,gres)->QNResidualKrylov!(uhat,gres)), 
+                LSOutput    = Anderson(FW_NLS((uhat,gres)->QNResidualKrylov!(uhat,gres)), 
                                 u_k./scalv, 
                                 AbsTolX=1.0*TolA, RelTolX=0.0, 
                                 AbsTolG=0.0*TolA, RelTolG=0.0, 
@@ -2002,7 +2026,7 @@ function IRK_Step!(solver::SolverData)
         
     end
     if t_n==0.0
-        etaT_np1_est    = solver.TolT
+        etaT_np1_est    = 0.1*solver.TolT
     end
     
     solver.tAlloc       += time()-t_ini
@@ -2033,6 +2057,13 @@ function IRK_Step!(solver::SolverData)
     #Save M*u[1]:
     b1                  = MuProduct(solver.MII, u_n, solver.nVars)
 
+    #Scaling vector:
+    scalv               = zeros(solver.nVars*solver.fes.nDof)
+    scalv_views         = GetViews(scalv, solver.nVars, solver.fes.nDof)
+    for II=1:solver.nVars
+        scalv_views[II] .= solver.nFacts[II]
+    end
+    
     #Loop stages until algebraic and time tolerances are met:
     RepeatTA            = true
     LSFailed_iters      = 0
@@ -2070,82 +2101,197 @@ function IRK_Step!(solver::SolverData)
             for ll=1:kk-1
                 @mlv solver.bv      += (Deltat_n*solver.RK.AI[kk,ll])*$view(solver.f_RK,:,ll)
             end
-#             if any(isnan.(solver.bv))
-#                 display(kk)
-#                 display(norm(b1))
-#                 display(norm(solver.f_RK[:,1:kk-1]))
-#                 display(norm(solver.Ju_RK))
-#                 display(Deltat_n)
-#                 error("NaNs in solver.bv")
-#             end
             solver.tb               += time()-t_ini
             
-            #Define preconditioned residual:
-            function QNResidual1!(u::Vector{Float64}, gres::Vector{Float64})
-                
-                #Compute flux and save derivatives:
-#                 t_ini                   = time()
-                flag,       = Rhs!(solver, t_k, u, false, 
-                                view(solver.f_RK,:,kk), solver.Jm)
-#                 solver.tRhs             += time()-t_ini
-                if flag<0
+            #Solve nonlinear system
+            #   Mu - b - a_ii*Deltat_n*f(t_k, u_k) = 0
+            if solver.KrylovApprox
+            
+                #Approximation of J*g:
+                Jg              = zeros(length(u_k))
+                epsilon_Krylov  = 1e-5
+                f_evals         = 0
+            
+                #Define preconditioned residual:
+                #   fres = M*u - b - a_ii*Deltat_n * f(u)
+                #   gres = A^{-1} fres
+                function QNResidualKrylov!(uhat::Vector{Float64}, gres::Vector{Float64})
+                    
+                    #Unscale u:
+                    u           = @tturbo @. scalv*uhat
+                    
+                    #Compute flux and save derivatives:
+    #                 t_ini                   = time()
+                    flag,               = Rhs!(solver, t_k, u, false, 
+                                            view(solver.f_RK,:,kk), solver.Jm)
+    #                 solver.tRhs             += time()-t_ini
+                    f_evals             += 1
+                    if flag<0
+                        return flag
+                    end
+                    
+                    #Compute residual f:
+                    #   fres = M*u - b - Deltat*a_kk*f(t_k,u_k)
+                    fres                = MuProduct(solver.MII, u, solver.nVars) - 
+                                            solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
+                                            view(solver.f_RK,:,kk)
+                    
+                    #Instead of solving Ahat*gres=fres, where Ahat is the preconditioner, 
+                    #we solve A(t_k,u_k)*gres=fres, with A the exact Jacobian of fres, 
+                    #in a Krylov fashion. That is, we solve for gres in
+                    #   fres2   = M*gres - Deltat*a_kk*(f(u_k+epsilon*gres)-f(u_k))/epsilon - fres = 0
+                    #This equation is preconditioned with Ahat. That is, we solve
+                    #   gres2(gres) = Ahat\fres2(gres) = 0
+                    function QNResidualG!(ghat::Vector{Float64}, gres2::Vector{Float64})
+                    
+                        #Unscale g:
+                        g           = @tturbo @. scalv*ghat
+                    
+                        #Compute (f(t_k, u_k + epsilon*g)-f(t_k, u_k))/epsilon:
+                        flag,       = Rhs!(solver, t_k, u+epsilon_Krylov*g, false, 
+                                        Jg, solver.Jm)
+                        if flag<=0
+                            return flag
+                        end
+                        BLAS.axpby!(-1.0, view(solver.f_RK,:,kk), 1.0, Jg)
+                        BLAS.scal!(Deltat_n*solver.RK.AI[kk,kk]/epsilon_Krylov, Jg)
+                    
+                        #Residual:
+                        fres2       = MuProduct(solver.MII, g, solver.nVars) - Jg - fres
+                        
+                        #Compute preconditioned residual gres2 = Ahat\fres2. This system is linear
+                        #and does not require to evaluate f. We solve the system with 
+                        #high accuracy in order to reduce the number of evaluations of f in 
+                        #outer loops.
+                        LSOutput    = LS_solve!(solver.Am_LS.LS, gres2, fres2, 
+                                        RelTol=0.0, AbsTol=TolA, 
+                                        Display="notify", MaxIter=solver.LS_iters_max)
+                        flag        = LSOutput[1]
+                        
+                        #Scale residual:
+                        @tturbo @. gres2    /= scalv
+                        
+                        return flag 
+                        
+                    end
+                    #Solve for gres. This value provides the Newton step. It is not necessary
+                    #to ask for a small tolerance since this is only the Newton step, and anyway
+                    #f has to be computed at each iteration:
+                    t_ini       = time()
+                    LSOutput    = Anderson(FW_NLS((ghat,gres2)->QNResidualG!(ghat,gres2)), 
+                                    gres./scalv, 
+                                    AbsTolX=0.0*TolA, RelTolX=0.0, 
+                                    AbsTolG=1.0*TolA, RelTolG=1e-2, 
+                                    NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
+                                    memory=100, MaxIter=solver.LS_iters_max, 
+                                    history=true, Display="notify")
+                    solver.tLS  += time()-t_ini
+                    gres        .= LSOutput[1].*scalv
+                    flag        = LSOutput[2].flag
+                    f_evals     += LSOutput[2].nIter
+                    
+                    #Scale gres:
+                    @tturbo @. gres     /= scalv
+                    
                     return flag
+                    
                 end
-                
-                #Compute residual f:
-                #   f = D*(M*(Du) - b - Deltat*a_kk*f_k(Du))
-                fres        = MuProduct(solver.MII, u, solver.nVars) - 
-                                    solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
-                                    view(solver.f_RK,:,kk)
-                
-                #Compute preconditioned residual:
-                LSOutput    = LS_solve!(solver.Am_LS.LS, gres, fres, 
-#                                 RelTol=1e-2, AbsTol=0.0, 
-                                RelTol=0.0, AbsTol=TolA, 
-                                Display="notify", MaxIter=solver.LS_iters_max)
-                #Returns flag, nIters, etaA
-                flag        = LSOutput[1]
-#                 etaA_np1    = LSOutput[3]
-                
-                return flag
-                
-            end
             
-            #Solve:
-            t_ini       = time()
-            LSOutput    = Anderson(FW_NLS((u,gres)->QNResidual1!(u,gres)), 
-                            u_k, 
-                            AbsTolX=1.0*TolA, RelTolX=0.0, 
-                            AbsTolG=0.0*TolA, RelTolG=0.0, 
-                            NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
-                            memory=100, MaxIter=solver.LS_iters_max, 
-                            history=true, Display="final")
-            solver.tLS  += time()-t_ini
-            u_k         .= LSOutput[1]
-            LSFlag      = LSOutput[2].flag
-            LSIter      = LSOutput[2].nIter
-            etaA_np1    = LSOutput[2].pnorms[ length(LSOutput[2].pnorms) ]
-            if LSFlag<0
-                #NLS did not converge because something went wrong with the residual function
-                etaA_np1        = Inf   #In this way, time step is decreased as maximum as possible
-                break #loop for kk=2:nStages
-            elseif LSFlag==0
-                #NLS reached maximum of iterations
-                break #loop for kk=2:nStages
-            else
-#                 println("Stage $kk, linear solver converged in $(LSIter) iterations")
-            end
-            solver.LS_iters     += LSIter
-            solver.LS_total     += LSIter
-            #Here, LS in reality is NLS
+                #Solve:
+                t_ini       = time()
+                LSOutput    = Anderson(FW_NLS((uhat,gres)->QNResidualKrylov!(uhat,gres)), 
+                                u_k./scalv, 
+                                AbsTolX=1.0*TolA, RelTolX=0.0, 
+                                AbsTolG=0.0*TolA, RelTolG=0.0, 
+                                NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
+                                memory=100, MaxIter=solver.LS_iters_max, 
+                                history=true, Display="final")
+                solver.tLS  += time()-t_ini
+                u_k         .= LSOutput[1].*scalv
+                LSFlag      = LSOutput[2].flag
+                etaA_np1    = LSOutput[2].pnorms[ length(LSOutput[2].pnorms) ]
+                solver.LS_iters     += f_evals
+                solver.LS_total     += f_evals
+                if LSFlag<0
+                    #NLS did not converge because something went wrong with the residual function
+                    etaA_np1        = Inf   #In this way, time step is decreased as maximum as possible
+                    break #loop for kk=2:nStages
+                elseif LSFlag==0
+                    #NLS reached maximum of iterations
+                    break #loop for kk=2:nStages
+                else
+                    printstyled("NLSolver converged, f_evals=", sprintf1("%d", f_evals), " \n", color=:cyan)
+                end
+                #Here, LS in reality is NLS
+                
+            else #Krylov==false
             
-#             splot_fun(x1,x2)    = @mlv x1
-#             solver.uv           .= u_k
-#             for var in ["h", "v1", "v3", "p"]
-#                 figure()
-#                 PlotNodes(splot_fun, solver, var)
-#             end
-#             error("")
+                #Define preconditioned residual:
+                function QNResidualJ!(uhat::Vector{Float64}, gres::Vector{Float64})
+                    
+                    #Unscale u:
+                    u           = @tturbo @. scalv*uhat
+                    
+                    #Compute flux and save derivatives:
+    #                 t_ini                   = time()
+                    flag,       = Rhs!(solver, t_k, u, false, 
+                                    view(solver.f_RK,:,kk), solver.Jm)
+    #                 solver.tRhs             += time()-t_ini
+                    if flag<0
+                        return flag
+                    end
+                    
+                    #Compute residual f:
+                    #   f = M*u - b - Deltat*a_kk*f(t_k,u_k)
+                    fres        = MuProduct(solver.MII, u, solver.nVars) - 
+                                        solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
+                                        view(solver.f_RK,:,kk)
+                    
+                    #Compute preconditioned residual. Since this equation is linear and 
+                    #f does not need to be computed at each iteration, we ask for a very
+                    #small tolerance. In that case, having an accurate Newton step gres will 
+                    #allow for a reduction in the number of Newton steps (and evaluations of f):
+                    LSOutput    = LS_solve!(solver.Am_LS.LS, gres, fres, 
+                                    RelTol=0.0, AbsTol=TolA, 
+                                    Display="notify", MaxIter=solver.LS_iters_max)
+                    #Returns flag, nIters, etaA
+                    flag        = LSOutput[1]
+                    
+                    #Scale gres:
+                    @tturbo @. gres     /= scalv
+                    
+                    return flag
+                    
+                end
+            
+                #Solve:
+                t_ini       = time()
+                LSOutput    = Anderson(FW_NLS((uhat,gres)->QNResidualJ!(uhat,gres)), 
+                                u_k./scalv, 
+                                AbsTolX=1.0*TolA, RelTolX=0.0, 
+                                AbsTolG=0.0*TolA, RelTolG=0.0, 
+                                NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
+                                memory=100, MaxIter=solver.LS_iters_max, 
+                                history=true, Display="final")
+                solver.tLS  += time()-t_ini
+                u_k         .= LSOutput[1].*scalv
+                LSFlag      = LSOutput[2].flag
+                LSIter      = LSOutput[2].nIter
+                etaA_np1    = LSOutput[2].pnorms[ length(LSOutput[2].pnorms) ]
+                if LSFlag<0
+                    #NLS did not converge because something went wrong with the residual function
+                    etaA_np1        = Inf   #In this way, time step is decreased as maximum as possible
+                    break #loop for kk=2:nStages
+                elseif LSFlag==0
+                    #NLS reached maximum of iterations
+                    break #loop for kk=2:nStages
+                else
+                end
+                solver.LS_iters     += LSIter
+                solver.LS_total     += LSIter
+                #Here, LS in reality is NLS
+                
+            end #krylov if
             
         end
         
