@@ -39,8 +39,19 @@ mutable struct BCW{BCType<:BoundConds}
 end
 BCW(bc::BCType) where BCType<:BoundConds = BCW{BCType}(bc)
 
-#Static condensation + ILU0 factorization + GMRES:
-mutable struct LinearSystem1
+#Wrapper for linear systems/preconditioners:
+abstract type LinearSystems end
+
+mutable struct LSW{LSType<:LinearSystems}
+    LS                  ::LSType
+end
+LSW(ls::LSType) where LSType<:LinearSystems = LSW{LSType}(ls)
+
+#Static condensation + ILU0 + GMRES. The solution of a linear system involves 
+#1) static condensation, 2) ILU0+GMRES for master dofs, 3) computation of slave dofs
+#from static condensation. It is not possible to separate preconditioner from linear 
+#solver; everything is coupled.
+mutable struct LS_SCILU0_GMRES <: LinearSystems
 
     A                   ::SparseMatrixCSC{Float64,Int}  #Original matrix
     APP                 ::SparseMatrixCSC{Float64,Int}  #Permuted matrix
@@ -52,34 +63,29 @@ mutable struct LinearSystem1
     scaleP_m            ::Vector{Float64}               #Vector to scale master dof solution with NFactors
     
     #nMaster, nSlaves, etc is in Pl
-    
-    normvPP             ::Vector{Float64}               #Diagonal vector to compute norm from permuted vector
-    normvPP_m           ::Vector{Float64}               #Diagonal vector to compute norm from permuted vector and master dof
+        
     NormFun             ::FW_NLS_norm                   #Function to compute the norm
     
-    LinearSystem1()     = new()
+    LS_SCILU0_GMRES()   = new()
     
 end
 
-#=
-#ILU factorization + GMRES:
-mutable struct LinearSystem3
+#Block Jacobi preconditioner:
+mutable struct LS_BlockJacobi <: LinearSystems
 
     A                   ::SparseMatrixCSC{Float64,Int}  #Original matrix
     APP                 ::SparseMatrixCSC{Float64,Int}  #Permuted matrix
     p                   ::Vector{Int}
     pinv                ::Vector{Int}
     ssPP_ss             ::Vector{Int}                   #Vector to compute APP quickly
-    Pl                  ::ILUFact{Float64, Int}
-#     eta_err             ::Float64                       #Quotient between LS residual and user-defined tolerance
-#     NormMatrixPP        ::SparseMatrixCSC{Float64,Int}  #Matrix to compute norm from permuted solution
-    normvPP             ::Vector{Float64}               #Diagonal vector to compute norm from permuted vector
-    NormFun             ::FW_NLS_norm                   #Function to compute the norm
+    Pl                  ::SCILU0Fact{Float64, Int}      #ILU0 (exact) factorization of block Jacobi
+    scaleP              ::Vector{Float64}               #Vector to scale solution with NFactors
     
-    LinearSystem3()     = new()
+    #nMaster, nSlaves, etc is in Pl
+    
+    LS_BlockJacobi()    = new()
     
 end
-=#
 
 #Variables at quadrature nodes:
 mutable struct TrIntVars
@@ -208,11 +214,19 @@ mutable struct SolverData{ConstModel<:ConstModels}
     Ju_RK           :: Matrix{Float64}
     fNStab_RK       :: Matrix{Float64}
     
-    #Approximate Jacobian?
+    #Linear solver type. Available options:
+    #SCILU0:            All Jacobian terms are computed, system is solved via static condensation + ILU0 + GMRES
+    #BlockJacobi:       Jacobian approximated by BlockJacobi preconditioner
+    #BlockJacobiKrylov: BlockJacobi preconditioner, Krylov approximation for Jacobian 
+    LSType          :: String       
+    #Separate, if possible, preconditioner and Krylov approximation:
     JType           :: String
-    Jm_ilocal       :: Vector{Int}
+    KrylovApprox    :: Bool
+    #(i,j) pairs of Jacobian terms to be computed at each element
+    Jm_ilocal       :: Vector{Int}  
     Jm_jlocal       :: Vector{Int}
-    Jm_diagterms    :: Int
+    Jm_localterms   :: Int
+    
     
     #Matrices/vectors:
     Integ2D         :: TrInt
@@ -220,14 +234,14 @@ mutable struct SolverData{ConstModel<:ConstModels}
 #     elems_RCM       :: Vector{Int}                      #Optimal permutations for the edge dofs
 #     dof_RCM         :: Vector{Int}                      #Optimal permutations for degrees of freedom
     MII             :: SparseMatrixCSC{Float64,Int}     #Mass matrix for each variable 
-    MII_LS          :: LinearSystem1
+    MII_LS          :: LS_SCILU0_GMRES
     bv              :: Vector{Float64}
     b               :: Vector{VectorView{Float64}}
     Mm              :: SparseMatrixCSC{Float64,Int}     #JType part (complete or block Jacobi) of the mass matrix
     Jm              :: SparseMatrixCSC{Float64,Int}
     Jm_pinv         :: Matrix{Vector{Int}}              #Matrix nVars*nVars with vectors for fast assembly
     Am              :: SparseMatrixCSC{Float64,Int}
-    Am_LS           :: LinearSystem1
+    Am_LS           :: LSW                              #Wrapper to linear system
     
     #Monitor variables:
     monitor         :: Vector{Matrix{Float64}}

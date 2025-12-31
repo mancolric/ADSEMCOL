@@ -341,8 +341,8 @@ function MtPlot(q::Float64, beta::Float64;
     Mt2v    = []
     gamma   = 1.4
     if q==5.0 && beta==10.0
-        Miv     = [2.0, 2.4, 2.8, 3.4, 4.0, 4.9, 8.4]#, 5.8, 6.9, 8.4, 10.0]
-        Mt1v    = [2.59, 3.26, 3.95, 5.84, 6.6, 8.0, 13.20] 
+        Miv     = [2.0, 2.4, 2.8, 3.4, 4.0, 4.9, 8.4, 10.0]#, 5.8, 6.9, 8.4, 10.0]
+        Mt1v    = [2.58, 3.26, 3.95, 5.84, 6.6, 8.0, 13.20, 15.67] 
         Mt2v    = copy(Mt1v)
     else
         error("Undefined case")
@@ -381,7 +381,7 @@ function MtPlot(q::Float64, beta::Float64;
         Mtv_ex[ii], = MtMrShock(Miv_ex[ii], gamma, q) 
     end
     semilogx(Miv_ex, Mtv_ex./Miv_ex, color=:cyan)
-    
+    #
     tick_params(axis="both", which="both", labelsize=TickSize)
     xlabel(latexstring("\\mathcal{M}_i"), fontsize=10)
     ylabel(latexstring("\\mathcal{M}_t/\\mathcal{M}_i"), fontsize=10, rotation=0, labelpad=20.0)    

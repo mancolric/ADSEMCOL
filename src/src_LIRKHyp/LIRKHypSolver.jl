@@ -29,7 +29,7 @@ function LIRKHyp_Start(model::ConstModel) where {ConstModel<:ConstModels}
     #Unassigned
     
     #Approximate Jacobian?
-    solver.JType        = "Complete"
+    solver.LSType       = "SCILU0"
     #Jm_ilocal, Jm_jlocal will be allocated in initial condition
     
     #Time integration method:
@@ -119,7 +119,7 @@ function ReadMesh!(solver::SolverData)
     solver.rec_fes      = TrQSpace(solver.mesh, solver.FesOrder+2)
     
     #Condense and precondition mass matrix. Note that 
-    solver.MII_LS       = LinearSystem1(solver.MII, solver, [1.0])
+    solver.MII_LS       = LinearSystem(solver.MII, solver, [1.0])
     LinearSystem!(solver.MII_LS)
     
     return
@@ -141,7 +141,7 @@ function RKAlloc!(solver::SolverData)
 #     println("Matrices allocate = ", time()-t_ini)
     
     #Allocate linear system:
-    solver.Am_LS        = LinearSystem1(solver.Am, solver, solver.nFacts, JType=solver.JType)
+    solver.Am_LS        = LSW(LinearSystem(solver.Am, solver, solver.nFacts, JType=solver.JType))
 #     println("allocate LS = ", time()-t_ini)
     
     return
@@ -220,18 +220,23 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
     solver.validv       = zeros(Int,0)
     
     #Set variables for ElemsDofCompute and UpsilonCompute:
-    if uppercase(solver.JType)=="COMPLETE"
+    if uppercase(solver.LSType)=="SCILU0"
+        solver.JType            = "Complete"
+        solver.KrylovApprox     = false
         #compute all products in Jacobian matrix:
         solver.Jm_ilocal        = zeros(Int, 0)     
         solver.Jm_jlocal        = zeros(Int, 0)   
-        solver.Jm_diagterms     = solver.fes.DofPerElem*solver.fes.DofPerElem
-    elseif uppercase(solver.JType)=="BLOCKJACOBI"
+        solver.Jm_localterms    = solver.fes.DofPerElem*solver.fes.DofPerElem
+    elseif uppercase(solver.LSType)=="BLOCKJACOBI"
+        solver.JType            = "BlockJacobi"
+        solver.KrylovApprox     = false
         #compute only products concerning the same dof:
         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
-        solver.Jm_diagterms     = solver.fes.DofPerElem
+        solver.Jm_localterms    = solver.fes.DofPerElem
     else
-        error("Unknown option $(solver.JType). Available options are: Complete, BlockJacobi.")
+        error(string("Unknown option $(solver.LSType). Available options are: ", 
+                "SCILU0, BlockJacobi."))
     end
     
     #--------------------------------------------------------
@@ -275,7 +280,7 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
             error("Initial condition for variable $(ii) is not finite")
         end
 #         solver.u[ii]    = cholesky(Symmetric(solver.MII))\solver.b[ii]
-        flag, nIter, etaA_I = LS_gmres!(solver.MII_LS, solver.u[ii], solver.b[ii], 
+        flag, nIter, etaA_I = LS_solve!(solver.MII_LS, solver.u[ii], solver.b[ii], 
                                 AbsTol=solver.TolA_min*solver.nFacts[ii], Display="notify")
         etaA                += (etaA_I/solver.nFacts[ii])^2
         if flag<=0
@@ -456,6 +461,13 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
     etaT_np1            = 0.0
     etaA_np1            = NaN
     
+    #Scaling vector:
+    scalv               = zeros(solver.nVars*solver.fes.nDof)
+    scalv_views         = GetViews(scalv, solver.nVars, solver.fes.nDof)
+    for II=1:solver.nVars
+        scalv_views[II] .= solver.nFacts[II]
+    end
+    
     #Loop stages until algebraic and time tolerances are met:
     RepeatTA            = true
     LSFailed_iters      = 0
@@ -479,7 +491,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                 t_ini                   = time()
                 BLAS.axpby!(1.0, solver.Mm.nzval, 0.0, solver.Am.nzval)
                 BLAS.axpby!(-Deltat_n*solver.RK.AI[kk,kk], solver.Jm.nzval, 1.0, solver.Am.nzval)
-                LinearSystem!(solver.Am_LS)
+                LinearSystem!(solver.Am_LS.LS)
                 solver.tSCILU           += time()-t_ini
                 printstyled("Linear system set up in ", time()-t_ini, " seconds \n", color=:cyan)
 #                 PlotLSPermutations(solver.Am_LS, solver.MII, solver.nVars)
@@ -493,44 +505,151 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                                                 $view(solver.Ju_RK,:,ll) + 
                                         solver.RK.AE[kk,ll]*$view(solver.f_RK,:,ll))
             end
-#             if any(isnan.(solver.bv))
-#                 display(kk)
-#                 display(norm(b_1))
-#                 display(norm(solver.f_RK))
-#                 display(norm(solver.Ju_RK))
-#                 display(Deltat_n)
-#                 error("NaNs in solver.bv")
-#             end
             solver.tb               += time()-t_ini
             
-            #Save linear system to discuss role of CA:
-            t_CA        = 0.8*solver.tf
-            if false && solver.t<t_CA && t_np1>=t_CA && kk==solver.RK.stages
-                filename    = "$(ResUbi)LIRKHyp_SC$(solver.SC)_LinearSystem.jld2"
-                save(filename, "A", solver.Am_LS, "u", u_k, "b", solver.bv, "etaST", TolA/solver.CA, 
-                    "solver", save(solver))
-            end
+            #Solve linear system:
+            if uppercase(solver.JType)=="COMPLETE"
             
-            #Solve:
-            t_ini       = time()
-            LSOutput    = LS_gmres!(solver.Am_LS, u_k, solver.bv, AbsTol=TolA, Display="final",
-                            MaxIter=solver.LS_iters_max)
-            solver.tLS  += time()-t_ini
-            LSFlag      = LSOutput[1]
-            LSIter      = LSOutput[2]
-            etaA_np1    = LSOutput[3]
-            if LSFlag<0
-                #LS did not converge because something went wrong with the rhs vector
-                etaA_np1        = Inf   #In this way, time step is decreased as maximum as possible
-                break #loop for kk=2:nStages
-            elseif LSFlag==0
-                #LS reached maximum of iterations
-                break #loop for kk=2:nStages
-            else
-#                 println("Stage $kk, linear solver converged in $(LSIter) iterations")
+                #J is computed exactly, solve with SC+ILU0+GMRES:
+                
+                t_ini       = time()
+                LSOutput    = LS_solve!(solver.Am_LS.LS, u_k, solver.bv, AbsTol=TolA, Display="final",
+                                MaxIter=solver.LS_iters_max)
+                solver.tLS  += time()-t_ini
+                LSFlag      = LSOutput[1]
+                LSIter      = LSOutput[2]
+                etaA_np1    = LSOutput[3]
+                if LSFlag<0
+                    #LS did not converge because something went wrong with the rhs vector
+                    etaA_np1        = Inf   #In this way, time step is decreased as maximum as possible
+                    break #loop for kk=2:nStages
+                elseif LSFlag==0
+                    #LS reached maximum of iterations
+                    break #loop for kk=2:nStages
+                else
+    #                 println("Stage $kk, linear solver converged in $(LSIter) iterations")
+                end
+                solver.LS_iters     += LSIter
+                solver.LS_total     += LSIter
+                
+            elseif solver.KrylovApprox
+            
+                #Solve Mu = b + tau*a_ii*Ju
+                error("Unfinished")
+                
+                #Define preconditioned residual:
+                function QNResidualKrylov!(uhat::Vector{Float64}, gres::Vector{Float64})
+                    
+                    #Unscale u:
+                    u           = @tturbo @. scalv*uhat
+                    
+                    #Compute residual f:
+                    #   f = M*u - b - Deltat*a_kk*J*u
+                    fres        = MuProduct(solver.MII, u, solver.nVars) - 
+                                        solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
+                                        MuProduct(solver.Jm, u, 1)
+                    
+                    #Compute preconditioned residual. LS_solve! scales gres, it is not necessary
+                    #to scale it here:
+                    LSOutput    = LS_solve!(solver.Am_LS.LS, gres, fres,  
+                                    RelTol=0.0, AbsTol=TolA, 
+                                    Display="notify", MaxIter=solver.LS_iters_max)
+                    #Returns flag, nIters, etaA
+                    flag        = LSOutput[1]
+                    
+                    #Scale gres:
+                    @tturbo @. gres     /= scalv
+                    
+                    return flag
+                    
+                end
+                
+                #Solve:
+                t_ini       = time()
+                LSOutput    = Anderson(FW_NLS((uhat,gres)->QNResidualKrylov!(uhat,gres)), 
+                                u_k./scalv, 
+                                AbsTolX=1.0*TolA, RelTolX=0.0, 
+                                AbsTolG=0.0*TolA, RelTolG=0.0, 
+                                NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
+                                memory=100, MaxIter=solver.LS_iters_max, 
+                                history=true, Display="final")
+                solver.tLS  += time()-t_ini
+                u_k         .= LSOutput[1].*scalv
+                LSFlag      = LSOutput[2].flag
+                LSIter      = LSOutput[2].nIter
+                etaA_np1    = LSOutput[2].pnorms[ length(LSOutput[2].pnorms) ]
+                if LSFlag<0
+                    #NLS did not converge because something went wrong with the residual function
+                    etaA_np1        = Inf   #In this way, time step is decreased as maximum as possible
+                    break #loop for kk=2:nStages
+                elseif LSFlag==0
+                    #NLS reached maximum of iterations
+                    break #loop for kk=2:nStages
+                else
+    #                 println("Stage $kk, linear solver converged in $(LSIter) iterations")
+                end
+                solver.LS_iters     += LSIter
+                solver.LS_total     += LSIter
+                
+            else #Krylov==false
+            
+                #Solve Mu = b + tau*a_ii*Jprec*u
+                
+                #Define preconditioned residual:
+                function QNResidualJ!(uhat::Vector{Float64}, gres::Vector{Float64})
+                    
+                    #Unscale u:
+                    u           = @tturbo @. scalv*uhat
+                    
+                    #Compute residual f:
+                    #   f = M*u - b - Deltat*a_kk*J*u
+                    fres        = MuProduct(solver.MII, u, solver.nVars) - 
+                                        solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
+                                        MuProduct(solver.Jm, u, 1)
+                    
+                    #Compute preconditioned residual. LS_solve! scales gres, it is not necessary
+                    #to scale it here:
+                    LSOutput    = LS_solve!(solver.Am_LS.LS, gres, fres,  
+                                    RelTol=0.0, AbsTol=TolA, 
+                                    Display="notify", MaxIter=solver.LS_iters_max)
+                    #Returns flag, nIters, etaA
+                    flag        = LSOutput[1]
+                    
+                    #Scale gres:
+                    @tturbo @. gres     /= scalv
+                    
+                    return flag
+                    
+                end
+                
+                #Solve:
+                t_ini       = time()
+                LSOutput    = Anderson(FW_NLS((uhat,gres)->QNResidualJ!(uhat,gres)), 
+                                u_k./scalv, 
+                                AbsTolX=1.0*TolA, RelTolX=0.0, 
+                                AbsTolG=0.0*TolA, RelTolG=0.0, 
+                                NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
+                                memory=100, MaxIter=solver.LS_iters_max, 
+                                history=true, Display="final")
+                solver.tLS  += time()-t_ini
+                u_k         .= LSOutput[1].*scalv
+                LSFlag      = LSOutput[2].flag
+                LSIter      = LSOutput[2].nIter
+                etaA_np1    = LSOutput[2].pnorms[ length(LSOutput[2].pnorms) ]
+                if LSFlag<0
+                    #NLS did not converge because something went wrong with the residual function
+                    etaA_np1        = Inf   #In this way, time step is decreased as maximum as possible
+                    break #loop for kk=2:nStages
+                elseif LSFlag==0
+                    #NLS reached maximum of iterations
+                    break #loop for kk=2:nStages
+                else
+    #                 println("Stage $kk, linear solver converged in $(LSIter) iterations")
+                end
+                solver.LS_iters     += LSIter
+                solver.LS_total     += LSIter
+                
             end
-            solver.LS_iters     += LSIter
-            solver.LS_total     += LSIter
             
             #Compute flux and save derivatives:
             t_ini                   = time()
@@ -573,7 +692,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
             ehat                = 0.0*u_k   #ehat=u-uhat
             ehat_views          = GetViews(ehat, solver.nVars, solver.fes.nDof)
             for II=1:solver.nVars
-                flag,           = LS_gmres!(solver.MII_LS, ehat_views[II], solver.b[II], 
+                flag,           = LS_solve!(solver.MII_LS, ehat_views[II], solver.b[II], 
                                     AbsTol=TolA*solver.nFacts[II], Display="notify")
                 if flag<=0
 #                     printstyled("Unable to compute solution for embedded RK. Aborting\n", 
@@ -744,7 +863,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
             ", Deltat=", sprintf1("%.2e", solver.Deltat), 
             ", CFL=", sprintf1("%.2e", solver.CFL), 
             ", TotalDof=", sprintf1("%d", solver.nVars*solver.fes.nDof),
-            ", MasterDof=", sprintf1("%d", solver.Am_LS.Pl.nMasters),
+            ", MasterDof=", sprintf1("%d", solver.Am_LS.LS.Pl.nMasters),
             ", hp_min=", sprintf1("%.2e", minimum(_hmin(solver.mesh))/solver.FesOrder), 
             ", etaS=", sprintf1("%.2e", solver.etaS), 
             ", etaT=", sprintf1("%.2e", solver.etaT), 
@@ -994,7 +1113,7 @@ function AdaptMesh!(solver::SolverData,
                     return -2, AMA_iters
                 end
                 for ii=1:solver.nVars
-                    flag, nIter, etaA_I = LS_gmres!(solver.MII_LS, solver.u[ii], solver.b[ii], 
+                    flag, nIter, etaA_I = LS_solve!(solver.MII_LS, solver.u[ii], solver.b[ii], 
                                             AbsTol=solver.TolA_min*solver.nFacts[ii], Display="notify")
                     etaA                += (etaA_I/solver.nFacts[ii])^2
                     if flag<=0
@@ -1287,7 +1406,7 @@ function LIRKHyp_Step_Post_Dolejsi!(solver::SolverData)
                     t_ini                   = time()
                     @mlv solver.Am.nzval    = solver.Mm.nzval - 
                                                 (Deltat_n*solver.RK.AI[kk,kk])*solver.Jm.nzval
-                    LinearSystem!(solver.Am_LS)
+                    LinearSystem!(solver.Am_LS.LS)
                     solver.tSCILU           += time()-t_ini
                     printstyled("Linear system set up in ", time()-t_ini, " seconds \n", color=:cyan)
                     #PlotLSPermutations(solver.Am_LS, solver.MII, solver.nVars)
@@ -1313,7 +1432,7 @@ function LIRKHyp_Step_Post_Dolejsi!(solver::SolverData)
                 
                 #Solve:
                 t_ini       = time()
-                LSOutput    = LS_gmres!(solver.Am_LS, u_np1, solver.bv, AbsTol=TolA, Display="final",
+                LSOutput    = LS_solve!(solver.Am_LS.LS, u_np1, solver.bv, AbsTol=TolA, Display="final",
                                 MaxIter=solver.LS_iters_max)
                 solver.tLS  += time()-t_ini
                 LSFlag      = LSOutput[1]
@@ -1381,7 +1500,7 @@ function LIRKHyp_Step_Post_Dolejsi!(solver::SolverData)
                 ehat                = 0.0*u_np1   #ehat=u-uhat
                 ehat_views          = GetViews(ehat, solver.nVars, solver.fes.nDof)
                 for II=1:solver.nVars
-                    flag,           = LS_gmres!(solver.MII_LS, ehat_views[II], solver.b[II], 
+                    flag,           = LS_solve!(solver.MII_LS, ehat_views[II], solver.b[II], 
                                         AbsTol=TolA*solver.nFacts[II], Display="notify")
                     if flag<=0
                         printstyled("Unable to compute solution for embedded RK\n", 
@@ -1699,7 +1818,7 @@ function LIRKHyp_Step_Post_Dolejsi!(solver::SolverData)
             ", Deltat=", sprintf1("%.2e", solver.Deltat), 
             ", CFL=", sprintf1("%.2e", solver.CFL), 
             ", TotalDof=", sprintf1("%d", solver.nVars*solver.fes.nDof),
-            ", MasterDof=", sprintf1("%d", solver.Am_LS.Pl.nMasters),
+            ", MasterDof=", sprintf1("%d", solver.Am_LS.LS.Pl.nMasters),
             ", hp_min=", sprintf1("%.2e", minimum(_hmin(solver.mesh))/solver.FesOrder), 
             ", etaS=", sprintf1("%.2e", solver.etaS), 
             ", etaT=", sprintf1("%.2e", solver.etaT), 
@@ -1772,7 +1891,7 @@ function L2Projection!(solver::SolverData, u0::Vector{Float64}, u0_fes::TrPBSpac
             return -1
         end
         for ii=1:solver.nVars
-            flag, nIter, etaA_I = LS_gmres!(solver.MII_LS, solver.u[ii], solver.b[ii], 
+            flag, nIter, etaA_I = LS_solve!(solver.MII_LS, solver.u[ii], solver.b[ii], 
                                     AbsTol=solver.TolA_min*solver.nFacts[ii], Display="notify")
             etaA                += (etaA_I/solver.nFacts[ii])^2
             if flag<=0
@@ -1787,7 +1906,6 @@ function L2Projection!(solver::SolverData, u0::Vector{Float64}, u0_fes::TrPBSpac
     return 1
     
 end
-
 
 #-----------------------------------------------------------------
 #Choose default step function:
@@ -1939,7 +2057,7 @@ function IRK_Step!(solver::SolverData)
                 t_ini                   = time()
                 BLAS.axpby!(1.0, solver.Mm.nzval, 0.0, solver.Am.nzval)
                 BLAS.axpby!(-Deltat_n*solver.RK.AI[kk,kk], solver.Jm.nzval, 1.0, solver.Am.nzval)
-                LinearSystem!(solver.Am_LS)                
+                LinearSystem!(solver.Am_LS.LS)                
                 solver.tSCILU           += time()-t_ini
                 printstyled("Linear system set up in ", time()-t_ini, " seconds \n", color=:cyan)
 #                 PlotLSPermutations(solver.Am_LS, solver.MII, solver.nVars)
@@ -1981,7 +2099,7 @@ function IRK_Step!(solver::SolverData)
                                     view(solver.f_RK,:,kk)
                 
                 #Compute preconditioned residual:
-                LSOutput    = LS_gmres!(solver.Am_LS, gres, fres, 
+                LSOutput    = LS_solve!(solver.Am_LS.LS, gres, fres, 
 #                                 RelTol=1e-2, AbsTol=0.0, 
                                 RelTol=0.0, AbsTol=TolA, 
                                 Display="notify", MaxIter=solver.LS_iters_max)
@@ -2060,7 +2178,7 @@ function IRK_Step!(solver::SolverData)
             ehat                = 0.0*u_k   #ehat=u-uhat
             ehat_views          = GetViews(ehat, solver.nVars, solver.fes.nDof)
             for II=1:solver.nVars
-                flag,           = LS_gmres!(solver.MII_LS, ehat_views[II], solver.b[II], 
+                flag,           = LS_solve!(solver.MII_LS, ehat_views[II], solver.b[II], 
                                     AbsTol=TolA*solver.nFacts[II], Display="notify")
                 if flag<=0
 #                     printstyled("Unable to compute solution for embedded RK. Aborting\n", 
@@ -2231,7 +2349,7 @@ function IRK_Step!(solver::SolverData)
             ", Deltat=", sprintf1("%.2e", solver.Deltat), 
             ", CFL=", sprintf1("%.2e", solver.CFL), 
             ", TotalDof=", sprintf1("%d", solver.nVars*solver.fes.nDof),
-            ", MasterDof=", sprintf1("%d", solver.Am_LS.Pl.nMasters),
+            ", MasterDof=", sprintf1("%d", solver.Am_LS.LS.Pl.nMasters),
             ", hp_min=", sprintf1("%.2e", minimum(_hmin(solver.mesh))/solver.FesOrder), 
             ", etaS=", sprintf1("%.2e", solver.etaS), 
             ", etaT=", sprintf1("%.2e", solver.etaT), 

@@ -226,26 +226,26 @@ function SolutionNorm(MII::SparseMatrixCSC{Float64,Int}, x::Vector{Float64},
     
 end
 
-function LinearSystem1(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
+function LinearSystem(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
     nFacts::Vector{Float64}; JType::String="Complete")
     
     if uppercase(JType)=="COMPLETE"
-        return LinearSystem1_Complete(A, solver, nFacts)
+        return LinearSystem_Complete(A, solver, nFacts)
     elseif uppercase(JType)=="BLOCKJACOBI"
-        return LinearSystem1_BlockJacobi(A, solver, nFacts)
+        return LinearSystem_BlockJacobi(A, solver, nFacts)
     else
         error("Unknown option")
     end
     
 end
     
-function LinearSystem1_Complete(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
+function LinearSystem_Complete(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
     nFacts::Vector{Float64})
 
     t_ini           = time()
     
     #Create linear system:
-    LS              = LinearSystem1()
+    LS              = LS_SCILU0_GMRES()
     
     #Save pointer to original matrix:
     LS.A            = A
@@ -288,20 +288,20 @@ function LinearSystem1_Complete(A::SparseMatrixCSC{Float64,Int}, solver::SolverD
     
 end
 
-function LinearSystem1_BlockJacobi(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
+function LinearSystem_BlockJacobi(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
     nFacts::Vector{Float64})
 
     t_ini           = time()
     
     #Create linear system:
-    LS              = LinearSystem1()
+    LS              = LS_BlockJacobi()
     
     #Save pointer to original matrix:
     LS.A            = A
     
     #Nb of variables, master dof and slave dof:
     nVars           = length(nFacts)
-    nMaster         = 0
+    nMaster         = 0                 #no master dofs, system is solved directly
     nDof            = solver.fes.nDof
     nSlaves         = nDof-nMaster
     
@@ -322,7 +322,6 @@ function LinearSystem1_BlockJacobi(A::SparseMatrixCSC{Float64,Int}, solver::Solv
         LS.scaleP[iiII_new]         = nFacts[II]
     end
     LS.p            = invperm(LS.pinv)
-    LS.scaleP_m     = LS.scaleP[nSlaves*nVars+1:(nDof)*nVars]
     
     #Allocate permuted matrix and ILU factorization:
     iv,jv,          = findnz(A)
@@ -336,7 +335,7 @@ function LinearSystem1_BlockJacobi(A::SparseMatrixCSC{Float64,Int}, solver::Solv
     
 end
 
-function LinearSystem!(LS::LinearSystem1)
+function LinearSystem!(LS::LS_SCILU0_GMRES)
 
 #     t_ini           = time()
     
@@ -360,7 +359,26 @@ function LinearSystem!(LS::LinearSystem1)
     
 end
 
-function LS_gmres!(LS::LinearSystem1, u::GenVector{Float64}, b::GenVector{Float64};
+function LinearSystem!(LS::LS_BlockJacobi)
+
+#     t_ini           = time()
+    
+    #Save data:
+    @inbounds for ii=1:length(LS.ssPP_ss)
+        LS.APP.nzval[ii]    = LS.A.nzval[LS.ssPP_ss[ii]]
+    end
+#     println("Permuting matrix: ", time()-t_ini)
+    
+    #Update ILU0 factorization (exact for block Jacobi):
+    SCILU0!(LS.Pl, LS.APP)
+#     println("Updating factorization: ", time()-t_ini)
+ 
+    return LS
+    
+end
+    
+#Solve LS.A*u=b. Employ permutations, SCILU0 preconditioner and call to GMRES:
+function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Float64};
     RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
     
     #Notation:
@@ -460,141 +478,36 @@ function LS_gmres!(LS::LinearSystem1, u::GenVector{Float64}, b::GenVector{Float6
     
 end
 
-#=
-function JacobianAllocate(nVars::Int, fes1::TrFES, fes2::TrFES)
-
-    #(i,j) values for nnz numbers for one variable:
-    iv, jv          = ElemsDofCompute(fes1, fes2)
-    iv              = iv[:]
-    jv              = jv[:]
+function LS_solve!(LS::LS_BlockJacobi, u::GenVector{Float64}, b::GenVector{Float64};
+    RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
     
-    #Allocate (i,j) values for all nnz numbers:
-    imat            = zeros(Int, length(iv), nVars, nVars)
-    jmat            = zeros(Int, length(iv), nVars, nVars)
-    smat            = zeros(length(iv), nVars, nVars)
+    #Optional arguments are necessary for compatibility with the calling function
+    
+    #Exit early if there are NaNs or Infs in b:
+    if !all(isfinite.(b))
+        return -1, 0, Inf   #flag, nIters, etaA
+    end
         
-    #Get (i,j,s) values:
-    fes1_nDof       = fes1.nDof
-    fes2_nDof       = fes2.nDof
-    for JJ=1:nVars, II=1:nVars
-        view(imat,:,II,JJ)  .= iv.+(II-1)*fes1_nDof
-        view(jmat,:,II,JJ)  .= jv.+(JJ-1)*fes2_nDof
-    end
-    J_iv            = view(imat,:)
-    J_jv            = view(jmat,:)
-    J_sv            = view(smat,:)
+    #Extract variables:
+    F               = LS.Pl
+    scaleP          = LS.scaleP
     
-    return sparse(J_iv, J_jv, J_sv)
+    #Permute and scale vectors:
+    bhat            = b[LS.p]
+    uhat            = u[LS.p]
+    @mlv uhat       /= scaleP
+    
+    #Reduce r.h.s.:
+    bred            = ReduceRhs(F, bhat)
+    
+    #Exit early if there are no master dofs:
+    if F.nMasters==0
+        ldiv_slave!(uhat, F, bred)
+        @mlv u[LS.p]    = uhat
+        return 1, 0, 0.0   #flag, nIters, etaA
+    end
     
 end
-
-function JacobianFastIndex(solver::SolverData)
-
-    fes             = solver.fes
-    fes_dof         = fes.nDof
-    nVars           = solver.nVars
-    
-    #(i,j) values for nnz numbers for one variable:
-    iv, jv          = ElemsDofCompute(fes, fes)
-    iv              = iv[:]
-    jv              = jv[:]
-    
-#     println("ElemsDofCompute = ", time()-t_ini)
-    
-    #Allocate (i,j) values for all nnz numbers:
-    imat            = zeros(Int,length(iv), nVars, nVars)
-    jmat            = zeros(Int,length(iv), nVars, nVars)
-    
-#     println("Allocation = ", time()-t_ini)
-    
-    #Get (i,j,s) values:
-    for JJ=1:nVars, II=1:nVars
-        view(imat,:,II,JJ)  .= iv.+(II-1)*fes_dof
-        view(jmat,:,II,JJ)  .= jv.+(JJ-1)*fes_dof
-    end
-    J_iv            = view(imat,:)
-    J_jv            = view(jmat,:)
-    
-#     println("(i,j,s) = ", time()-t_ini)
-    
-    #Sort by columns and then by rows: k=(j-1)*nDof+i
-    J_kv            = @mlv (J_jv-1)*fes_dof*nVars + J_iv
-    p               = sortperm(J_kv)
-    J_kv_sorted     = J_kv[p]
-    
-    #Currently, elements of J_kv_sorted are numbered from 1 to nVars*nElems*DofPerElem^2.
-    #Renumber from 1 to nnz, where nnz is the number of elements in Jacobian matrix:
-    J_ss            = zeros(Int, length(J_kv))
-    last_k          = 0
-    last_ss         = 0
-    @inbounds for ii=1:length(J_kv_sorted)
-        if J_kv_sorted[ii]  != last_k
-            last_k          = J_kv_sorted[ii]
-            last_ss         += 1 
-        end
-        J_ss[ii]            = last_ss
-    end
-    #Note that Jm.nzval[J_ss[ii]]   += smat[p[ii]], that is, component 
-    #p[ii] in smat updates component J_ss[ii] in Jm.nzval.
-    #
-    #For simplicity, we seek vector pinv such that component jj in smat updates 
-    #component pinv[jj] in Jm.nzval. That is,
-    #   Jm.nzval[pinv[jj]]      += smat[jj]
-    #Note that, if we make jj=p[ii], then
-    #   Jm.nzval[pinv[p[ii]]]   += smat[p[ii]]
-    #On the other hand, we know that
-    #   Jm.nzval[J_ss[ii]]      += smat[p[ii]]
-    #so
-    #   pinv[p]                 = J_ss
-    #(It is also possible to demonstrate this by "drawing" the vectors)
-    J_pinv          = zeros(Int, length(J_kv))
-    J_pinv[p]       .= J_ss
-    
-#     println("sorting = ", time()-t_ini)
-    
-    return J_pinv
-    
-end
-
-function MassMatrixExpand!(solver::SolverData)
-
-    t_ini           = time()
-    
-    fes             = solver.fes
-    
-    #Extract nz values from individual mass matrix:
-    iv,jv,sv        = findnz(solver.MII)
-    
-    println("findnz = ", time()-t_ini)
-    
-    #Allocate (i,j) values for all nnz numbers:
-    nVars           = solver.nVars
-    fes_dof         = solver.fes.nDof
-    imat            = zeros(Int, length(iv), nVars, nVars)
-    jmat            = zeros(Int, length(iv), nVars, nVars)
-    smat            = zeros(length(iv), nVars, nVars)
-    
-    println("allocation = ", time()-t_ini)
-    
-    #Loop and construct block diagonal matrix:
-    for JJ=1:nVars, II=1:nVars
-        @mlv imat[:,II,JJ]      = iv + (II-1)*fes_dof
-        @mlv jmat[:,II,JJ]      = jv + (JJ-1)*fes_dof
-        if II==JJ
-            @mlv smat[:,II,JJ]  = sv
-        end
-    end
-    
-    println("block = ", time()-t_ini)
-    
-    solver.Mm       = sparse(view(imat,:), view(jmat,:), view(smat,:,))
-    
-    println("sparse = ", time()-t_ini)
-    
-    return
-    
-end
-=#
 
 #Allocate full mass matrix, jacobian matrix and linear system matrix:
 function MatricesAllocate!(solver::SolverData)
@@ -1073,7 +986,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     J_ElemsDof                  = Matrix{Matrix{Float64}}(undef,nVars,nVars)
     if ComputeJ
         for JJ=1:nVars, II=1:nVars
-            J_ElemsDof[II,JJ]   = zeros(solver.mesh.nElems, solver.Jm_diagterms)
+            J_ElemsDof[II,JJ]   = zeros(solver.mesh.nElems, solver.Jm_localterms)
         end
     end
     flux_Ik                     = zeros(solver.mesh.nElems, Integ2D.QRule.nqp)
@@ -1187,7 +1100,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         J_BElemsDof                 = Matrix{Matrix{Float64}}(undef,nVars,nVars)
         if ComputeJ
             for JJ=1:nVars, II=1:nVars
-                J_BElemsDof[II,JJ]  = zeros(bmesh.nElems, solver.Jm_diagterms)
+                J_BElemsDof[II,JJ]  = zeros(bmesh.nElems, solver.Jm_localterms)
             end
         end
         bflux_I                     = zeros(bmesh.nElems, Binteg2D.QRule.nqp)
@@ -1222,7 +1135,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
             flux_ElemsDof[II][parent_elem, iDof]    += flux_BElemsDof[II][iElem, iDof]
         end
         if ComputeJ
-            @inbounds for JJ=1:nVars, II=1:nVars, iJ=1:solver.Jm_diagterms, iElem=1:bmesh.nElems
+            @inbounds for JJ=1:nVars, II=1:nVars, iJ=1:solver.Jm_localterms, iElem=1:bmesh.nElems
                 parent_elem                         = bmesh.ParentElems[iElem]
                 J_ElemsDof[II,JJ][parent_elem,iJ]   += J_BElemsDof[II,JJ][iElem, iJ]
             end
@@ -1642,7 +1555,7 @@ function CheckJacobian(solver::SolverData;
     
 end
 
-function PlotLSPermutations(LS::LinearSystem1, MII::SparseMatrixCSC{Float64,Int}, nVars::Int)
+function PlotLSPermutations(LS::LS_SCILU0_GMRES, MII::SparseMatrixCSC{Float64,Int}, nVars::Int)
     
     nMasters    = LS.Pl.nMasters
     nSlaves     = LS.Pl.nSlaves
