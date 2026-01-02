@@ -5,7 +5,7 @@
 # NOTE: SBATCH parameters must be defined first. Do not define any variable before them.
 
 # Editable options:
-#SBATCH --job-name=ShockFlame
+#SBATCH --job-name=LP2
 #SBATCH --partition=cn1
 #SBATCH --array=1-11%11
 #SBATCH --cpus-per-task=4
