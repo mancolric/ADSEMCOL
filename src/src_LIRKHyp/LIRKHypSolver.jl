@@ -102,10 +102,10 @@ function ReadMesh!(solver::SolverData)
     
     #Create finite element space, matrices, integrals, auxiliary vectors:
     solver.fes          = TrPBSpace(solver.mesh, solver.FesOrder)
-    solver.Integ2D      = TrInt(solver.mesh, 2*(solver.FesOrder+2)+1)
+    solver.Integ2D      = TrInt(solver.mesh, 2*(solver.FesOrder+3)+1)
     solver.Binteg2D     = Vector{TrBint}(undef, solver.nBounds*3)
     for ib=1:solver.nBounds*3
-        solver.Binteg2D[ib]     = TrBint(solver.mesh, ib, 2*(solver.FesOrder+2))
+        solver.Binteg2D[ib]     = TrBint(solver.mesh, ib, 2*(solver.FesOrder+3))
     end
     solver.uv           = zeros(solver.nVars*solver.fes.nDof)
     solver.u            = GetViews(solver.uv, solver.nVars, solver.fes.nDof)
@@ -141,7 +141,7 @@ function RKAlloc!(solver::SolverData)
 #     println("Matrices allocate = ", time()-t_ini)
     
     #Allocate linear system:
-    solver.Am_LS        = LSW(LinearSystem(solver.Am, solver, solver.nFacts, JType=solver.JType))
+    solver.Am_LS        = LSW(LinearSystem(solver.Am, solver, solver.nFacts, LSType=solver.LSType))
 #     println("allocate LS = ", time()-t_ini)
     
     return
@@ -182,7 +182,7 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
         solver.AMA_SizeOrder    = solver.FesOrder
     end
     if solver.AMA_ProjOrder==0
-        solver.AMA_ProjOrder    = 2*(solver.FesOrder+2+1)
+        solver.AMA_ProjOrder    = 2*(solver.FesOrder+3+1)
     end
     
     #Minimal algebraic tolerance:
@@ -226,29 +226,42 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
     
     #Set variables for ElemsDofCompute and UpsilonCompute:
     if uppercase(solver.LSType)=="SCILU0"
-        solver.JType            = "Complete"
+        solver.JPatt            = "Complete"
         solver.KrylovApprox     = false
         #compute all products in Jacobian matrix:
         solver.Jm_ilocal        = zeros(Int, 0)     
         solver.Jm_jlocal        = zeros(Int, 0)   
         solver.Jm_localterms    = solver.fes.DofPerElem*solver.fes.DofPerElem
     elseif uppercase(solver.LSType)=="BLOCKJACOBI"
-        solver.JType            = "BlockJacobi"
+        solver.JPatt            = "BlockJacobi"
         solver.KrylovApprox     = false
         #compute only products concerning the same dof:
         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
         solver.Jm_localterms    = solver.fes.DofPerElem
     elseif uppercase(solver.LSType)=="BLOCKJACOBIKRYLOV"
-        solver.JType            = "BlockJacobi"
+        solver.JPatt            = "BlockJacobi"
         solver.KrylovApprox     = true
         #compute only products concerning the same dof:
         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
         solver.Jm_localterms    = solver.fes.DofPerElem
+    elseif uppercase(solver.LSType)=="DOMINANTILU0"
+        solver.JPatt            = "Dominant"
+        solver.KrylovApprox     = false
+        #compute only products concerning the same dof:
+        aux                     = GetDominantTerms(solver.fes)
+        solver.Jm_ilocal        = aux[1]
+        solver.Jm_jlocal        = aux[2]
+        solver.Jm_localterms    = length(solver.Jm_ilocal)
+        #compute only products concerning the same dof:
+        solver.Jm_ilocal        = 1:solver.fes.DofPerElem
+        solver.Jm_jlocal        = 1:solver.fes.DofPerElem
+        solver.Jm_localterms    = solver.fes.DofPerElem
+        @warn "BLOCKJACOBI"
     else
         error(string("Unknown option $(solver.LSType). Available options are: ", 
-                "SCILU0, BlockJacobi."))
+                "SCILU0, BlockJacobi, BlockJacobiKrylov, DominantILU0."))
     end
     
     #--------------------------------------------------------
@@ -520,7 +533,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
             solver.tb               += time()-t_ini
             
             #Solve linear system:
-            if uppercase(solver.JType)=="COMPLETE"
+            if uppercase(solver.LSType)=="SCILU0"
             
                 #J is computed exactly, solve with SC+ILU0+GMRES:
                 
@@ -544,10 +557,15 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                 solver.LS_iters     += LSIter
                 solver.LS_total     += LSIter
                 
-            elseif solver.KrylovApprox
-            
-                @warn "This method does not perform well because the product Ju is not computed with sufficient accuracy"
+                #Compute flux and save derivatives:
+                t_ini                   = time()
+                flag,                   = Rhs!(solver, t_k, u_k, false, view(solver.f_RK,:,kk), solver.Jm)
+                solver.tRhs             += time()-t_ini
+    #             println("Rhs vector = ", time()-t_ini)
+                view(solver.Ju_RK,:,kk) .= solver.Jm*u_k
                 
+            elseif uppercase(solver.LSType)=="BLOCKJACOBIKRYLOV"
+            
                 #Solve Mu - b - tau*a_ii*Ju = 0
                 #Ju is replaced by (f(u_n+epsilon*u)-f(u_n))/epsilon
                 Ju              = zeros(length(u_k))
@@ -566,12 +584,12 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                         return flag
                     end
                     BLAS.axpby!(-1.0, view(solver.f_RK,:,1), 1.0, Ju)
-                    BLAS.scal!(Deltat_n*solver.RK.AI[kk,kk]/epsilon_Krylov, Ju)
+                    BLAS.scal!(1.0/epsilon_Krylov, Ju)
                     
                     #Compute residual f:
                     #   f = M*u - b - Deltat*a_kk*J*u
                     fres        = MuProduct(solver.MII, u, solver.nVars) - 
-                                    solver.bv - Ju
+                                    solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*Ju
                                         
                     #Compute preconditioned residual. LS_solve! scales gres, it is not necessary
                     #to scale it here:
@@ -615,7 +633,14 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                 solver.LS_iters     += LSIter
                 solver.LS_total     += LSIter
                 
-            else #Krylov==false
+                #Compute flux and save derivatives:
+                t_ini                   = time()
+                flag,                   = Rhs!(solver, t_k, u_k, false, view(solver.f_RK,:,kk), solver.Jm)
+                solver.tRhs             += time()-t_ini
+    #             println("Rhs vector = ", time()-t_ini)
+                view(solver.Ju_RK,:,kk) .= Ju
+            
+            elseif any(uppercase(solver.LSType).==["BLOCKJACOBI", "DOMINANTILU0"])
             
                 #Solve Mu = b + tau*a_ii*Jprec*u
                 
@@ -673,14 +698,18 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                 solver.LS_iters     += LSIter
                 solver.LS_total     += LSIter
                 
-            end
+                #Compute flux and save derivatives:
+                t_ini                   = time()
+                flag,                   = Rhs!(solver, t_k, u_k, false, view(solver.f_RK,:,kk), solver.Jm)
+                solver.tRhs             += time()-t_ini
+    #             println("Rhs vector = ", time()-t_ini)
+                view(solver.Ju_RK,:,kk) .= solver.Jm*u_k
+                
+            else
             
-            #Compute flux and save derivatives:
-            t_ini                   = time()
-            flag,                   = Rhs!(solver, t_k, u_k, false, view(solver.f_RK,:,kk), solver.Jm)
-            solver.tRhs             += time()-t_ini
-#             println("Rhs vector = ", time()-t_ini)
-            view(solver.Ju_RK,:,kk) .= solver.Jm*u_k
+                error("Unknown solver $(solver.LSType)")
+            
+            end
             
         end
         

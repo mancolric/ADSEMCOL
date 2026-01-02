@@ -227,12 +227,14 @@ function SolutionNorm(MII::SparseMatrixCSC{Float64,Int}, x::Vector{Float64},
 end
 
 function LinearSystem(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
-    nFacts::Vector{Float64}; JType::String="Complete")
+    nFacts::Vector{Float64}; LSType::String="SCILU0")
     
-    if uppercase(JType)=="COMPLETE"
+    if uppercase(LSType)=="SCILU0"
         return LinearSystem_Complete(A, solver, nFacts)
-    elseif uppercase(JType)=="BLOCKJACOBI"
+    elseif uppercase(LSType)=="BLOCKJACOBI" || uppercase(LSType)=="BLOCKJACOBIKRYLOV"
         return LinearSystem_BlockJacobi(A, solver, nFacts)
+    elseif uppercase(LSType)=="DOMINANTILU0"
+        return LinearSystem_DominantILU0(A, solver, nFacts)
     else
         error("Unknown option")
     end
@@ -335,6 +337,51 @@ function LinearSystem_BlockJacobi(A::SparseMatrixCSC{Float64,Int}, solver::Solve
     
 end
 
+function LinearSystem_DominantILU0(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
+    nFacts::Vector{Float64})
+
+    t_ini           = time()
+    
+    #Create linear system:
+    LS              = LS_DominantILU0()
+    
+    #Save pointer to original matrix:
+    LS.A            = A
+    
+    #Nb of variables, master dof and slave dof:
+    nVars           = length(nFacts)
+    nMaster         = solver.fes.nDof                 #no master dofs, system is solved directly
+    nDof            = solver.fes.nDof
+    nSlaves         = 0
+    
+    #Optimal ordering for the degrees of freedom:
+    dof_RCM_inv             = invperm(symrcm(solver.Mm[1:nMaster,1:nMaster]))
+    
+    #For a single variable, dof "idof" goes to new position jdof=dof_RCM_inv[idof].
+    #On the other hand, dof jdof of vble II goes to position
+    #   (jdof-1)*nVars + II:
+    LS.pinv                 = zeros(Int, nVars*nDof)
+    LS.scaleP               = zeros(Float64, nVars*nDof)
+    @inbounds for II=1:nVars, ii=1:nDof
+        ii_new                      = dof_RCM_inv[ii]
+        iiII_new                    = (ii_new-1)*nVars+II
+        LS.pinv[(II-1)*nDof+ii]     = iiII_new
+        LS.scaleP[iiII_new]         = nFacts[II]
+    end
+    LS.p            = invperm(LS.pinv)
+    
+    #Allocate permuted matrix and ILU factorization:
+    iv,jv,          = findnz(A)
+    S_aux           = sparse(LS.pinv[iv], LS.pinv[jv], 1:length(iv))
+    LS.ssPP_ss      = S_aux.nzval
+    LS.APP          = SparseMatrixCSC{Float64,Int}(S_aux.m, S_aux.n, S_aux.colptr, 
+                        S_aux.rowval, A.nzval[LS.ssPP_ss])
+    LS.Pl           = SCILU0_alloc(LS.APP, nSlaves*nVars)
+
+    return LS
+    
+end
+
 function LinearSystem!(LS::LS_SCILU0_GMRES)
 
 #     t_ini           = time()
@@ -376,8 +423,28 @@ function LinearSystem!(LS::LS_BlockJacobi)
     return LS
     
 end
+
+function LinearSystem!(LS::LS_DominantILU0)
+
+#     t_ini           = time()
     
-#Solve LS.A*u=b. Employ permutations, SCILU0 preconditioner and call to GMRES:
+    #Save data:
+    @inbounds for ii=1:length(LS.ssPP_ss)
+        LS.APP.nzval[ii]    = LS.A.nzval[LS.ssPP_ss[ii]]
+    end
+#     println("Permuting matrix: ", time()-t_ini)
+    
+    #Update ILU0 factorization:
+    SCILU0!(LS.Pl, LS.APP)
+#     println("Updating factorization: ", time()-t_ini)
+    
+    return LS
+    
+end
+
+#NOTE: A refers to the exact Jacobian matrix M - a_ii Deltat_n J
+
+#Solve A*u=b. Employ permutations, SCILU0 preconditioner and call to GMRES:
 function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Float64};
     RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
     
@@ -396,10 +463,9 @@ function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Floa
     scaleP          = LS.scaleP
     scaleP_m        = LS.scaleP_m
     
-    #Permute and scale vectors:
+    #Permute vectors:
     bhat            = b[LS.p]
     uhat            = u[LS.p]
-    @mlv uhat       /= scaleP
     
     #Reduce r.h.s.:
     bred            = ReduceRhs(F, bhat)
@@ -436,13 +502,13 @@ function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Floa
     
     #Solve with GMRES:
     flag                    = 1
-    solver_output           = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), uhat_m,
+    solver_output           = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), uhat_m./scaleP_m,
                                 memory=100, MaxIter=MaxIter, 
                                 AbsTolX=0.0, RelTolX=0.0, 
                                 AbsTolG=AbsTol, RelTolG=RelTol,
                                 Display=Display, history=true,
                                 NormFun=LS.NormFun)
-#     solver_output           = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), uhat_m,
+#     solver_output           = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), uhat_m./scaleP_m,
 #                                 memory=100, MaxIter=MaxIter, 
 #                                 AbsTolX=AbsTol, RelTolX=RelTol,
 #                                 AbsTolG=0.0, RelTolG=0.0, 
@@ -478,6 +544,7 @@ function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Floa
     
 end
 
+#Solve BLOCK JACOBI(A)*u=b:
 function LS_solve!(LS::LS_BlockJacobi, u::GenVector{Float64}, b::GenVector{Float64};
     RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
     
@@ -492,20 +559,116 @@ function LS_solve!(LS::LS_BlockJacobi, u::GenVector{Float64}, b::GenVector{Float
     F               = LS.Pl
     scaleP          = LS.scaleP
     
-    #Permute and scale vectors:
+    #Permute vectors:
     bhat            = b[LS.p]
     uhat            = u[LS.p]
-    @mlv uhat       /= scaleP
     
     #Reduce r.h.s.:
     bred            = ReduceRhs(F, bhat)
     
-    #Exit early if there are no master dofs:
-    if F.nMasters==0
-        ldiv_slave!(uhat, F, bred)
-        @mlv u[LS.p]    = uhat
-        return 1, 0, 0.0   #flag, nIters, etaA
+    #Solve:
+    ldiv_slave!(uhat, F, bred)
+    @mlv u[LS.p]    = uhat
+    return 1, 0, 0.0   #flag, nIters, etaA
+    
+end
+
+#Solve ILU0(Dominant(A))*u=b:
+function LS_solve_old!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Float64};
+    RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
+    
+    #Optional arguments are necessary for compatibility with the calling function
+    
+    #Exit early if there are NaNs or Infs in b:
+    if !all(isfinite.(b))
+        return -1, 0, Inf   #flag, nIters, etaA
     end
+        
+    #Extract variables:
+    F               = LS.Pl
+    scaleP          = LS.scaleP
+    
+    #Permute vectors:
+    bhat            = b[LS.p]
+    uhat            = u[LS.p]
+    
+    #Solve ILU0(Aapprox) uhat = bhat (no iterative solver):
+    ldiv_master!(uhat, F, bhat)     #Overwrites uhat
+    u[LS.p]         .= uhat
+    
+    return 1, 0, 0.0   #flag, nIters, etaA
+    
+end
+
+function LS_solve!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Float64};
+    RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
+    
+    #Optional arguments are necessary for compatibility with the calling function
+    
+    #Exit early if there are NaNs or Infs in b:
+    if !all(isfinite.(b))
+        return -1, 0, Inf   #flag, nIters, etaA
+    end
+        
+    #Extract variables:
+    F               = LS.Pl
+    scaleP          = LS.scaleP
+    
+    #Permute vectors:
+    bhat            = b[LS.p]
+    uhat            = u[LS.p]
+    
+    #Solve Aapprox uhat = bhat with ILU0+GMRES:
+    f               = zeros(length(uhat));
+    function QN_ILU0!(x::Vector{Float64}, g::Vector{Float64}) #x=u at some iteration
+        t_ini       = time()
+        @avxt @. x  *= scaleP
+        mul!(f, LS.APP, x)              #f = 1.0*A*x
+        axpby!(-1.0, bhat, 1.0, f)
+#         t_mult      += time()-t_ini
+        if !isnothing(g)
+            t_ini       = time()
+            ldiv_master!(g, F, f)
+            @avxt @. g  /= scaleP     #g ~~ Delta u. We have to return the scaled g
+#             t_ldiv      += time()-t_ini
+        end
+        @avxt @. x      /= scaleP
+        return 1
+    end
+    
+    #Call GMRES:
+    flag            = 1
+    solver_output   = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), 
+                                    uhat./scaleP,
+                                    memory=100, MaxIter=MaxIter, 
+                                    AbsTolX=AbsTol, RelTolX=AbsTol, 
+                                    AbsTolG=0.0, RelTolG=0.0,
+                                    Display="iter", history=true,
+                                    NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(uhat))))
+    @mlv uhat       = solver_output[1]*scaleP
+    @mlv u[LS.p]    = uhat
+    nIter           = solver_output[2].nIter 
+    resv            = solver_output[2].gnorms
+    etaA            = resv[length(resv)]
+    if solver_output[2].flag==2
+        #Exit due to convergence in residual g
+    elseif solver_output[2].flag==1
+        #Exit due to convergence in unknown x
+    else
+        if false
+            figure()
+            ch          = solver_output[2]
+            semilogy(ch.pnorms, ".-b")
+            semilogy(ch.gnorms, ".-r")
+            error("")
+        end
+        flag        = -1
+    end
+    
+#     println("t_mult=", t_mult)
+#     println("t_ldiv=", t_ldiv)
+    
+    return flag, nIter, etaA
     
 end
 
@@ -523,13 +686,11 @@ function MatricesAllocate!(solver::SolverData)
     JII, JII_pinv   = SpAlloc(Float64, imat, jmat)
     JII_nnz         = JII.colptr[JII.n+1]-1
     MII_nzval       = zeros(0)
-    if uppercase(solver.JType)=="COMPLETE"
+    if uppercase(solver.JPatt)=="COMPLETE"
         MII_nzval   = solver.MII.nzval
-    elseif uppercase(solver.JType)=="BLOCKJACOBI"
+    else
         MII         = MassMatrix(solver.Integ2D, solver.fes, iv=solver.Jm_ilocal, jv=solver.Jm_jlocal)
         MII_nzval   = MII.nzval
-    else
-        error("Unknown option")
     end
     
     #Allocate pinv vectors:

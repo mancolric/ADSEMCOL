@@ -87,6 +87,23 @@ mutable struct LS_BlockJacobi <: LinearSystems
     
 end
 
+#ILU0 factorization of row-dominant terms:
+mutable struct LS_DominantILU0 <: LinearSystems
+
+    A                   ::SparseMatrixCSC{Float64,Int}  #Original matrix
+    APP                 ::SparseMatrixCSC{Float64,Int}  #Permuted matrix
+    p                   ::Vector{Int}
+    pinv                ::Vector{Int}
+    ssPP_ss             ::Vector{Int}                   #Vector to compute APP quickly
+    Pl                  ::SCILU0Fact{Float64, Int}      #ILU0 factorization of approximate Jacobian
+    scaleP              ::Vector{Float64}               #Vector to scale solution with NFactors
+    
+    #nMaster, nSlaves, etc is in Pl
+    
+    LS_DominantILU0()   = new()
+    
+end
+
 #Variables at quadrature nodes:
 mutable struct TrIntVars
 
@@ -220,7 +237,7 @@ mutable struct SolverData{ConstModel<:ConstModels}
     #BlockJacobiKrylov: BlockJacobi preconditioner, Krylov approximation for Jacobian 
     LSType          :: String       
     #Separate, if possible, preconditioner and Krylov approximation:
-    JType           :: String
+    JPatt           :: String
     KrylovApprox    :: Bool
     #(i,j) pairs of Jacobian terms to be computed at each element
     Jm_ilocal       :: Vector{Int}  
@@ -237,7 +254,7 @@ mutable struct SolverData{ConstModel<:ConstModels}
     MII_LS          :: LS_SCILU0_GMRES
     bv              :: Vector{Float64}
     b               :: Vector{VectorView{Float64}}
-    Mm              :: SparseMatrixCSC{Float64,Int}     #JType part (complete or block Jacobi) of the mass matrix
+    Mm              :: SparseMatrixCSC{Float64,Int}     #JPatt part (complete or block Jacobi) of the mass matrix
     Jm              :: SparseMatrixCSC{Float64,Int}
     Jm_pinv         :: Matrix{Vector{Int}}              #Matrix nVars*nVars with vectors for fast assembly
     Am              :: SparseMatrixCSC{Float64,Int}
@@ -346,8 +363,8 @@ mutable struct SolverDataSave{ConstModel<:ConstModels}
     tf              :: Float64  
     TimeAdapt       :: Bool   
     
-    #Approximate Jacobian?
-    JType           :: String
+    #Linear solver:
+    LSType          :: String
     
     #Monitor variables at quadrature nodes:
     monitor         :: Vector{Matrix{Float64}}

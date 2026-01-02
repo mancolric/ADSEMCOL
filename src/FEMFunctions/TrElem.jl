@@ -742,179 +742,6 @@ function PlotBX(order, iDof; Nxi::Int=100)
     
 end
 
-#=
-#-----------------------------------------------------------------------------
-#Bubble space:
-
-#Elementary bubble function:
-function TrElem_Bubble_Nm(xim::AbstractMatrix{Float64})
-
-    #Note that the edges of the equilateral
-    #triangle are given by
-    #   xi2/(-0.5)      = 1
-    #   xi1/d + xi2     = 1
-    #   -xi1/d + xi2    = 1
-    #with (d,0) and (-d,0) two points of the triangle, given by
-    #d/1 = sqrt(3)/2 / (1+1/2)
-    dinv            = 3.0/sqrt(3)
-    sq32            = sqrt(3.0)/2.0
-    bv              = @mlv    -1.0*(-2.0*xim[:,2]-1.0)*
-                        (xim[:,1]*dinv+xim[:,2]-1.0)*
-                        (-xim[:,1]*dinv+xim[:,2]-1.0)
-
-    return bv
-
-end
-function TrElem_Bubble_gradNm(xim::AbstractMatrix{Float64})
-
-    #Note that the edges of the equilateral
-    #triangle are given by
-    #   xi2/(-0.5)      = 1
-    #   xi1/d + xi2     = 1
-    #   -xi1/d + xi2    = 1
-    #with (d,0) and (-d,0) two points of the triangle, given by
-    #d/1 = sqrt(3)/2 / (1+1/2)
-    dinv            = 3.0/sqrt(3)
-    sq32            = sqrt(3.0)/2.0
-    bv              = @mlv    -1.0*(-2.0*xim[:,2]-1.0)*
-                        (xim[:,1]*dinv+xim[:,2]-1.0)*
-                        (-xim[:,1]*dinv+xim[:,2]-1.0)
-    grad1bv         = @mlv    -1.0*(-2.0*xim[:,2]-1.0)*
-                        (dinv*(-xim[:,1]*dinv+xim[:,2]-1.0) - 
-                         (xim[:,1]*dinv+xim[:,2]-1.0)*dinv)
-    grad2bv         = @mlv    -1.0*(
-                        (-2.0)*
-                        (xim[:,1]*dinv+xim[:,2]-1.0)*
-                        (-xim[:,1]*dinv+xim[:,2]-1.0) +
-                        (-2.0*xim[:,2]-1.0)*
-                        1.0*
-                        (-xim[:,1]*dinv+xim[:,2]-1.0) +
-                        (-2.0*xim[:,2]-1.0)*
-                        (xim[:,1]*dinv+xim[:,2]-1.0)*
-                        1.0)
-                        
-    return [grad1bv, grad2bv]
-
-end
-
-#Create BSpace of given order associated with given mesh:
-function TrBSpace(mesh::TrMesh, order::Int)
-
-    BSpace              = TrBSpace()
-    BSpace.mesh         = mesh
-    BSpace.order        = order
-    if order==0
-        error("Unable to construct bubble space of order 0")
-    elseif order==1
-        BSpace.DofPerElem   = 1
-    else
-        #Multiply "b" only by PKD functions of degree p-2 and p-1:
-        BSpace.DofPerElem   = 2*order-1
-    end
-    BSpace.ElemsDof     = zeros(Int, mesh.nElems, BSpace.DofPerElem)
-    for iElem=1:mesh.nElems, iDof=1:BSpace.DofPerElem
-        BSpace.ElemsDof[iElem,iDof]     = (iElem-1)*BSpace.DofPerElem + iDof
-    end
-    BSpace.nDof         = mesh.nElems*BSpace.DofPerElem
-    
-    #We have to compute the fluctuation w.r.t. PSpace of order r:
-    #For that purpose, let us write 
-    #   NB_j(x_i)   = NP_k(x_i) a_kj. 
-    #By definition, 
-    #   a_kj        = NB_j(xi_k), 
-    #with xi the Lagrange nodes.
-    BSpace.xi           = TrElem_ChebyshevNodes(order)
-    BSpace.Lag_PKD      = Lag_PKDCoefficients(order, BSpace.xi)
-    BSpace.Bub_Lag      = BX_NCompute(BSpace, BSpace.xi) 
-       
-    return BSpace
-    
-end
-
-#Compute bubble functions without fluctuation:
-function BX_NCompute(FES::TrBSpace, xim::AbstractMatrix{Float64})  #FES=finite element space
-
-    #PKD shape functions:
-    Nm_PKD      = PKD_Nm(xim, FES.order-1)
-    indexm      = PKD_index(FES.order-1)
-    
-    #Retain functions with order max(0,(p-2)) to (p-1):
-    p1          = max(0,FES.order-2)
-    index1      = indexm[p1+1,1]
-    index2      = indexm[1,FES.order-1+1]
-    
-    #Bubble shape functions:
-    bv          = TrElem_Bubble_Nm(xim)
-    Nm          = zeros(size(xim,1), FES.DofPerElem)
-    for kk=1:FES.DofPerElem
-        @mlv    Nm[:,kk]    = Nm_PKD[:,index1-1+kk]*bv
-    end
-    
-    return Nm
-
-end
-
-function BX_gradNCompute(FES::TrBSpace, xim::AbstractMatrix{Float64})  #FES=finite element space
-
-    #PKD shape functions:
-    Nm_PKD      = PKD_Nm(xim, FES.order-1)
-    gradNm_PKD  = PKD_gradNm(xim, FES.order-1)
-    indexm      = PKD_index(FES.order-1)
-    
-    #Retain functions with order max(0,(p-2)) to (p-1):
-    p1          = max(0,FES.order-2)
-    index1      = indexm[p1+1,1]
-    index2      = indexm[1,FES.order-1+1]
-    
-    #Bubble shape functions:
-    bv          = TrElem_Bubble_Nm(xim)
-    gradbv      = TrElem_Bubble_gradNm(xim)
-    
-    #grad(b*N) = gradb*N + b*gradN:
-    grad1Nm     = zeros(size(xim,1), FES.DofPerElem)
-    grad2Nm     = zeros(size(xim,1), FES.DofPerElem)
-    for kk=1:FES.DofPerElem
-        @mlv    grad1Nm[:,kk]   = gradNm_PKD[1][:,index1-1+kk]*bv + 
-                                    Nm_PKD[:,index1-1+kk]*gradbv[1]
-        @mlv    grad2Nm[:,kk]   = gradNm_PKD[2][:,index1-1+kk]*bv + 
-                                    Nm_PKD[:,index1-1+kk]*gradbv[2]
-    end
-    
-    return [ grad1Nm, grad2Nm ]
-    
-end
-
-#Compute fluctuations. For that purpose, let us write 
-#   NB_j(x_i)   = NP_k(x_i) a_kj. 
-#By definition, 
-#   a_kj        = NB_j(xi_k), 
-#with xi the Lagrange nodes.
-function NCompute(FES::TrBSpace, xim::AbstractMatrix{Float64})  #FES=finite element space
-
-    #Bubble functions without fluctuations:
-    NBm         = BX_NCompute(FES, xim)
-    
-    #Lagrangian functions:
-    NPm         = PKD_Nm(xim, FES.order)*FES.Lag_PKD
-    
-    return NBm - NPm*FES.Bub_Lag
-
-end
-
-function gradNCompute(FES::TrBSpace, xim::AbstractMatrix{Float64})  #FES=finite element space
-
-    #Bubble functions without fluctuations:
-    gradNBm     = BX_gradNCompute(FES, xim)
-    
-    #Lagrangian functions:
-    gradN_PKD   = PKD_gradNm(xim, FES.order)
-    gradNPm     = [gradN_PKD[1]*FES.Lag_PKD, gradN_PKD[2]*FES.Lag_PKD]
-    
-    return [ gradNBm[1]-gradNPm[1]*FES.Bub_Lag, gradNBm[2]-gradNPm[2]*FES.Bub_Lag ]
-    
-end
-=#
-
 #---------------------------------------------------------------------------------
 #Polynomial + bubble space:
 
@@ -1104,5 +931,82 @@ function GLRule(order::Int)
     QRule.w     = aux[2]
     
     return QRule
+    
+end
+
+#------------------------------------------------------------------
+
+function MassMatrixElem(FES::TrFES)
+
+    #Create quadrature rule:
+    QRule       = WVRule(FES.order)
+    w_qp        = diagm(QRule.w)
+    Nm_qp       = NCompute(FES, QRule.xi)
+    Mm          = transpose(Nm_qp)*w_qp*Nm_qp
+    return Mm
+    
+end
+
+function GetDominantTerms(Am::Matrix{Float64})
+
+    Am          = abs.(Am)
+    iv          = zeros(Int,0)
+    jv          = zeros(Int,0)
+    m,n         = size(Am)
+    
+    #Loop rows:
+    for ii=1:m
+        
+        #Sort rows:
+        cols        = sortperm(Am[ii,:], rev=true)
+        vals        = Am[ii,cols]
+        
+        #Compute sum of terms:
+        cumsumv     = cumsum(vals)
+        threshold   = 0.5*cumsumv[n]
+        
+        #Retain terms such that cumulative sum is larger than threshold:
+        T           = findfirst(cumsumv.>=threshold)
+        append!(iv, fill(ii, T))
+        append!(jv, cols[1:T])
+        
+        #Add diagonal:
+        if !any(cols[1:T]==ii)
+            push!(iv, ii)
+            push!(jv, ii)
+        end
+        
+#         println("ii=$ii")
+#         display(Am[ii,:])
+#         display(vals)
+#         display(cols[1:T])
+#         error("")
+        
+    end
+    
+    sv      = @. iv + (jv-1)*m
+    
+    return iv, jv, sv 
+    
+end
+
+function GetDominantTerms(FES::TrPBSpace)
+
+    #Get row-dominant terms in mass matrix:
+    Melem           = MassMatrixElem(FES)
+    iv, jv, sv      = GetDominantTerms(Melem)
+    
+    #Check rank:
+    Melem_red       = 0.0*Melem
+    Melem_red[sv]   = Melem[sv]
+    if rank(Melem_red)!=size(Melem,1)
+        error("Reduced matrix is rank-defficient")
+    end
+    
+    #Force symmetry:
+    Melem_red       = sparse(vcat(iv, jv), vcat(jv, iv), ones(2*length(iv)))
+    iv, jv,         = findnz(Melem_red)
+    
+    return iv, jv
     
 end
