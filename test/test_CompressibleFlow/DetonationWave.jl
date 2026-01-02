@@ -148,7 +148,7 @@ function DetonationWave(; FesOrder::Int=5,
     solver.TolS_max         = TolS
     solver.TolS_min         = 0.01*TolS
     solver.TolT             = TolT
-    #     solver.CA_max           = Inf
+#     solver.LSType           = "BlockJacobi"
 
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x))
@@ -264,7 +264,8 @@ function DetonationWave(; FesOrder::Int=5,
     while solver.t<tf
 
         ConvFlag    = LIRKHyp_Step!(solver)
-
+#         ConvFlag    = IRK_Step!(solver)
+        
         if ConvFlag<=0
             break
         end

@@ -100,7 +100,8 @@ function SmoothVortex(hp::Float64, FesOrder::Int, tfv::Array{Float64,1};
     solver.TimeAdapt        = TimeAdapt
 #     solver.LSType           = "BlockJacobi"
 #     solver.LSType           = "BlockJacobiKrylov"
-    solver.LSType           = "DominantILU0"
+#     solver.LSType           = "DominantILU0"
+#     solver.LSType           = "Dominant"
     solver.LS_iters_target  = typemax(Int)
     solver.LS_iters_max     = 400
     

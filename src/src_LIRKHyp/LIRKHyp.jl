@@ -104,6 +104,23 @@ mutable struct LS_DominantILU0 <: LinearSystems
     
 end
 
+#Row-dominant terms:
+mutable struct LS_Dominant <: LinearSystems
+
+    A                   ::SparseMatrixCSC{Float64,Int}  #Original matrix
+    APP                 ::SparseMatrixCSC{Float64,Int}  #Permuted matrix
+    p                   ::Vector{Int}
+    pinv                ::Vector{Int}
+    ssPP_ss             ::Vector{Int}                   #Vector to compute APP quickly
+    Pl                  ::SCILU0Fact{Float64, Int}      #ILU0 factorization of approximate Jacobian
+    scaleP              ::Vector{Float64}               #Vector to scale solution with NFactors
+    
+    #nMaster, nSlaves, etc is in Pl
+    
+    LS_Dominant()       = new()
+    
+end
+
 #Variables at quadrature nodes:
 mutable struct TrIntVars
 

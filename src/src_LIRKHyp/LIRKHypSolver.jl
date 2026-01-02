@@ -255,13 +255,44 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
         solver.Jm_jlocal        = aux[2]
         solver.Jm_localterms    = length(solver.Jm_ilocal)
         #compute only products concerning the same dof:
-        solver.Jm_ilocal        = 1:solver.fes.DofPerElem
-        solver.Jm_jlocal        = 1:solver.fes.DofPerElem
-        solver.Jm_localterms    = solver.fes.DofPerElem
-        @warn "BLOCKJACOBI"
+#         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
+#         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
+#         solver.Jm_localterms    = solver.fes.DofPerElem
+#         @warn "BLOCKJACOBI"
+        #complete:
+#         imat, jmat              = ndgrid(1:solver.fes.DofPerElem, 1:solver.fes.DofPerElem)
+#         solver.Jm_ilocal        = imat[:]
+#         solver.Jm_jlocal        = jmat[:]
+#         solver.Jm_localterms    = solver.fes.DofPerElem^2
+#         @warn "Complete"
+    elseif uppercase(solver.LSType)=="DOMINANT"
+        solver.JPatt            = "Dominant"
+        solver.KrylovApprox     = false
+        #compute only products concerning the same dof:
+        aux                     = GetDominantTerms(solver.fes)
+        solver.Jm_ilocal        = aux[1]
+        solver.Jm_jlocal        = aux[2]
+        solver.Jm_localterms    = length(solver.Jm_ilocal)
+        #compute only products concerning the same dof:
+#         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
+#         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
+#         solver.Jm_localterms    = solver.fes.DofPerElem
+#         @warn "BLOCKJACOBI"
+        #complete:
+#         imat, jmat              = ndgrid(1:solver.fes.DofPerElem, 1:solver.fes.DofPerElem)
+#         solver.Jm_ilocal        = imat[:]
+#         solver.Jm_jlocal        = jmat[:]
+#         solver.Jm_localterms    = solver.fes.DofPerElem^2
+#         @warn "Complete"
+        #complete transposed:
+#         imat, jmat              = ndgrid(1:solver.fes.DofPerElem, 1:solver.fes.DofPerElem)
+#         solver.Jm_ilocal        = jmat[:]
+#         solver.Jm_jlocal        = imat[:]
+#         solver.Jm_localterms    = solver.fes.DofPerElem^2
+#         @warn "Complete"
     else
         error(string("Unknown option $(solver.LSType). Available options are: ", 
-                "SCILU0, BlockJacobi, BlockJacobiKrylov, DominantILU0."))
+                "SCILU0, BlockJacobi, BlockJacobiKrylov, DominantILU0, Dominant."))
     end
     
     #--------------------------------------------------------
@@ -640,7 +671,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
     #             println("Rhs vector = ", time()-t_ini)
                 view(solver.Ju_RK,:,kk) .= Ju
             
-            elseif any(uppercase(solver.LSType).==["BLOCKJACOBI", "DOMINANTILU0"])
+            elseif any(uppercase(solver.LSType).==["BLOCKJACOBI", "DOMINANTILU0", "DOMINANT"])
             
                 #Solve Mu = b + tau*a_ii*Jprec*u
                 
@@ -2134,7 +2165,7 @@ function IRK_Step!(solver::SolverData)
             
             #Solve nonlinear system
             #   Mu - b - a_ii*Deltat_n*f(t_k, u_k) = 0
-            if solver.KrylovApprox
+            if uppercase(solver.LSType)=="BLOCKJACOBIKRYLOV"
             
                 #Approximation of J*g:
                 Jg              = zeros(length(u_k))
@@ -2234,7 +2265,7 @@ function IRK_Step!(solver::SolverData)
                                 AbsTolG=0.0*TolA, RelTolG=0.0, 
                                 NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
                                 memory=100, MaxIter=solver.LS_iters_max, 
-                                history=true, Display="final")
+                                history=true, Display="notify")
                 solver.tLS  += time()-t_ini
                 u_k         .= LSOutput[1].*scalv
                 LSFlag      = LSOutput[2].flag
@@ -2253,7 +2284,7 @@ function IRK_Step!(solver::SolverData)
                 end
                 #Here, LS in reality is NLS
                 
-            else #Krylov==false
+            elseif any(uppercase(solver.LSType).==["SCILU0", "BLOCKJACOBI", "DOMINANTILU0", "DOMINANT"])
             
                 #Define preconditioned residual:
                 function QNResidualJ!(uhat::Vector{Float64}, gres::Vector{Float64})
@@ -2319,6 +2350,10 @@ function IRK_Step!(solver::SolverData)
                 solver.LS_iters     += LSIter
                 solver.LS_total     += LSIter
                 #Here, LS in reality is NLS
+                
+            else
+            
+                error("Unknown method $(solver.LSType)")
                 
             end #krylov if
             

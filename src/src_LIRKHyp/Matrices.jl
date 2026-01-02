@@ -235,6 +235,8 @@ function LinearSystem(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
         return LinearSystem_BlockJacobi(A, solver, nFacts)
     elseif uppercase(LSType)=="DOMINANTILU0"
         return LinearSystem_DominantILU0(A, solver, nFacts)
+    elseif uppercase(LSType)=="DOMINANT"
+        return LinearSystem_Dominant(A, solver, nFacts)
     else
         error("Unknown option")
     end
@@ -382,6 +384,51 @@ function LinearSystem_DominantILU0(A::SparseMatrixCSC{Float64,Int}, solver::Solv
     
 end
 
+function LinearSystem_Dominant(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
+    nFacts::Vector{Float64})
+
+    t_ini           = time()
+    
+    #Create linear system:
+    LS              = LS_Dominant()
+    
+    #Save pointer to original matrix:
+    LS.A            = A
+    
+    #Nb of variables, master dof and slave dof:
+    nVars           = length(nFacts)
+    nMaster         = solver.fes.nDof                 #no master dofs, system is solved directly
+    nDof            = solver.fes.nDof
+    nSlaves         = 0
+    
+    #Optimal ordering for the degrees of freedom:
+    dof_RCM_inv             = invperm(symrcm(solver.Mm[1:nMaster,1:nMaster]))
+    
+    #For a single variable, dof "idof" goes to new position jdof=dof_RCM_inv[idof].
+    #On the other hand, dof jdof of vble II goes to position
+    #   (jdof-1)*nVars + II:
+    LS.pinv                 = zeros(Int, nVars*nDof)
+    LS.scaleP               = zeros(Float64, nVars*nDof)
+    @inbounds for II=1:nVars, ii=1:nDof
+        ii_new                      = dof_RCM_inv[ii]
+        iiII_new                    = (ii_new-1)*nVars+II
+        LS.pinv[(II-1)*nDof+ii]     = iiII_new
+        LS.scaleP[iiII_new]         = nFacts[II]
+    end
+    LS.p            = invperm(LS.pinv)
+    
+    #Allocate permuted matrix and ILU factorization:
+    iv,jv,          = findnz(A)
+    S_aux           = sparse(LS.pinv[iv], LS.pinv[jv], 1:length(iv))
+    LS.ssPP_ss      = S_aux.nzval
+    LS.APP          = SparseMatrixCSC{Float64,Int}(S_aux.m, S_aux.n, S_aux.colptr, 
+                        S_aux.rowval, A.nzval[LS.ssPP_ss])
+    LS.Pl           = SCILU0_alloc(LS.APP, nSlaves*nVars)
+
+    return LS
+    
+end
+
 function LinearSystem!(LS::LS_SCILU0_GMRES)
 
 #     t_ini           = time()
@@ -406,7 +453,7 @@ function LinearSystem!(LS::LS_SCILU0_GMRES)
     
 end
 
-function LinearSystem!(LS::LS_BlockJacobi)
+function LinearSystem!(LS::Union{LS_BlockJacobi, LS_DominantILU0, LS_Dominant})
 
 #     t_ini           = time()
     
@@ -420,24 +467,6 @@ function LinearSystem!(LS::LS_BlockJacobi)
     SCILU0!(LS.Pl, LS.APP)
 #     println("Updating factorization: ", time()-t_ini)
  
-    return LS
-    
-end
-
-function LinearSystem!(LS::LS_DominantILU0)
-
-#     t_ini           = time()
-    
-    #Save data:
-    @inbounds for ii=1:length(LS.ssPP_ss)
-        LS.APP.nzval[ii]    = LS.A.nzval[LS.ssPP_ss[ii]]
-    end
-#     println("Permuting matrix: ", time()-t_ini)
-    
-    #Update ILU0 factorization:
-    SCILU0!(LS.Pl, LS.APP)
-#     println("Updating factorization: ", time()-t_ini)
-    
     return LS
     
 end
@@ -574,7 +603,7 @@ function LS_solve!(LS::LS_BlockJacobi, u::GenVector{Float64}, b::GenVector{Float
 end
 
 #Solve ILU0(Dominant(A))*u=b:
-function LS_solve_old!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Float64};
+function LS_solve!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Float64};
     RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
     
     #Optional arguments are necessary for compatibility with the calling function
@@ -600,7 +629,7 @@ function LS_solve_old!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{
     
 end
 
-function LS_solve!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Float64};
+function LS_solve!(LS::LS_Dominant, u::GenVector{Float64}, b::GenVector{Float64};
     RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
     
     #Optional arguments are necessary for compatibility with the calling function
@@ -636,14 +665,14 @@ function LS_solve!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Floa
         return 1
     end
     
-    #Call GMRES:
+    #Call GMRES with a high tolerance:
     flag            = 1
     solver_output   = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), 
                                     uhat./scaleP,
                                     memory=100, MaxIter=MaxIter, 
                                     AbsTolX=AbsTol, RelTolX=AbsTol, 
                                     AbsTolG=0.0, RelTolG=0.0,
-                                    Display="iter", history=true,
+                                    Display="notify", history=true,
                                     NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(uhat))))
     @mlv uhat       = solver_output[1]*scaleP
     @mlv u[LS.p]    = uhat
@@ -664,6 +693,8 @@ function LS_solve!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Floa
         end
         flag        = -1
     end
+    
+    println("Inner linear solver, nIters=",nIter)
     
 #     println("t_mult=", t_mult)
 #     println("t_ldiv=", t_ldiv)
@@ -1276,7 +1307,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         t_ini2                      = time()
         for II=1:solver.nVars
             if !all(isfinite.(_bqp.f[II]))
-                error("flux $(II) for boundary $(bound_id) is not finite")
+#                 error("flux $(II) for boundary $(bound_id) is not finite")
                 flag                = -1
             end
         end

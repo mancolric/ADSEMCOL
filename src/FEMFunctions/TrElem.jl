@@ -992,6 +992,12 @@ end
 
 function GetDominantTerms(FES::TrPBSpace)
 
+    return GetDominantTerms3(FES)
+    
+end
+
+function GetDominantTerms1(FES::TrPBSpace)
+
     #Get row-dominant terms in mass matrix:
     Melem           = MassMatrixElem(FES)
     iv, jv, sv      = GetDominantTerms(Melem)
@@ -1006,6 +1012,75 @@ function GetDominantTerms(FES::TrPBSpace)
     #Force symmetry:
     Melem_red       = sparse(vcat(iv, jv), vcat(jv, iv), ones(2*length(iv)))
     iv, jv,         = findnz(Melem_red)
+    
+    return iv, jv
+    
+end
+
+function GetDominantTerms2(FES::TrPBSpace)
+
+    #Get row-dominant terms in mass matrix of PSpace:
+    Melem           = MassMatrixElem(FES.PSpace)
+    iv, jv, sv      = GetDominantTerms(Melem)
+    
+    #Check rank:
+    Melem_red       = 0.0*Melem
+    Melem_red[sv]   = Melem[sv]
+    if rank(Melem_red)!=size(Melem,1)
+        error("Reduced matrix is rank-defficient")
+    end
+    
+    #Force symmetry:
+    Melem_red       = sparse(vcat(iv, jv), vcat(jv, iv), ones(2*length(iv)))
+    iv, jv,         = findnz(Melem_red)
+    
+    #Append bubbles:
+    for iDof=1:FES.PSpace.DofPerElem, jDof=1:FES.BSpace.DofPerElem
+        push!(iv, iDof, FES.PSpace.DofPerElem+jDof)
+        push!(jv, FES.PSpace.DofPerElem+jDof, iDof)
+    end
+    for iDof=1:FES.BSpace.DofPerElem, jDof=1:FES.BSpace.DofPerElem
+        push!(iv, FES.PSpace.DofPerElem+iDof)
+        push!(jv, FES.PSpace.DofPerElem+jDof)
+    end
+    
+    return iv, jv
+    
+end
+
+function GetDominantTerms3(FES::TrPBSpace)
+
+    #Matrix with location of the nodes:
+    xim             = vcat( FES.PSpace.xi, 
+                            FES.BSpace.xi[3*(FES.order+3)+1:3*(FES.order+3)+3*FES.order,:] )
+                            
+    #Get distance between nodes:
+    dm              = zeros(FES.DofPerElem, FES.DofPerElem)
+    for jDof=1:FES.DofPerElem, iDof=1:FES.DofPerElem
+        xi_i            = xim[iDof,:]
+        xi_j            = xim[jDof,:]
+        dm[iDof, jDof]  = norm(xi_i-xi_j)
+    end
+    
+    #For each dof, pick the six closest dofs:
+    T               = 6
+    iv              = zeros(Int,0)
+    jv              = zeros(Int,0)
+    for ii=1:FES.DofPerElem
+        
+        #Sort terms in the row according to the distance to node i:
+        cols        = sortperm(dm[ii,:])
+        
+        append!(iv, fill(ii, T))
+        append!(jv, cols[1:T])
+        
+    end
+    
+    #Check:
+#     S       = sparse(iv, jv, ones(size(iv)))
+#     figure()
+#     spy(S)
+#     error("")
     
     return iv, jv
     

@@ -80,7 +80,8 @@ function TriplePoint(hp0::Float64, FesOrder::Int;
     solver.TolS_min         = 0.0*TolS
     solver.TolT             = TolT
 #     solver.LSType           = "BlockJacobi"
-    solver.LSType           = "BlockJacobiKrylov"
+#     solver.LSType           = "BlockJacobiKrylov"
+#     solver.LSType           = "DominantILU0"
     
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x)) 
@@ -197,8 +198,8 @@ function TriplePoint(hp0::Float64, FesOrder::Int;
         if PostAdapt
             ConvFlag            = LIRKHyp_Step_Post!(solver)
         else
-#             ConvFlag            = LIRKHyp_Step_Pre!(solver)
-            ConvFlag            = IRK_Step!(solver)
+            ConvFlag            = LIRKHyp_Step_Pre!(solver)
+#             ConvFlag            = IRK_Step!(solver)
         end
         if ConvFlag<=0
             break
