@@ -9,7 +9,7 @@
 #SBATCH --partition=cn1
 #SBATCH --array=1-11%11
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=15G
+#SBATCH --mem=20G
 
 # Do not modify:
 #SBATCH --nodes=1
