@@ -381,7 +381,7 @@ mutable struct SolverDataSave{ConstModel<:ConstModels}
     TimeAdapt       :: Bool   
     
     #Linear solver:
-    LSType          :: String
+#     LSType          :: String
     
     #Monitor variables at quadrature nodes:
     monitor         :: Vector{Matrix{Float64}}

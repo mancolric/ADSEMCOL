@@ -962,7 +962,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
     end
     
     #Clear memory:
-    if mod(solver.Nt,500)==0
+    if mod(solver.Nt,50)==0
         GC.gc()
     end
     
@@ -1302,6 +1302,9 @@ function AdaptMesh!(solver::SolverData,
         end
         
     end #AMA_TolS loop
+    
+    #Clear memory:
+    GC.gc()
     
     return
     
@@ -1917,7 +1920,7 @@ function LIRKHyp_Step_Post_Dolejsi!(solver::SolverData)
     end
     
     #Clear memory:
-    if mod(solver.Nt,500)==0
+    if mod(solver.Nt,50)==0
         GC.gc()
     end
     
@@ -2574,7 +2577,7 @@ function IRK_Step!(solver::SolverData)
     end
     
     #Clear memory:
-    if mod(solver.Nt,500)==0
+    if mod(solver.Nt,50)==0
         GC.gc()
     end
     
