@@ -21,7 +21,9 @@ The code is currently under development, i.e., it is not optimized and it can so
 Manuel Colera Rico (Universidad Politécnica de Madrid)\
 Vít Dolejší (Charles University Prague)
 
+Gonzalo Sánchez Moreno (Universidad Politécnica de Madrid): Hydrogen combustion\
 León Villalba Muñoz (Universidad Politécnica de Madrid): Shallow Water Equations
+
 
 Please feel free to ask any questions at
 m.colera@upm.es
