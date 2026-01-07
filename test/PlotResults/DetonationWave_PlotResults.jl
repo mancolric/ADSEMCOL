@@ -1,6 +1,6 @@
 include("PlotResults.jl")
 
-function Contour_DetonationWave(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=30.0, h::Float64=8.50,
+function Nodes_DetonationWave(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=30.0, h::Float64=8.50,
                                   PlotVars::Vector{String}=["Q_reac", "T", "p"], mFig::Int=1, nFig::Int=3)
     N = length(PlotVars)
     #Define gas:
@@ -9,7 +9,7 @@ function Contour_DetonationWave(SC::Int, nb::Int; SaveFig::Bool=false, w::Float6
     FileName    = GetFileName(SC, nb)
     solver      = GetSolver(SC, nb)
 
-    fig         = PyPlotSubPlots(N, 1, w=w, h=h, top=1.0)
+    fig         = PyPlotSubPlots(N, 1, w=w, h=h, top=1.0, tTitle=1.0)
 
     for ii=1:length(PlotVars)
 
@@ -19,14 +19,16 @@ function Contour_DetonationWave(SC::Int, nb::Int; SaveFig::Bool=false, w::Float6
         #Numerical solution:
         splot_fun(x1,x2)    = @mlv x1
         PlotNodes(splot_fun, solver, GasModel, PlotVars[ii])
-        title(latexstring(LatexString(PlotVars[ii])),
+        title(latexstring(LatexString(GasModel, PlotVars[ii])),
               fontsize=10)
         tick_params(axis="both", which="both", labelsize=TickSize)
 
-        if SaveFig
-            savefig("$(FigUbi)SC$(SC)_Contour_$(PlotVars[ii]).png", dpi=800, pad_inches=0)
-        end
-
+    end
+    
+    suptitle(latexstring("t=", sprintf1("%d", 1e6*solver.t), "\\mu s"), fontsize=10)
+    
+    if SaveFig
+        savefig("$(FigUbi)SC$(SC)_Contour_$(PlotVars[ii]).png", dpi=800, pad_inches=0)
     end
 
     return
@@ -48,7 +50,7 @@ function Line_DetonationWave(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=1
     splot_fun(x1,x2)    = @mlv x1
     PlotNodes(splot_fun, solver, GasModel, PlotVar)
     xlim(0,0.4)
-#     title(latexstring(LatexString(PlotVar)),
+#     title(latexstring(LatexString(GasModel, PlotVar)),
 #             fontsize=10)
     text(0.35, -0.4e9, latexstring("t = $(nb) \\mu s"))
     #text(0.34, -0.4e9, latexstring("\\epsilon = 1·10^{-1}"))
@@ -103,7 +105,7 @@ function Video_DetonationWave(SC::Int, var::String; SaveFig::Bool=false, w::Floa
         PlotNodes(splot_fun, solver, GasModel, var)
         #         PlotMesh!(SC, nb, color="w")
         tick_params(axis="both", which="both", labelsize=TickSize)
-        title(latexstring(LatexString(var),"; t^n=", sprintf1("%.2e", solver.t)),
+        title(latexstring(LatexString(GasModel, var),"; t^n=", sprintf1("%.2e", solver.t)),
               fontsize=10)
 
         PyPlot.subplot(2,1,2)
@@ -111,7 +113,7 @@ function Video_DetonationWave(SC::Int, var::String; SaveFig::Bool=false, w::Floa
 #         PlotContour(solver.u[1], solver.fes)
         PlotMesh!(SC, nb, color="b")
         tick_params(axis="both", which="both", labelsize=TickSize)
-        title(latexstring(LatexString(var),"; t^n=", sprintf1("%.2e", solver.t)),
+        title(latexstring(LatexString(GasModel, var),"; t^n=", sprintf1("%.2e", solver.t)),
               fontsize=10)
 
         if SaveFig

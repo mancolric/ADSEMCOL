@@ -145,7 +145,7 @@ Base.@kwdef mutable struct GasH2 <: ReactiveGas
     #Reaction's characteristic fields:
     species         ::Vector{String}    = [ "H2", "O2", "H2O", "N2", "He",
                                             "Ar", "CO", "CO2", "H", "OH", 
-                                            "HO2", "H2O2 O", "O" ]
+                                            "HO2", "H2O2", "O" ]
     coef1           ::Matrix{Float64}   = H2_coef1() # 200-1000 K NASA
     coef2           ::Matrix{Float64}   = H2_coef2() # 1000-6000 K NASA
     coef3           ::Matrix{Float64}   = H2_coef3() # 6000-20000 K NASA

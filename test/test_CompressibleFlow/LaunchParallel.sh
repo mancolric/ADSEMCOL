@@ -5,11 +5,11 @@
 # NOTE: SBATCH parameters must be defined first. Do not define any variable before them.
 
 # Editable options:
-#SBATCH --job-name=LP3
+#SBATCH --job-name=LP1
 #SBATCH --partition=cn1
-#SBATCH --array=1-2%2
+#SBATCH --array=1-5%5
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=50G
+#SBATCH --mem=20G
 
 # Do not modify:
 #SBATCH --nodes=1
