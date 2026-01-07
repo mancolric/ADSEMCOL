@@ -6,6 +6,7 @@ function DetonationWave(; FesOrder::Int=5,
     tf::Float64=20.0, RKMethod::String="Ascher3", #"BPR3"
     delta::Float64=1e-3,
     epsilon::Float64=1000*delta,
+    Xmin::Float64=1e-3, 
     #
     TolS::Float64=1e-6, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2,
     #
@@ -46,7 +47,7 @@ function DetonationWave(; FesOrder::Int=5,
     #12-H2O2 13-O
     
     #State 1: 0-0.015: Ar (6), H2O (3), OH (10)
-    X1       = zeros(13)
+    X1       = fill(Xmin,13)
     X1[6]    = 8.0
     X1[3]    = 2.0
     X1[10]   = 0.01
@@ -66,7 +67,7 @@ function DetonationWave(; FesOrder::Int=5,
     E1       = sum(Y1.*e1)
     
     #State 2: 0.015-0.025: 
-    X2       = zeros(13)
+    X2       = fill(Xmin, 13)
     X2[6]    = 7.0
     X2[2]    = 1.0
     X2[1]    = 2.0
@@ -87,7 +88,7 @@ function DetonationWave(; FesOrder::Int=5,
     E2       = sum(Y2.*e2)
 
     #State 3: 0.025-0.45:
-    X3       = zeros(13)
+    X3       = fill(Xmin, 13)
     X3[6]    = 7.0
     X3[2]    = 1.0
     X3[1]    = 2.0
