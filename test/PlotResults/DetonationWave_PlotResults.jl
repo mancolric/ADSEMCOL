@@ -44,7 +44,7 @@ function Line_DetonationWave(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=1
     FileName    = GetFileName(SC, nb)
     solver      = GetSolver(SC, nb)
 
-    fig         = PyPlotFigure(w=w, h=h, top=0.5, bottom=0.1)
+    fig         = PyPlotFigure(w=w, h=h, top=1.0, bottom=0.1)
 
     #Numerical solution:
     splot_fun(x1,x2)    = @mlv x1
@@ -56,6 +56,8 @@ function Line_DetonationWave(SC::Int, nb::Int; SaveFig::Bool=false, w::Float64=1
     #text(0.34, -0.4e9, latexstring("\\epsilon = 1·10^{-1}"))
     tick_params(axis="both", which="both", labelsize=TickSize)
 
+    title(latexstring("t=", sprintf1("%d", 1e6*solver.t), "\\mu s"), fontsize=10)
+    
     if SaveFig
         savefig("$(FigUbi)SC$(SC)_$(nb)_Line_$(PlotVar).png", dpi=800, pad_inches=0)
     end

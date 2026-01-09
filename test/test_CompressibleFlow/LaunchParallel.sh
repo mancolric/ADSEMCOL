@@ -5,9 +5,9 @@
 # NOTE: SBATCH parameters must be defined first. Do not define any variable before them.
 
 # Editable options:
-#SBATCH --job-name=DetonationWave1
+#SBATCH --job-name=DetonationWave2
 #SBATCH --partition=cn1
-#SBATCH --array=1-3%3
+#SBATCH --array=1-2%2
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=50G
 
