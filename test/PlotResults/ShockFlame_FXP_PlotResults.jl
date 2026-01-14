@@ -252,9 +252,11 @@ function Video_ShockFlame(SC::Int;
 end
 
 function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Float64=10.0, 
-    Deltat::Float64=1.0)
+    Deltat::Float64=1.0, nbMax::Int=-1)
 
-    nbMax       = load("$(ResUbi)LIRKHyp_SC$(SC)_info.jld2", "nb_SaveRes")
+    if nbMax<0
+        nbMax   = load("$(ResUbi)LIRKHyp_SC$(SC)_info.jld2", "nb_SaveRes")
+    end
     
     FileName    = GetFileName(SC, nbMax)
     q           = load(FileName, "q")
@@ -393,7 +395,7 @@ function MtPlot(q::Float64, beta::Float64;
     tick_params(axis="both", which="both", labelsize=TickSize)
     xlabel(latexstring("\\mathcal{M}_i"), fontsize=10)
     ylabel(latexstring("\\mathcal{M}_t/\\mathcal{M}_i"), fontsize=10, rotation=0, labelpad=20.0)    
-    title(latexstring("\\mathcal{Q}=", q, ", \\beta=", beta), fontsize=10)
+    title(latexstring("\\mathcal{Q}=", q, ", T_I/T_s^{CJ}=T_B/T_s^{CJ}=", beta), fontsize=10)
     if SaveFig
         savefig("$(FigUbi)Mt_q$(q)_beta$(beta).png", dpi=800, pad_inches=0)
     end
