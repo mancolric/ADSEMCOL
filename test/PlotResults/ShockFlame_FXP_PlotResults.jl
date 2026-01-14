@@ -155,11 +155,11 @@ end
 
 #Video with velocity and Mach numbers relative to the shock.
 function Video_ShockFlame(SC::Int; 
-    PlotVars::Vector{String}=["Y_F", "v", "p", "RT", "rho", "M"],
+    PlotVars::Vector{String}=["Y_F", "vxRel", "p", "RT", "rho", "MRel"],
     MarkSF::Bool=false, 
     mFig::Int=3, nFig::Int=2, 
     SaveFig::Bool=false, w::Float64=8.50, h::Float64=8.50,
-    tPlot::Float64=30.0, n1::Int=0, n2=Int=1000)
+    tPlot::Float64=30.0, n1::Int=0, n2=Int=1000, Deltat::Float64=1.0)
 
     nbMax       = load("$(ResUbi)LIRKHyp_SC$(SC)_info.jld2", "nb_SaveRes")
     nbMax       = min(nbMax, n2)
@@ -175,7 +175,7 @@ function Video_ShockFlame(SC::Int;
     tv          = load(FileName, "tv")
     xsv         = load(FileName, "xsv")
     xfv         = load(FileName, "xfv")
-    xsdotv      = xdotfun(tv, xsv)
+    xsdotv      = xdotfun(tv, xsv, Deltat=Deltat)
     
 #     fig         = PyPlotSubPlots(mFig, nFig, w=w, h=h, top=1.0)
     fig         = PyPlotSubPlots(mFig, nFig, w=w, h=h, top=0.1, right=0.1, left=1.8, bottom=0.1, tTitle=0.8, bTitle=1.0)
@@ -349,7 +349,7 @@ function MtPlot(q::Float64, beta::Float64;
                     4.0,    4.9,    5.8,    6.9,    8.4, 
                     10.0    ]
         Mt1v    = [ 2.58,   3.26,   3.95,   4.05,   4.16, 
-                    4.29,   4.41,   5.56,   5.60,   5.69, 
+                    4.29,   4.41,   5.55,   5.60,   5.69, 
                     5.78,   5.86, 
                     6.65,   7.93,   9.27,   10.94,  13.24, 
                     15.71   ] 
