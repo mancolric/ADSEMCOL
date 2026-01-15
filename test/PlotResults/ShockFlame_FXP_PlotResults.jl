@@ -155,7 +155,7 @@ end
 
 #Video with velocity and Mach numbers relative to the shock.
 function Video_ShockFlame(SC::Int; 
-    PlotVars::Vector{String}=["Y_F", "vxRel", "p", "RT", "rho", "MRel"],
+    PlotVars::Vector{String}=["Y", "vxRel", "p", "RT", "rho", "MRel"],
     MarkSF::Bool=false, 
     mFig::Int=3, nFig::Int=2, 
     SaveFig::Bool=false, w::Float64=8.50, h::Float64=8.50,
@@ -209,6 +209,26 @@ function Video_ShockFlame(SC::Int;
                 plot(solver.fes.PSpace.NodesCoords[:,1], MRel, ".b", markersize=0.2)
                 vbleString      = "M'"
                 v_plot          = MRel
+            elseif PlotVars[ii]=="Y"
+                #Dummy plot for legend:
+                semilogy(NaN, NaN, "b", linewidth=1.5)
+                semilogy(NaN, NaN, "g", linewidth=1.5)
+                semilogy(NaN, NaN, "r", linewidth=1.5)
+                #Plot
+                YF              = SolutionAtNodes(solver, GasModel, "Y_F")
+                YX              = SolutionAtNodes(solver, GasModel, "Y_X")
+                YP              = SolutionAtNodes(solver, GasModel, "Y_P")
+                MRel            = SolutionAtNodes_MRel(solver, GasModel, xsdot)
+                semilogy(solver.fes.PSpace.NodesCoords[:,1], YF, ".b", markersize=0.2)
+                semilogy(solver.fes.PSpace.NodesCoords[:,1], YX, ".g", markersize=0.2)
+                semilogy(solver.fes.PSpace.NodesCoords[:,1], YP, ".r", markersize=0.2)
+                vbleString      = "Y"
+                v_plot          = YF
+            elseif PlotVars[ii]=="p"
+                p               = SolutionAtNodes(solver, GasModel, "p")
+                semilogy(solver.fes.PSpace.NodesCoords[:,1], p, ".b", markersize=0.2)
+                vbleString      = "p"
+                v_plot          = p
             else    
                 splot_fun(x1,x2)= @mlv x1       
                 v_plot          = PlotNodes(splot_fun, solver, GasModel, PlotVars[ii])
@@ -223,6 +243,8 @@ function Video_ShockFlame(SC::Int;
                 xmax    = maximum(solver.fes.PSpace.NodesCoords[:,1])
                 plot([xmin, xmax], [1.0, 1.0], "--k")
             end
+
+            xlim(xs-1.0, xf+1.0)
             
             tick_params(axis="both", which="both", labelsize=TickSize)
             xlabel(latexstring("x_1"), fontsize=10)
@@ -231,6 +253,12 @@ function Video_ShockFlame(SC::Int;
 #                 fontsize=10)
             ylabel(latexstring(vbleString), rotation=0, fontsize=10, labelpad=10)
 
+            if PlotVars[ii]=="Y"
+                ylim(1e-12, 2.0)
+                legend([latexstring("Y_F"), latexstring("Y_X"), latexstring("Y_P")], 
+                    loc="best")
+            end
+            
         end
         suptitle(latexstring("\\mathcal{Q}=", q, ", M_i=", ML, 
                     ", t=", sprintf1("%.2e", solver.t)), fontsize=10)
