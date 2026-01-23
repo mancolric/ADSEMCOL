@@ -29,7 +29,8 @@ function x1Plot_ShockFlame(SC::Int, nb::Int;
     PlotVars::Vector{String}=["Y_F", "v", "p", "RT", "rho", "M"],
     MarkSF::Bool=false,
     mFig::Int=3, nFig::Int=2, 
-    SaveFig::Bool=false, w::Float64=9.50, h::Float64=6.50)
+    SaveFig::Bool=false, w::Float64=9.50, h::Float64=6.50, 
+    Deltat::Float64=1.0)
     
     #Extract data:
     if nb==1000
@@ -41,6 +42,16 @@ function x1Plot_ShockFlame(SC::Int, nb::Int;
     q           = load(FileName, "q")
     ML          = load(FileName, "ML")
     
+    #Get positions of shock and flame
+    tv          = load(FileName, "tv")
+    xsv         = load(FileName, "xsv")
+    xfv         = load(FileName, "xfv")
+    xsdotv      = xdotfun(tv, xsv, Deltat=Deltat)
+    Nt          = length(tv)
+    xs          = xsv[Nt]
+    xf          = xfv[Nt]
+    xsdot       = xsdotv[Nt]
+        
     #No zoom - loop plot variables:
 #     fig         = PyPlotSubPlots(mFig, nFig, w=w, h=h, top=1.0, right=0.1, left=2.0, bottom=0.7)
 #     fig         = PyPlotSubPlots(mFig, nFig, w=w, h=h, top=1.0, right=0.1)
@@ -52,16 +63,31 @@ function x1Plot_ShockFlame(SC::Int, nb::Int;
         splot_fun(x1,x2)    = @mlv x1
         vbleString      = ""
         v_plot          = NaN
-        if false && PlotVars[ii]=="vxRel" #unfinished - xsxdot not defined
+        if PlotVars[ii]=="vxRel" #unfinished - xsxdot not defined
             vxRel           = SolutionAtNodes_vxRel(solver, GasModel, xsdot)
             plot(solver.fes.PSpace.NodesCoords[:,1], vxRel, ".b", markersize=0.2)
             vbleString      = "v_x'"
             v_plot          = vxRel
-        elseif false && PlotVars[ii]=="MRel"
+        elseif PlotVars[ii]=="MRel"
             MRel            = SolutionAtNodes_MRel(solver, GasModel, xsdot)
             plot(solver.fes.PSpace.NodesCoords[:,1], MRel, ".b", markersize=0.2)
             vbleString      = "M'"
             v_plot          = MRel
+        elseif PlotVars[ii]=="Y"
+            #Dummy plot for legend:
+            semilogy(NaN, NaN, "b", linewidth=1.5)
+            semilogy(NaN, NaN, "g", linewidth=1.5)
+            semilogy(NaN, NaN, "r", linewidth=1.5)
+            #Plot
+            YF              = SolutionAtNodes(solver, GasModel, "Y_F")
+            YX              = SolutionAtNodes(solver, GasModel, "Y_X")
+            YP              = SolutionAtNodes(solver, GasModel, "Y_P")
+            MRel            = SolutionAtNodes_MRel(solver, GasModel, xsdot)
+            semilogy(solver.fes.PSpace.NodesCoords[:,1], YF, ".b", markersize=0.2)
+            semilogy(solver.fes.PSpace.NodesCoords[:,1], YX, ".g", markersize=0.2)
+            semilogy(solver.fes.PSpace.NodesCoords[:,1], YP, ".r", markersize=0.2)
+            vbleString      = "Y"
+            v_plot          = YF
         else    
             splot_fun(x1,x2)= @mlv x1       
             v_plot          = PlotNodes(splot_fun, solver, GasModel, PlotVars[ii])
@@ -69,14 +95,10 @@ function x1Plot_ShockFlame(SC::Int, nb::Int;
         end
         tick_params(axis="both", which="both", labelsize=TickSize)
         xlabel(latexstring("x_1"), fontsize=10)
-        ylabel(latexstring(LatexString(GasModel, PlotVars[ii])), rotation=0, fontsize=10, labelpad=10)
+        ylabel(latexstring(vbleString), rotation=0, fontsize=10, labelpad=10)
             
         #Get positions of shock and flame:
         if MarkSF
-            xsv         = load(FileName, "xsv")
-            xfv         = load(FileName, "xfv")
-            xs          = xsv[length(xsv)]
-            xf          = xfv[length(xfv)]
             plot([xf, xf], [0.9*minimum(v_plot), 1.1*maximum(v_plot)], "--r")
             plot([xs, xs], [0.9*minimum(v_plot), 1.1*maximum(v_plot)], "--g")
         end
@@ -244,7 +266,7 @@ function Video_ShockFlame(SC::Int;
                 plot([xmin, xmax], [1.0, 1.0], "--k")
             end
 
-            xlim(xs-1.0, xf+1.0)
+            xlim(xs-0.2, xf+0.2)
             
             tick_params(axis="both", which="both", labelsize=TickSize)
             xlabel(latexstring("x_1"), fontsize=10)
@@ -327,6 +349,19 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
     grid("on")
     if SaveFig
         savefig("$(FigUbi)SC$(SC)_TrackShockFlame2.png", dpi=800, pad_inches=0)
+    end
+    
+    #Plot xs(t) and xf(t):
+    PyPlotFigure(w=w, h=h, top=1.0, bottom=1.0, left=1.5, right=0.2)
+    auxv            = xfv-xsv
+    auxv[xfv.<xsv]  .= NaN
+    plot(tv, auxv, "m")
+    tick_params(axis="both", which="both", labelsize=TickSize)
+    xlabel(latexstring("t"), fontsize=10)
+    ylabel(latexstring("x_1"), fontsize=10, rotation=0)    
+    title(latexstring("\\mathcal{Q}=", q, ", \\mathcal{M}_i=", ML), fontsize=10)
+    if SaveFig
+        savefig("$(FigUbi)SC$(SC)_TrackShockFlame3.png", dpi=800, pad_inches=0)
     end
     
     #Plot Mrel(t):
@@ -832,3 +867,73 @@ function xsxf_ShockFlame(solver::SolverDataSave, GasModel::GasFXP,
 end
 
 =#
+
+function Table_ShockFlame(SC::Int, nb::Int;
+    PlotVars::Vector{String}=["x", "Y_F", "Y_X", "Y_P", "vxRel", "p", "RT", "rho", "MRel"],
+    MarkSF::Bool=false,
+    mFig::Int=3, nFig::Int=2, 
+    SaveFig::Bool=false, w::Float64=9.50, h::Float64=6.50, 
+    Deltat::Float64=1.0)
+    
+    #Extract data:
+    if nb==1000
+        nb      = load("$(ResUbi)LIRKHyp_SC$(SC)_info.jld2", "nb_SaveRes")
+    end
+    GasModel    = GasFXP_ShockFlame(SC,nb)
+    FileName    = GetFileName(SC, nb)
+    solver      = GetSolver(SC, nb)
+    q           = load(FileName, "q")
+    ML          = load(FileName, "ML")
+    
+    #Get positions of shock and flame
+    tv          = load(FileName, "tv")
+    xsv         = load(FileName, "xsv")
+    xfv         = load(FileName, "xfv")
+    xsdotv      = xdotfun(tv, xsv, Deltat=Deltat)
+    Nt          = length(tv)
+    xs          = xsv[Nt]
+    xf          = xfv[Nt]
+    xsdot       = xsdotv[Nt]
+    
+    #Create matrix:
+    nNodes      = solver.fes.PSpace.nDof
+    A           = zeros(nNodes, length(PlotVars))
+    
+    #No zoom - loop plot variables:
+    for ii=1:length(PlotVars)
+        
+        if PlotVars[ii]=="vxRel" #unfinished - xsxdot not defined
+            vxRel           = SolutionAtNodes_vxRel(solver, GasModel, xsdot)
+            A[:,ii]         = vxRel
+        elseif PlotVars[ii]=="MRel"
+            MRel            = SolutionAtNodes_MRel(solver, GasModel, xsdot)
+            A[:,ii]         = MRel
+        elseif PlotVars[ii]=="x"
+            A[:,ii]         = solver.fes.PSpace.NodesCoords[:,1]
+        else    
+            A[:,ii]         = PlotNodes((x1,x2)->x1, solver, GasModel, PlotVars[ii])
+        end
+        
+    end
+    
+    #Sort by x-coord:
+    xv          = solver.fes.PSpace.NodesCoords[:,1]
+    permv       = sortperm(xv)
+    A           = A[permv,:]    
+        
+    if SaveFig
+        open("$(FigUbi)SC$(SC)_$(nb).csv"; write=true) do f
+            for ii=1:length(PlotVars)-1
+                write(f, PlotVars[ii], '\t')
+            end
+            for ii=length(PlotVars)
+                write(f, PlotVars[ii], '\n')
+            end
+            writedlm(f, A, '\t')
+        end
+#         writedlm(, A, '\t')
+    end
+        
+    return
+    
+end
