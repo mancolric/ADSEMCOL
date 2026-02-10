@@ -192,8 +192,7 @@ function qBC_(model::GasModel, BC::SlipAdiabatic,
     #   rhoE_BC = rhoe + 0.5*m_t^2/rho
     #so
     #   rhoE_BC = rhoE - 0.5*m_n^2/rho
-    xout                = DepVars(model, t, x, q, ["rho"])
-    rho                 = xout[1][1]
+    rho                 = sum(q[1:model.nSpecies])
     qBC[nSpecies+3]     = @tturbo @. q[nSpecies+3] - 0.5*q[nSpecies+1]^2/rho
     if ComputeJ
         for JJ=1:nSpecies
@@ -302,7 +301,8 @@ function bflux!(model::GasModel, BC::SlipAdiabatic,
     end
     
     #Compute viscous flux:
-    udep    = DepVars(model, t, x, u, ComputeJ)
+#     udep    = DepVars(model, t, x, u, ComputeJ)
+    udep    = uBCdep
     nu      = udep[DepVarIndex(model, "nu")][1]
     beta    = udep[DepVarIndex(model, "beta")][1]
     epsilon = udep[DepVarIndex(model, "epsilon")][1]
@@ -403,7 +403,10 @@ function bflux!(model::GasModel, BC::SubsonicInlet1,
     end
     rhoBC                   = sum(uBC[1:nSpecies])
     #Extrapolate internal energy:
-    rhoe                    = DepVars(model, t, x, u, ["rhoe"])[1][1]
+    rho                     = sum(u[1:nSpecies])
+    rhoe                    = @tturbo @. u[nSpecies+3] - 
+                                0.5*(u[nSpecies+1]*u[nSpecies+1] + 
+                                        u[nSpecies+2]*u[nSpecies+2])/rho
     #Impose total energy:
     uBC[nSpecies+3]         = @mlv rhoe + 0.5*(uBC[nSpecies+1]*uBC[nSpecies+1] + 
                                 uBC[nSpecies+2]*uBC[nSpecies+2])/rhoBC
@@ -412,8 +415,8 @@ function bflux!(model::GasModel, BC::SubsonicInlet1,
     duBC_du                 = Matrix{Matrix{Float64}}(undef,nVars,nVars)
     if ComputeJ
         alloc!(duBC_du, size(u[1]))
-        vx              = DepVars(model, t, x, u, ["vx"])[1][1]
-        vy              = DepVars(model, t, x, u, ["vy"])[1][1]
+        vx              = @tturbo @. u[nSpecies+1]/rho
+        vy              = @tturbo @. u[nSpecies+2]/rho
         drhoe_drho      = @mlv 0.5*(vx*vx+vy*vy)
         drhoe_drhovx    = @mlv -vx
         drhoe_drhovy    = @mlv -vy
@@ -461,7 +464,8 @@ function bflux!(model::GasModel, BC::SubsonicInlet1,
     end
     
     #Compute viscous flux:
-    udep    = DepVars(model, t, x, u, ComputeJ)
+#     udep    = DepVars(model, t, x, u, ComputeJ)
+    udep    = uBCdep
     epsilon = udep[DepVarIndex(model, "epsilon")][1]
     nu      = udep[DepVarIndex(model, "nu")][1]
     beta    = udep[DepVarIndex(model, "beta")][1]
@@ -572,7 +576,8 @@ function bflux!(model::GasModel, BC::SupersonicInlet1,
     end
     
     #Compute viscous flux:
-    udep            = DepVars(model, t, x, u, ComputeJ)
+#     udep            = DepVars(model, t, x, u, ComputeJ)
+    udep            = uBCdep
     epsilon         = udep[DepVarIndex(model, "epsilon")][1]
     nu              = udep[DepVarIndex(model, "nu")][1]
     beta            = udep[DepVarIndex(model, "beta")][1]
@@ -633,9 +638,8 @@ function bflux!(model::GasModel0, BC::SubsonicOutlet1,
     #----------------------------------------------------------------
     #Hyperbolic flux. Impose conditions on "u":
     
-    #Evaluate pressure and gamma at the boundary:
+    #Evaluate pressure at the boundary:
     pDir                    = BC.fun(t, x)[1]
-    gamma                   = DepVars(model, t, x, u, ["gamma"])[1][1]
     
     #Impose BC:
     uBC                     = Vector{Matrix{Float64}}(undef,nVars)
@@ -646,14 +650,16 @@ function bflux!(model::GasModel0, BC::SubsonicOutlet1,
     rho                     = sum(u[1:nSpecies])
     #Impose total energy:
     if GasModel0==GasIdeal
+        gamma               = model.gamma
         uBC[nSpecies+3]     = @mlv pDir/(gamma-1.0) + 0.5*(u[nSpecies+1]*u[nSpecies+1] + 
                                 u[nSpecies+2]*u[nSpecies+2])/rho
     elseif GasModel0==GasFP
+        gamma               = model.gamma
         uBC[nSpecies+3]     = @mlv pDir/(gamma-1.0) + model.hfF*u[1] + model.hfP*u[2] + 
                                 0.5*(u[nSpecies+1]*u[nSpecies+1] + 
                                     u[nSpecies+2]*u[nSpecies+2])/rho
     else
-        error("Unexpected")
+        error("Unexpected model")
     end
     
     #Derivatives:
@@ -707,7 +713,8 @@ function bflux!(model::GasModel0, BC::SubsonicOutlet1,
     end
     
     #Compute heat flux:
-    udep            = DepVars(model, t, x, u, ComputeJ)
+#     udep            = DepVars(model, t, x, u, ComputeJ)
+    udep            = uBCdep
     epsilon         = udep[DepVarIndex(model, "epsilon")][1]
     kappa_rho_cv    = udep[DepVarIndex(model, "kappa_rho_cv")][1]
     HeatFlux!(model, kappa_rho_cv, u, udep, du, ComputeJ, flux, dflux_du, dflux_dgradu)
@@ -735,7 +742,7 @@ function bflux!(model::GasModel0, BC::SubsonicOutlet1,
     
 end
 
-#Do nothing: nSpecies+3 conditions:
+#Do nothing/supersonic outlet: nSpecies+3 conditions:
 #   fmass_(k,j) n_j = 0
 #   tau_ij n_j      = 0
 #   q_j n_j         = 0
