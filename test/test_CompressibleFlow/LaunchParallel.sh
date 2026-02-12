@@ -7,7 +7,7 @@
 # Editable options:
 #SBATCH --job-name=LP1
 #SBATCH --partition=cn1
-#SBATCH --array=1-1%1
+#SBATCH --array=1-4%4
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=20G
 
