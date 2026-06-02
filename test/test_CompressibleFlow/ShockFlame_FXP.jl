@@ -4,7 +4,7 @@ include("InputData/ReactiveGasAuxFunctions.jl")
 function ShockFlame_FXP(; FesOrder::Int=5, 
     tf::Float64=20.0, RKMethod::String="Ascher3",
     epsilon::Float64=1e-2, nu::Float64=0e-3, kappa_rho_cv::Float64=0e-6, 
-    Pr::Float64=0.73, Le::Float64=1.0, YF0::Float64=0.999, 
+    Pr::Float64=0.73, Le::Float64=1.0, YF0::Float64=1.0-1e-8, 
     delta_flame::Float64=1.0, delta_shock::Float64=max(epsilon,nu),
     q::Float64=5.0, ML::Float64=2.0, 
     RThatI::Float64=10.0, RThatB::Float64=10.0, #RThat=RT_a/RT_1, #1: means post-shock condition

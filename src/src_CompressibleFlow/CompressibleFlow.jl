@@ -634,7 +634,7 @@ end
 
 function DepVars(model::GasH2, t::Float64, x::Vector{<:AMF64},
                  u::Vector{<:AMF64}, vout::Vector{String})
-
+    
     nSpecies    = model.nSpecies
     nVars       = model.nVars
     rho         = sum(u[1:nSpecies])

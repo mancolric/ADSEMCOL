@@ -1,6 +1,6 @@
 include("test_CompressibleFlow.jl")
 
-function SimpleFlame(MeshCase::Int, FesOrder::Int, tfv::Array{Float64,1};
+function SimpleFlame(hp0::Float64, FesOrder::Int, tf::Float64;
     RKMethod::String="Ascher3", epsilon::Float64=0.0,
     Re::Float64=1e4, Pr::Float64=0.73, beta::Float64=10.0, q::Float64=5.0,
     Le::Float64=1.0, Da::Float64=1e3,
@@ -65,16 +65,22 @@ function SimpleFlame(MeshCase::Int, FesOrder::Int, tfv::Array{Float64,1};
     #---------------------------------------------------------------------
     #PRE-PROCESS STAGE:
     
+    #Mesh:
+    MeshFile            = "$(@__DIR__)/../../temp/SimpleFlame_SC$(SC).geo"
+    NX                  = Int(ceil(1.0/(hp0*FesOrder)))
+    NY                  = Int(ceil(0.1/(hp0*FesOrder)))
+    TrMesh_Rectangle_Create!(MeshFile, 0.0, 1.0, NX, 0.0, 0.1, NY)
+    
     #Load LIRKHyp solver structure with default data. Modify the default data if necessary:
     solver              = LIRKHyp_Start(GasModel)
     solver.ProblemName  = "SimpleFlame"
     solver.SC           = SC
-    solver.MeshFile     = "$(MeshUbi)SodStandard/MeshCase$(MeshCase).geo"
+    solver.MeshFile     = MeshFile
     solver.nBounds      = 4
     solver.FesOrder     = FesOrder
     solver.RKMethod     = RKMethod
     solver.Deltat0      = Deltat0
-    solver.tf           = tfv[length(tfv)]
+    solver.tf           = tf
     solver.AMA_MaxIter  = AMA_MaxIter
     solver.AMA_SizeOrder= AMA_SizeOrder
     solver.TolS_max     = TolS
@@ -141,7 +147,7 @@ function SimpleFlame(MeshCase::Int, FesOrder::Int, tfv::Array{Float64,1};
         end
         legend(["space", "time", "algebraic"])
         xlabel(L"t")
-        if SaveFig && solver.t==tfv[length(tfv)]
+        if SaveFig && solver.t==tf
             savefig("$(VideosUbi)SimpleFlame_Errors$(SC).png", dpi=400, pad_inches=0)
         end
         
@@ -156,7 +162,7 @@ function SimpleFlame(MeshCase::Int, FesOrder::Int, tfv::Array{Float64,1};
     #-----------------------------------------------------------------------------
     #MARCH IN TIME:
     
-    while solver.t<tfv[length(tfv)]
+    while solver.t<tf
     
         flag    = LIRKHyp_Step!(solver)
         
@@ -165,7 +171,7 @@ function SimpleFlame(MeshCase::Int, FesOrder::Int, tfv::Array{Float64,1};
         end
         
         NPlotSave   += 1
-        if solver.t-t_lastFig>=1e-2 || solver.t==tfv[length(tfv)] || NPlotSave==Inf
+        if solver.t-t_lastFig>=1e-2 || solver.t==tf || NPlotSave==Inf
             NPlotSave   = 0
             t_lastFig   = solver.t
             PlotSol()
