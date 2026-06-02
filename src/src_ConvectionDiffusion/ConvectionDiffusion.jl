@@ -132,11 +132,12 @@ function FluxSource!(model::SCD, _qp::TrIntVars, ComputeJ::Bool)
     h_Elems             = @tturbo @. sqrt(A_Elems)
     hp                  = h_Elems./_qp.FesOrder * ones(1, _qp.nqp)
     epsilonSS           = @avxt @. model.CSS*lambda_max*hp
+    depsilonSS_du       = depsilon_du   #Copy pointer
     if ComputeJ
-        @avxt @. depsilon_du        = 0.0
-#         @avxt @. depsilon_du        = model.CSS*hp * (a[1]*da_du[1]+a[2]*da_du[2])/anorm
+        @avxt @. depsilonSS_du      = 0.0
+#         @avxt @. depsilonSS_du      = model.CSS*hp * (a[1]*da_du[1]+a[2]*da_du[2])/anorm
     end
-    DiffusiveFlux!(model, epsilonSS, depsilon_du, 
+    DiffusiveFlux!(model, epsilonSS, depsilonSS_du, 
         u, duB, ComputeJ, 
         _qp.fB, _qp.dfB_du, _qp.dfB_dgraduB)
     
