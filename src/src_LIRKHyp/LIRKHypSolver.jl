@@ -182,12 +182,14 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
         solver.AMA_SizeOrder    = solver.FesOrder
     end
     if solver.AMA_ProjOrder==0
-        solver.AMA_ProjOrder    = 2*(solver.FesOrder+3+1)
+#         solver.AMA_ProjOrder    = 2*(solver.FesOrder+3+1)
+        solver.AMA_ProjOrder    = 2*(solver.FesOrder+2+1)
     end
     
     #Minimal algebraic tolerance:
     if isnan(solver.TolA_min)
-        solver.TolA_min         = 1e-3*min(solver.TolS_max, solver.TolT)
+#         solver.TolA_min         = 1e-3*min(solver.TolS_max, solver.TolT)
+        solver.TolA_min         = 1e-12
     end
     
     #Copy db file or create from geo. The input is solver.MeshFile.
