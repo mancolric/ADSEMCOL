@@ -30,7 +30,7 @@ echo "Solving at $(hostname)"
 module load julia
 module load bamg
 
-# Read line $SLURM_TASK_ID of $SLURM_JOB_NAME.txt file to get input arguments:
+# Read line $SLURM_TASK_ID of $SLURM_JOB_NAME.lp file to get input arguments:
 ARGS=$( awk 'NR=='$SLURM_ARRAY_TASK_ID 'test/test_CompressibleFlow/'$SLURM_JOB_NAME.lp )
 
 #Call Julia:
