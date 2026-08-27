@@ -2319,6 +2319,7 @@ function IRK_Step!(solver::SolverData)
                     LSOutput    = LS_solve!(solver.Am_LS.LS, gres, fres, 
                                     RelTol=0.0, AbsTol=TolA, 
                                     Display="notify", MaxIter=solver.LS_iters_max)
+                    
                     #Returns flag, nIters, etaA
                     flag        = LSOutput[1]
                     

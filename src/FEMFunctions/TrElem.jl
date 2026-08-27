@@ -1165,7 +1165,7 @@ end
 
 function GetDominantTerms(FES::TrPBSpace)
 
-    return GetDominantTerms3(FES)
+    return GetDominantTerms2(FES)
     
 end
 

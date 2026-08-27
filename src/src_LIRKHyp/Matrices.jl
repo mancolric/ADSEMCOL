@@ -477,6 +477,8 @@ end
 function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Float64};
     RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
     
+    t_start         = time()
+    
     #Notation:
     #u, b: original vectors:
     #uhat, bhat: permuted vectors. uhat is also scaled by LS.scalP
@@ -519,13 +521,13 @@ function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Floa
         mul!(f, F.Ared_mm, x)              #f = 1.0*A*x
         axpby!(-1.0, bred_m, 1.0, f)
         t_mult      += time()-t_ini
-        if !isnothing(g)
-            t_ini       = time()
-            ldiv_master!(g, F, f)
-            @avxt @. g  /= scaleP_m     #g ~~ Delta u. We have to return the scaled g
-            t_ldiv      += time()-t_ini
-        end
-        @avxt @. x      /= scaleP_m
+#         if !isnothing(g)
+        t_ini       = time()
+        ldiv_master!(g, F, f)
+        @avxt @. g  /= scaleP_m     #g ~~ Delta u. We have to return the scaled g
+        t_ldiv      += time()-t_ini
+#         end
+        @avxt @. x  /= scaleP_m
         return 1
     end
     
@@ -565,10 +567,225 @@ function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Floa
         flag        = -1
 #         flag        = 1
     end
+#     println(nIter)
+#     println(time()-t_start)
+#     semilogy(solver_output[2].gnorms, marker="+")
+#     println("t_mult=", t_mult)
+#     println("t_ldiv=", t_ldiv)
+    
+    return flag, nIter, etaA
+    
+end
+
+#Function to debug Anderson method:
+function LS_solve_debug!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Float64};
+    RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
+    
+    #DEBUG:
+    println("\n", "old")
+    uold            = @. 1.0*u
+    LS_output       = LS_solve_old!(LS, u, b, RelTol=RelTol, AbsTol=AbsTol, MaxIter=MaxIter, Display="none")
+    @. u            = uold
+    
+    t_start         = time()
+    
+    #Notation:
+    #u, b: original vectors:
+    #uhat, bhat: permuted vectors. uhat is also scaled by LS.scalP
+    #bred: statically condensed permuted vector 
+    
+    #Exit early if there are NaNs or Infs in b:
+    if !all(isfinite.(b))
+        return -1, 0, Inf   #flag, nIters, etaA
+    end
+        
+    #Extract variables:
+    F               = LS.Pl
+    scaleP          = LS.scaleP
+    scaleP_m        = LS.scaleP_m
+    
+    #Permute vectors:
+    bhat            = b[LS.p]
+    uhat            = u[LS.p]
+    
+    #Reduce r.h.s.:
+    bred            = ReduceRhs(F, bhat)
+    bred_m          = bred[F.nSlaves+1:F.N]
+    uhat_m          = uhat[F.nSlaves+1:F.N]
+    
+    #Exit early if there are no master dofs:
+    if F.nMasters==0
+        ldiv_slave!(uhat, F, bred)
+        @mlv u[LS.p]    = uhat
+        return 1, 0, 0.0   #flag, nIters, etaA
+    end
+    
+    #DEBUG:
+    t_mult          = 0.0
+    t_ldiv          = 0.0
+    #ILU0 (quasi-Newton) iteration. Compute residual f=A_mm x_m-b_m and preconditioned residual g=approx(A)\f:
+    f               = zeros(length(uhat_m));
+    function QN_ILU0!(x::Vector{Float64}, g::Vector{Float64})
+        t_ini       = time()
+        @avxt @. x  *= scaleP_m
+        mul!(f, F.Ared_mm, x)              #f = 1.0*A*x
+        axpby!(-1.0, bred_m, 1.0, f)
+        t_mult      += time()-t_ini
+#         if !isnothing(g)
+        t_ini       = time()
+        ldiv_master!(g, F, f)
+        @avxt @. g  /= scaleP_m     #g ~~ Delta u. We have to return the scaled g
+        t_ldiv      += time()-t_ini
+#         end
+        @avxt @. x  /= scaleP_m
+        return 1
+    end
+    
+    #Solve with Anderson:
+    flag                    = 1
+    solver_output           = Anderson(FW_NLS((x,g)->QN_ILU0!(x,g)), uhat_m./scaleP_m,
+                                memory=100, MaxIter=MaxIter, 
+                                AbsTolX=0.0, RelTolX=0.0, 
+                                AbsTolG=AbsTol, RelTolG=RelTol,
+                                Display=Display, history=true,
+                                NormFun=LS.NormFun)
+#     solver_output           = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), uhat_m./scaleP_m,
+#                                 memory=100, MaxIter=MaxIter, 
+#                                 AbsTolX=AbsTol, RelTolX=RelTol,
+#                                 AbsTolG=0.0, RelTolG=0.0, 
+#                                 Display="iter", history=true,
+#                                 NormFun=LS.NormFun)
+    @mlv uhat[F.nSlaves+1:F.N]  = solver_output[1]*scaleP_m
+    ldiv_slave!(uhat, F, bred)
+    @mlv u[LS.p]                = uhat
+    nIter                       = solver_output[2].nIter 
+    resv                        = solver_output[2].gnorms
+#     resv                        = solver_output[2].pnorms
+    etaA                        = resv[length(resv)]
+    if solver_output[2].flag==2
+        #Exit due to convergence in residual g
+    elseif solver_output[2].flag==1
+        #Exit due to convergence in unknown x
+    else
+        if false
+            figure()
+            ch          = solver_output[2]
+            semilogy(ch.pnorms, ".-b")
+            semilogy(ch.gnorms, ".-r")
+            error("")
+        end
+        flag        = -1
+#         flag        = 1
+    end
+    println("New")
+    println(nIter)
+    println(time()-t_start)
+    semilogy(solver_output[2].gnorms, marker="x")
     
 #     println("t_mult=", t_mult)
 #     println("t_ldiv=", t_ldiv)
     
+    return flag, nIter, etaA
+    
+end
+
+#test - not faster - to be removed?
+function LS_solve_test!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Float64};
+    RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
+    
+    #DEBUG:
+    println("\n")
+    uold            = @. 1.0*u
+    LS_output       = LS_solve_old!(LS, u, b, RelTol=RelTol, AbsTol=AbsTol, MaxIter=MaxIter, Display="none")
+    @. u            = uold
+    println(LS_output[2])
+    
+    t_start         = time()
+    
+    #Notation:
+    #u, b: original vectors:
+    #uhat, bhat: permuted vectors. uhat is also scaled by LS.scalP
+    #bred: statically condensed permuted vector 
+    
+    #Exit early if there are NaNs or Infs in b:
+    if !all(isfinite.(b))
+        return -1, 0, Inf   #flag, nIters, etaA
+    end
+        
+    #Extract variables:
+    F               = LS.Pl
+    scaleP          = LS.scaleP
+    scaleP_m        = LS.scaleP_m
+    
+    #Permute vectors:
+    bhat            = b[LS.p]
+    uhat            = u[LS.p]
+    
+    #Reduce r.h.s.:
+    bred            = ReduceRhs(F, bhat)
+    bred_m          = bred[F.nSlaves+1:F.N]
+    uhat_m          = uhat[F.nSlaves+1:F.N]
+    
+    #Exit early if there are no master dofs:
+    if F.nMasters==0
+        ldiv_slave!(uhat, F, bred)
+        @mlv u[LS.p]    = uhat
+        return 1, 0, 0.0   #flag, nIters, etaA
+    end
+    
+    #Compute (Pl*Scalm)\bred_m:
+    c               = zeros(length(uhat_m))
+    ldiv_master!(c, F, bred_m)
+    @. c            /= scaleP_m
+    
+    #DEBUG:
+    t_mult          = 0.0
+    t_ldiv          = 0.0
+    #Define linear operator (Pl*Scalm)\(Ared_mm*Scalm*x):
+    f               = zeros(length(uhat_m));
+    function PlA_fun(y::Vector{Float64}, x::Vector{Float64})
+        t_ini       = time()
+        @avxt @. x  *= scaleP_m
+        mul!(f, F.Ared_mm, x)              #f = 1.0*A*x
+        t_mult      += time()-t_ini
+        t_ini       = time()
+        ldiv_master!(y, F, f)
+        @avxt @. y  /= scaleP_m     
+        t_ldiv      += time()-t_ini
+        @avxt @. x  /= scaleP_m
+        return
+    end
+    PlA_map         = LinearMap(PlA_fun, length(uhat_m), length(uhat_m))
+    
+    #Solve (Pl*Scalm)\(A*Scalm*uhat) = (Pl*Scalm)\bred_m = c with GMRES:
+    flag                        = 1
+    solver_output               = gmres(PlA_map, c, uhat_m./scaleP_m, 
+                                    memory=100, reorthogonalization=false,
+                                    atol=AbsTol*sqrt(LS.Pl.nMasters), rtol=RelTol, 
+                                    itmax=MaxIter, history=true)
+    @mlv uhat[F.nSlaves+1:F.N]  = solver_output[1]*scaleP_m
+    ldiv_slave!(uhat, F, bred)
+    @mlv u[LS.p]                = uhat
+    nIter                       = solver_output[2].niter 
+    resv                        = solver_output[2].residuals/sqrt(LS.Pl.nMasters)
+    etaA                        = resv[length(resv)]
+    println(nIter)
+    if solver_output[2].solved
+        #Exit due to convergence in residual g
+    else
+        if false
+            figure()
+            semilogy(resv, ".-b")
+            error("")
+        end
+        flag        = -1
+#         flag        = 1
+    end
+    display(time()-t_start)
+    semilogy(resv, marker="x")
+#     println("t_mult=", t_mult)
+#     println("t_ldiv=", t_ldiv)
+
     return flag, nIter, etaA
     
 end
