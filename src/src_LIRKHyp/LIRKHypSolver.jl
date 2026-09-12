@@ -234,6 +234,13 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
         solver.Jm_ilocal        = zeros(Int, 0)     
         solver.Jm_jlocal        = zeros(Int, 0)   
         solver.Jm_localterms    = solver.fes.DofPerElem*solver.fes.DofPerElem
+    elseif uppercase(solver.LSType)=="SCILU0KRYLOV"
+        solver.JPatt            = "Complete"
+        solver.KrylovApprox     = true
+        #compute all products in Jacobian matrix:
+        solver.Jm_ilocal        = zeros(Int, 0)     
+        solver.Jm_jlocal        = zeros(Int, 0)   
+        solver.Jm_localterms    = solver.fes.DofPerElem*solver.fes.DofPerElem
     elseif uppercase(solver.LSType)=="BLOCKJACOBI"
         solver.JPatt            = "BlockJacobi"
         solver.KrylovApprox     = false
@@ -294,7 +301,7 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
 #         @warn "Complete"
     else
         error(string("Unknown option $(solver.LSType). Available options are: ", 
-                "SCILU0, BlockJacobi, BlockJacobiKrylov, DominantILU0, Dominant."))
+                "SCILU0, SCILU0Krylov, BlockJacobi, BlockJacobiKrylov, DominantILU0, Dominant."))
     end
     
     #--------------------------------------------------------
@@ -2170,7 +2177,7 @@ function IRK_Step!(solver::SolverData)
             
             #Solve nonlinear system
             #   Mu - b - a_ii*Deltat_n*f(t_k, u_k) = 0
-            if uppercase(solver.LSType)=="BLOCKJACOBIKRYLOV"
+            if any(uppercase(solver.LSType).==["BLOCKJACOBIKRYLOV", "SCILU0KRYLOV"])
             
                 #Approximation of J*g:
                 Jg              = zeros(length(u_k))
@@ -2269,8 +2276,8 @@ function IRK_Step!(solver::SolverData)
                                 AbsTolX=1.0*TolA, RelTolX=0.0, 
                                 AbsTolG=0.0*TolA, RelTolG=0.0, 
                                 NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
-                                memory=100, MaxIter=solver.LS_iters_max, 
-                                history=true, Display="notify")
+                                memory=0, MaxIter=solver.LS_iters_max, 
+                                history=true, Display="final")
                 solver.tLS  += time()-t_ini
                 u_k         .= LSOutput[1].*scalv
                 LSFlag      = LSOutput[2].flag
@@ -2287,6 +2294,7 @@ function IRK_Step!(solver::SolverData)
                 else
                     printstyled("NLSolver converged, f_evals=", sprintf1("%d", f_evals), " \n", color=:cyan)
                 end
+                semilogy(LSOutput[2].gnorms)
                 #Here, LS in reality is NLS
                 
             elseif any(uppercase(solver.LSType).==["SCILU0", "BLOCKJACOBI", "DOMINANTILU0", "DOMINANT"])
@@ -2332,15 +2340,25 @@ function IRK_Step!(solver::SolverData)
             
                 #Solve:
                 t_ini       = time()
+                LSOutput    = NLSTest1(FW_NLS((uhat,gres)->QNResidualJ!(uhat,gres)), 
+                                u_k./scalv, 
+                                AbsTolX=1.0*TolA, RelTolX=0.0, 
+                                AbsTolG=0.0*TolA, RelTolG=0.0, 
+                                NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
+                                memory=20, MaxIter=solver.LS_iters_max, 
+                                history=true, Display="final")
+                gnorms0     = LSOutput[2].gnorms
                 LSOutput    = Anderson(FW_NLS((uhat,gres)->QNResidualJ!(uhat,gres)), 
                                 u_k./scalv, 
                                 AbsTolX=1.0*TolA, RelTolX=0.0, 
                                 AbsTolG=0.0*TolA, RelTolG=0.0, 
                                 NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
-                                memory=100, MaxIter=solver.LS_iters_max, 
+                                memory=10, MaxIter=solver.LS_iters_max, 
                                 history=true, Display="final")
+#                 display(LSOutput[2])
                 solver.tLS  += time()-t_ini
                 u_k         .= LSOutput[1].*scalv
+#                 display(LSOutput[2])
                 LSFlag      = LSOutput[2].flag
                 LSIter      = LSOutput[2].nIter
                 etaA_np1    = LSOutput[2].pnorms[ length(LSOutput[2].pnorms) ]
@@ -2356,6 +2374,9 @@ function IRK_Step!(solver::SolverData)
                 solver.LS_iters     += LSIter
                 solver.LS_total     += LSIter
                 #Here, LS in reality is NLS
+                
+                semilogy(gnorms0, marker="x")
+                semilogy(LSOutput[2].gnorms)
                 
             else
             

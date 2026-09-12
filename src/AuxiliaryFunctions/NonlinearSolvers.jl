@@ -256,8 +256,8 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
             XGcols          = min(memory, XGcols+1)
             
             #Normalize new columns:
-            BLAS.scal!(Deltag_norm_inv, view(Xm,:,1))
-            BLAS.scal!(Deltag_norm_inv, view(Gm,:,1))
+#             BLAS.scal!(Deltag_norm_inv, view(Xm,:,1))
+#             BLAS.scal!(Deltag_norm_inv, view(Gm,:,1))
             
         end
         

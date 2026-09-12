@@ -229,7 +229,7 @@ end
 function LinearSystem(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
     nFacts::Vector{Float64}; LSType::String="SCILU0")
     
-    if uppercase(LSType)=="SCILU0"
+    if uppercase(LSType)=="SCILU0" || uppercase(LSType)=="SCILU0KRYLOV"
         return LinearSystem_Complete(A, solver, nFacts)
     elseif uppercase(LSType)=="BLOCKJACOBI" || uppercase(LSType)=="BLOCKJACOBIKRYLOV"
         return LinearSystem_BlockJacobi(A, solver, nFacts)
