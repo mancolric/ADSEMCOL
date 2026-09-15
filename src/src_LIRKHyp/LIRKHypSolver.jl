@@ -2314,6 +2314,18 @@ function IRK_Step!(solver::SolverData)
                         return flag
                     end
                     
+#                     DEBUG:
+#                     println("Setting up linear system")
+#                     t_ini                   = time()
+#                     BLAS.axpby!(1.0, solver.Mm.nzval, 0.0, solver.Am.nzval)
+#                     BLAS.axpby!(-Deltat_n*solver.RK.AI[kk,kk], solver.Jm.nzval, 1.0, solver.Am.nzval)
+#                     LinearSystem!(solver.Am_LS.LS)                
+#                     solver.tSCILU           += time()-t_ini
+#                     printstyled("Linear system set up in ", time()-t_ini, " seconds \n", color=:cyan)
+#                     if flag<0
+#                         return flag
+#                     end
+                    
                     #Compute residual f:
                     #   f = M*u - b - Deltat*a_kk*f(t_k,u_k)
                     fres        = MuProduct(solver.MII, u, solver.nVars) - 
@@ -2340,20 +2352,24 @@ function IRK_Step!(solver::SolverData)
             
                 #Solve:
                 t_ini       = time()
-                LSOutput    = NLSTest1(FW_NLS((uhat,gres)->QNResidualJ!(uhat,gres)), 
-                                u_k./scalv, 
-                                AbsTolX=1.0*TolA, RelTolX=0.0, 
-                                AbsTolG=0.0*TolA, RelTolG=0.0, 
-                                NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
-                                memory=20, MaxIter=solver.LS_iters_max, 
-                                history=true, Display="final")
-                gnorms0     = LSOutput[2].gnorms
+#                 @warn "ComputeJ = true"
+#                 display(TolA)
+#                 display(solver.TolA_min)
+#                 error("")
+#                 LSOutput    = NLSTest1(FW_NLS((uhat,gres)->QNResidualJ!(uhat,gres)), 
+#                                 u_k./scalv, 
+#                                 AbsTolX=1.0*TolA, RelTolX=0.0, 
+#                                 AbsTolG=0.0*TolA, RelTolG=0.0, 
+#                                 NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
+#                                 memory=100, MaxIter=solver.LS_iters_max, 
+#                                 history=true, Display="iter")
+#                 gnorms0     = LSOutput[2].gnorms
                 LSOutput    = Anderson(FW_NLS((uhat,gres)->QNResidualJ!(uhat,gres)), 
                                 u_k./scalv, 
                                 AbsTolX=1.0*TolA, RelTolX=0.0, 
                                 AbsTolG=0.0*TolA, RelTolG=0.0, 
                                 NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
-                                memory=10, MaxIter=solver.LS_iters_max, 
+                                memory=100, MaxIter=solver.LS_iters_max, 
                                 history=true, Display="final")
 #                 display(LSOutput[2])
                 solver.tLS  += time()-t_ini
@@ -2375,8 +2391,8 @@ function IRK_Step!(solver::SolverData)
                 solver.LS_total     += LSIter
                 #Here, LS in reality is NLS
                 
-                semilogy(gnorms0, marker="x")
-                semilogy(LSOutput[2].gnorms)
+#                 semilogy(gnorms0, marker="x")
+#                 semilogy(LSOutput[2].gnorms)
                 
             else
             

@@ -293,6 +293,10 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
         gnorm           = NormFun(gn)
         _NLS_ch_update!()
         
+#         if mod(ch.nIter,5)==0
+#             semilogy(abs.(gn))
+#         end
+        
     end
     
     _NLS_Display()
