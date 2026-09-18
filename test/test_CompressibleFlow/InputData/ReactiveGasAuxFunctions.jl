@@ -37,23 +37,32 @@ function ChapmanJouget(gamma::Float64, q::Float64)
     p0      = 1.0
     u0      = M0*sqrt(gamma)
     
-    #=
-    #Check results:
-    display(rho0*u0 - rho2*u2)
-    display(p0+rho0*u0^2 - (p2+rho2*u2^2))
-    display(((1+q)*gamma/(gamma-1)*p0 + 0.5*rho0*u0^2)*u0 - 
-            (gamma/(gamma-1)*p2 + 0.5*rho2*u2^2)*u2)
-    =#
-    
     #State at region 1:
     rho1            = rho0 / ( (gamma-1.0)/(gamma+1.0) + 2.0/(gamma+1.0)/M0^2 )
     u1              = rho0*u0/rho1
     p1              = p0+rho0*u0^2-rho1*u1^2
     
+    #Check results:
+#     display(rho0*u0 - rho2*u2)
+#     display(p0+rho0*u0^2 - (p2+rho2*u2^2))
+#     display(((1+q)*gamma/(gamma-1)*p0 + 0.5*rho0*u0^2)*u0 - 
+#             (gamma/(gamma-1)*p2 + 0.5*rho2*u2^2)*u2)
+#     display(rho1*u1 - rho2*u2)
+#     display(p1+rho1*u1^2 - (p2+rho2*u2^2))
+#     display(((1+q)*gamma/(gamma-1)*p1 + 0.5*rho1*u1^2)*u1 - 
+#             (gamma/(gamma-1)*p2 + 0.5*rho2*u2^2)*u2)
+    
+    
     return M0, rho0, u0, p0, rho1, u1, p1, rho2, u2, p2
     
 end
 
+function M0_ChapmanJouget(gamma::Float64, q::Float64)
+
+    return sqrt(0.5*(gamma+1)*q+1) + sqrt(0.5*(gamma+1)*q)
+    
+end
+    
 function FP_ChapmanJouget(gamma::Float64, q::Float64, beta0::Float64; 
     Deltax::Float64=1e-3, xf::Float64=20.0, YF0::Float64=0.01, PlotRes::Bool=false)
 
@@ -197,7 +206,7 @@ end
 function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0, 
     RThatI::Float64=10.0, RThatB::Float64=10.0, #RThat=RT_a/RT_1, #1: means post-shock condition
     BIhat::Float64=2.5e-3, BBhat::Float64=4.4e5, 
-    Deltax::Float64=1e-3, xf::Float64=20.0, YF0::Float64=0.01, YX0::Float64=0.0, 
+    Deltax::Float64=1e-3, xf::Float64=20.0, YF0::Float64=1.0-1e-6, YX0::Float64=0.0, 
     PlotRes::Bool=false)
 
     #Variables will be make dimensionless via p1, rho1 and B_R:
@@ -206,11 +215,11 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
     M0, rho0, u0, p0, rho1, u1, p1, rho2, u2, p2 = ChapmanJouget(gamma,q)
     
     #Characteristic variables:
-    rhoc            = rho1
-    uc              = u1
-    pc              = rhoc*uc^2
-    tc              = 1.0
-    lc              = uc*tc
+#     rhoc            = rho1
+#     uc              = u1
+#     pc              = rhoc*uc^2
+#     tc              = 1.0
+#     lc              = uc*tc
     
     #Scale pre and post shock conditions:
 #     rho0            /= rhoc
@@ -231,6 +240,7 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
     Q               = gamma/(gamma-1)*RT0/YF0*q     #F and X formation mass enthalpy 
     RTI             = RThatI*RT1                    #Activation temperature
     RTB             = RThatB*RT1                    #Activation temperature
+    tc              = 1.0                           #Characteristic time
     BR              = 1.0/tc                        #t_c = B_R^{-1} = 1.0
     BI              = BIhat * BR
     BB              = BBhat * BR/rho1
@@ -257,6 +267,9 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
         A       = (gamma/(gamma-1)-0.5)*Fv[3]
         B       = -gamma/(gamma-1)*Fv[4]
         C       = Fv[5]-(Fv[1]+Fv[2])*Q
+        if B^2-4*A*C<0
+#             return NaN, NaN, NaN, NaN, NaN
+        end
         u       = (-B-sqrt(B^2-4*A*C))/(2*A)    #Positive root provides state 0, negative provides 1
         
         #Therefore:
@@ -362,16 +375,20 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
     if PlotRes
     
         Nx      = length(xv)
-        println("Theoretical solution: rho2=$rho2, u2=$u2, p2=$p2, YF2=0.0, M2=1.0")
+        println("Exact solution: rho2=$rho2, u2=$u2, p2=$p2, YF2=0.0, M2=1.0")
         println("Numerical solution: rho2=$(rhov[Nx]), u2=$(uv[Nx]), p2=$(pv[Nx]), ", 
                 "YF2=$(YFv[Nx]), M2=$(Mv[Nx])")
         
         figure()
-        plot(xv/lc, rhov/rho1, "b")
-        plot(xv/lc, uv/u1, "g")
-        plot(xv/lc, pv/p1, "c")
-        plot(xv/lc, (pv./rhov)/RT1, "r")
-        plot(xv/lc, Mv, "k")
+#         plot(xv/lc, rhov/rho1, "b")
+#         plot(xv/lc, uv/u1, "g")
+#         plot(xv/lc, pv/p1, "c")
+#         plot(xv/lc, (pv./rhov)/RT1, "r")
+        plot(xv, rhov, "b")
+        plot(xv, uv, "g")
+        plot(xv, pv, "c")
+        plot(xv, pv./rhov, "r")
+        plot(xv, Mv, "k")
         legend([latexstring("\\rho"), 
                 latexstring("u"), 
                 latexstring("p"),
@@ -382,9 +399,9 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
         grid("on")
         
         figure()
-        plot(xv/lc, YFv, color="b")
-        plot(xv/lc, YXv, color="orange")
-        plot(xv/lc, 1.0.-YFv.-YXv, color="g")
+        plot(xv, YFv, color="b")
+        plot(xv, YXv, color="orange")
+        plot(xv, 1.0.-YFv.-YXv, color="g")
         legend([latexstring("Y_{F}"), 
                 latexstring("Y_{X}"),
                 latexstring("Y_{P}")], 
