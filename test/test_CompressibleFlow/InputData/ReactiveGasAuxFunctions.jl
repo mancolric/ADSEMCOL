@@ -206,11 +206,9 @@ end
 function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0, 
     RThatI::Float64=10.0, RThatB::Float64=10.0, #RThat=RT_a/RT_1, #1: means post-shock condition
     BIhat::Float64=2.5e-3, BBhat::Float64=4.4e5, 
-    Deltax::Float64=1e-3, xf::Float64=20.0, YF0::Float64=1.0-1e-6, YX0::Float64=0.0, 
+    Deltax::Float64=1e-3, xf::Float64=20.0, YF0::Float64=1.0-1e-6, YX0::Float64=1e-6, 
     PlotRes::Bool=false)
 
-    #Variables will be make dimensionless via p1, rho1 and B_R:
-    
     #Compute detonation states:
     M0, rho0, u0, p0, rho1, u1, p1, rho2, u2, p2 = ChapmanJouget(gamma,q)
     
@@ -250,7 +248,7 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
     #               rhoY_X u, 
     #               rho u, 
     #               p + rho u^2, 
-    #               ( gamma/(gamma-1)*p - rho (Y_F+Y_X) Q + 1/2 rho u^2 ) u ]
+    #               ( gamma/(gamma-1)*p + rho (Y_F+Y_X) Q + 1/2 rho u^2 ) u ]
     function ExtractVars(Fv::Vector{Float64})
     
         #YF = rho YF u / (rho u):
@@ -371,7 +369,7 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
     #Compute Mach number:
     Mv      = @. uv/sqrt(gamma*pv/rhov)
     
-    #Plot each variable scaled with post-shock conditions (1):
+    #Plot each variable:
     if PlotRes
     
         Nx      = length(xv)
@@ -395,7 +393,7 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
                 latexstring("T"), 
                 latexstring("M") ], 
                 loc="best")
-        xlabel("x/L") #Here, L=u1 exp(beta1)/(beta1*BB)
+        xlabel("x/L") 
         grid("on")
         
         figure()
@@ -406,7 +404,7 @@ function FXP_ChapmanJouget(; gamma::Float64=1.4, q::Float64=5.0,
                 latexstring("Y_{X}"),
                 latexstring("Y_{P}")], 
                 loc="best")
-        xlabel("x/L") #Here, L=u1 exp(beta1)/(beta1*BB)
+        xlabel("x/L") 
         grid("on")
     
     end
