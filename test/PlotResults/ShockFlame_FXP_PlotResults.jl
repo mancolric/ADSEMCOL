@@ -111,7 +111,7 @@ function x1Plot_ShockFlame(SC::Int, nb::Int;
         end
        
     end
-    suptitle(latexstring("\\mathcal{Q}=", q, ", M=", ML, 
+    suptitle(latexstring("\\mathcal{Q}=", q, ", M_L=", ML, 
                         ", t=", sprintf1("%.2e", solver.t)), fontsize=10)
     
     if SaveFig
@@ -332,7 +332,8 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
     xlabel(latexstring("t"), fontsize=10)
     ylabel(latexstring("x_1"), fontsize=10, rotation=0)    
     legend(["shock", "flame"], fontsize=8)
-    title(latexstring("\\mathcal{Q}=", q, ", \\mathcal{M}_i=", ML), fontsize=10)
+#     title(latexstring("\\mathcal{Q}=", q, ", \\mathcal{M}_i=", ML), fontsize=10)
+    title(latexstring("\\mathcal{Q}=", q, ", M_L=", ML), fontsize=10)
     if SaveFig
         savefig("$(FigUbi)SC$(SC)_TrackShockFlame.png", dpi=800, pad_inches=0)
     end
@@ -376,7 +377,7 @@ function Track_ShockFlame(SC::Int; SaveFig::Bool=false, w::Float64=10.0, h::Floa
     if SaveFig
         savefig("$(FigUbi)SC$(SC)_Mt.png", dpi=800, pad_inches=0)
     end
-    println("M_rel=", Mtv)
+#     println("M_rel=", Mtv)
     
     return
     
@@ -442,23 +443,27 @@ function MtPlot(q::Float64, beta::Float64;
     
     #Plot xs(t) and xf(t):
     PyPlotFigure(w=w, h=h, top=1.0, bottom=1.5, left=2.2, right=0.2)
-    semilogx(Miv, Mt1v./Miv, "sb", markersize=3.0)
-    semilogx(Miv, Mt2v./Miv, "sb", markersize=3.0)
+    semilogx(Miv, Mt1v./Miv, "sb", markersize=3.0, label="_")
+    semilogx(Miv, Mt2v./Miv, "sb", markersize=3.0, label="_nolegend_")
     Miv_ex          = logspace(minimum(Miv), maximum(Miv), 100)
     Mtv_ex          = zeros(size(Miv_ex))
     for ii=1:length(Miv_ex)
         Mtv_ex[ii], = MtMrDeton(Miv_ex[ii], gamma, q) 
     end
-    semilogx(Miv_ex, Mtv_ex./Miv_ex, color=:orange)
+    semilogx(Miv_ex, Mtv_ex./Miv_ex, color=:orange, label="detonation")
     for ii=1:length(Miv_ex)
         Mtv_ex[ii], = MtMrShock(Miv_ex[ii], gamma, q) 
     end
-    semilogx(Miv_ex, Mtv_ex./Miv_ex, color=:cyan)
+    semilogx(Miv_ex, Mtv_ex./Miv_ex, color=:cyan, label="shock")
     #
     tick_params(axis="both", which="both", labelsize=TickSize)
-    xlabel(latexstring("\\mathcal{M}_i"), fontsize=10)
-    ylabel(latexstring("\\mathcal{M}_t/\\mathcal{M}_i"), fontsize=10, rotation=0, labelpad=20.0)    
-    title(latexstring("\\mathcal{Q}=", q, ", T_I/T_s^{CJ}=T_B/T_s^{CJ}=", beta), fontsize=10)
+#     xlabel(latexstring("\\mathcal{M}_i"), fontsize=10)
+#     ylabel(latexstring("\\mathcal{M}_t/\\mathcal{M}_i"), fontsize=10, rotation=0, labelpad=20.0)
+#     title(latexstring("\\mathcal{Q}=", q, ", T_I/T_s^{CJ}=T_B/T_s^{CJ}=", beta), fontsize=10)
+    xlabel(latexstring("M_L"), fontsize=10)
+    ylabel(latexstring("M_T/M_L"), fontsize=10, rotation=0, labelpad=20.0)    
+    title(latexstring("\\mathcal{Q}=", q), fontsize=10)
+    legend(fontsize=8)
     if SaveFig
         savefig("$(FigUbi)Mt_q$(q)_beta$(beta).png", dpi=800, pad_inches=0)
     end
