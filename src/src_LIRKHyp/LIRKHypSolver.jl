@@ -2366,7 +2366,7 @@ function IRK_Step!(solver::SolverData)
 #                 gnorms0     = LSOutput[2].gnorms
                 LSOutput    = Anderson(FW_NLS((uhat,gres)->QNResidualJ!(uhat,gres)), 
                                 u_k./scalv, 
-                                UpdateType=0, 
+                                UpdateType=2, 
                                 AbsTolX=1.0*TolA, RelTolX=0.0, 
                                 AbsTolG=0.0*TolA, RelTolG=0.0, 
                                 NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(u_k))), 
