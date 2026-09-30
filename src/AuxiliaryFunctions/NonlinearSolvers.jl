@@ -135,7 +135,7 @@ Output:
 
 "
 function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
-    memory::Int=100, 
+    memory::Int=100, UpdateType::Int=2, 
     RelTolX::Float64=0e-6, AbsTolX::Float64=0e-6,
     RelTolG::Float64=0e-6, AbsTolG::Float64=1e-8, 
     MaxIter::Int=length(x0), Restart::Int=MaxIter+1, 
@@ -248,16 +248,26 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
                 BLAS.copy!(view(Gm,:,jj+1), view(Gm,:,jj))
             end
             
+            #=
             #New columns:
             @mlv Gm[:,1]    = gnp1-gn
             Deltag_norm_inv = 1.0/(NormFun(view(Gm,:,1))+1e-10)
             @mlv Gm[:,1]    *= Deltag_norm_inv
             @mlv Xm[:,1]    = (xnp1-xn)*Deltag_norm_inv
             XGcols          = min(memory, XGcols+1)
+            =#
+            
+            #New columns:
+            @mlv Gm[:,1]    = gnp1-gn
+            @mlv Xm[:,1]    = xnp1-xn
             
             #Normalize new columns:
-#             BLAS.scal!(Deltag_norm_inv, view(Xm,:,1))
-#             BLAS.scal!(Deltag_norm_inv, view(Gm,:,1))
+            Deltag_norm_inv     = 1.0/(NormFun(view(Gm,:,1))+1e-14)
+            BLAS.scal!(Deltag_norm_inv, view(Gm,:,1))
+            BLAS.scal!(Deltag_norm_inv, view(Xm,:,1))
+            
+            #Update number of current memory:
+            XGcols          = min(memory, XGcols+1)
             
         end
         
@@ -266,27 +276,35 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
         @mlv gn         = gnp1
         
         #Next step. Apply multisecant formula:
-        #   pn  = - H g^n = - [I + (X-G) (G^T G)^{-1} G^T] g^n 
-        #       = -g^n - X*gamma + G*gamma,
-        #with gamma = (G^T G)^{-1} G^T g^n 
-        #If G=U Sigma V^T, then
-        #   gamma = V Sigma^{-1} U^T g^n
-        #Note that Anderson acceleration would read
-        #   x_star      = xn - X*gamma
-        #   g_star      = gn - G*gamma
-        #   x_(n+1)     = x_star - g_star = xn - X*gamma - (gn - G*gamma)
-        #hence
-        #   p_n         = - gn - X*gamma + G*gamma
-        Gm_SVD              = svd(view(Gm,:,1:XGcols))
-        Sinv                = Gm_SVD.S
-        deg_bool            = Sinv.<sigma_min
-        Sinv[deg_bool]      .= 0.0
-        Sinv[.!deg_bool]    .= 1.0./Sinv[.!deg_bool]
-        gammav              = Gm_SVD.V*(Sinv.*(transpose(Gm_SVD.U)*gn))
-        BLAS.axpby!(-1.0, gn, 0.0, pn)
-        BLAS.gemv!('N', -1.0, view(Xm,:,1:XGcols), gammav, 1.0, pn)
-        BLAS.gemv!('N', 1.0, view(Gm,:,1:XGcols), gammav, 1.0, pn)
-        nSigma              = sum(.!deg_bool)
+        #   pn          = -g^n - X*gamma + G*gamma,
+        #with 
+        #   gamma       = (X^T G)^{-1} X^T g^n  [type-I]
+        #   gamma       = (G^T G)^{-1} G^T g^n  [type-II]
+        if UpdateType==1
+            Cm_SVD              = svd(transpose(view(Xm,:,1:XGcols))*view(Gm,:,1:XGcols)) #TODO: Optimize Xm^T*Gm
+            Sinv                = Cm_SVD.S
+            deg_bool            = Sinv.<sigma_min
+            Sinv[deg_bool]      .= 0.0
+            Sinv[.!deg_bool]    .= 1.0./Sinv[.!deg_bool]
+            gammav              = Cm_SVD.V*(Sinv.*(transpose(Cm_SVD.U)*(transpose(view(Xm,:,1:XGcols))*gn)))
+            BLAS.axpby!(-1.0, gn, 0.0, pn)
+            BLAS.gemv!('N', -1.0, view(Xm,:,1:XGcols), gammav, 1.0, pn)
+            BLAS.gemv!('N', 1.0, view(Gm,:,1:XGcols), gammav, 1.0, pn)
+            nSigma              = sum(.!deg_bool)
+        elseif UpdateType==2
+            Gm_SVD              = svd(view(Gm,:,1:XGcols))
+            Sinv                = Gm_SVD.S
+            deg_bool            = Sinv.<sigma_min
+            Sinv[deg_bool]      .= 0.0
+            Sinv[.!deg_bool]    .= 1.0./Sinv[.!deg_bool]
+            gammav              = Gm_SVD.V*(Sinv.*(transpose(Gm_SVD.U)*gn))
+            BLAS.axpby!(-1.0, gn, 0.0, pn)
+            BLAS.gemv!('N', -1.0, view(Xm,:,1:XGcols), gammav, 1.0, pn)
+            BLAS.gemv!('N', 1.0, view(Gm,:,1:XGcols), gammav, 1.0, pn)
+            nSigma              = sum(.!deg_bool)
+        else
+            error("UpdateType must be 1 or 2. Current value is $(UpdateType).")
+        end
                 
         #Update norms:
         pnorm           = NormFun(pn)
