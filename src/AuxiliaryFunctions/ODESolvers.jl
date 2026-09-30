@@ -967,49 +967,58 @@ function PlotStabilityRegions1(; SaveFig::Bool=false, w::Float64=8.50, h::Float6
     colorv          = PyPlotColors("jet2", 6)
     
     #mu*tau = 0.0:
-    PyPlotFigure(w=w, h=h, bottom=1.5, left=1.7, top=0.7)
+    PyPlotFigure(w=w, h=h, bottom=1.2, left=1.9, top=0.7)
     EINRK_PlotStabilityRegion!("Ascher3", 0.0, linspace(-3.0, 0.05, 100), linspace(-3.0, 3.0, 200), color="b")
     EINRK_PlotStabilityRegion!("BPR3", 0.0, linspace(-3.0, 0.05, 100), linspace(-3.0, 3.0, 200), color="c")
     RoW_PlotStabilityRegion!("ROS34PRW", 0.0, linspace(-5.0, 0.5, 100), linspace(-4.0, 4.0, 200), color="r")
     title(latexstring("\\mu \\tau=", 0.0), fontsize=10)
     tick_params(axis="both", which="both", labelsize=8)
     xlabel(latexstring("\\mathrm{Re}(\\lambda\\tau)"), fontsize=10)
-    xlabel(latexstring("\\mathrm{Im}(\\lambda\\tau)"), fontsize=10)
+    ylabel(latexstring("\\mathrm{Im}(\\lambda\\tau)"), fontsize=10)
     ax = gca()
     ax.xaxis.get_offset_text().set_fontsize(8)
     ax.yaxis.get_offset_text().set_fontsize(8)
     grid("on")
+    if SaveFig
+        savefig("$(FigUbi)StabilityRegion_0.png", dpi=800, pad_inches=0)
+    end
     
     #Real mu*tau:
-    for mutau in [-1e1, -1e2, -1e3, -1e6]
-        PyPlotFigure(w=w, h=h, bottom=1.5, left=1.7, top=0.7)
-        EINRK_PlotStabilityRegion!("Ascher3", mutau, linspace(2.5*mutau, 0.05, 100), linspace(mutau, -mutau, 200), color="b")
-        EINRK_PlotStabilityRegion!("BPR3", mutau, linspace(3.0*mutau, 0.05, 100), linspace(mutau, -mutau, 200), color="c")
-        RoW_PlotStabilityRegion!("ROS34PRW", mutau, linspace(3.2*mutau, 0.05, 100), linspace(1.8*mutau, -1.8*mutau, 200), color="r")
-        title(latexstring("\\mu \\tau=", mutau), fontsize=10)
+    for mutau in [-1e1, -1e3, -1e6]
+        PyPlotFigure(w=w, h=h, bottom=1.2, left=1.9, top=0.7)
+        EINRK_PlotStabilityRegion!("Ascher3", mutau, linspace(2.5*mutau, 0.05, 100), linspace(mutau, -mutau, 201), color="b")
+        EINRK_PlotStabilityRegion!("BPR3", mutau, linspace(3.0*mutau, 0.05, 100), linspace(mutau, -mutau, 201), color="c")
+        RoW_PlotStabilityRegion!("ROS34PRW", mutau, linspace(3.2*mutau, 0.05, 100), linspace(1.8*mutau, -1.8*mutau, 201), color="r")
+        title(latexstring("\\mu \\tau=", sprintf1("%.2E", mutau)), fontsize=10)
         tick_params(axis="both", which="both", labelsize=8)
         xlabel(latexstring("\\mathrm{Re}(\\lambda\\tau)"), fontsize=10)
-        xlabel(latexstring("\\mathrm{Im}(\\lambda\\tau)"), fontsize=10)
+        ylabel(latexstring("\\mathrm{Im}(\\lambda\\tau)"), fontsize=10, labelpad=-0.2)
         ax = gca()
         ax.xaxis.get_offset_text().set_fontsize(8)
         ax.yaxis.get_offset_text().set_fontsize(8)
         grid("on")
+        if SaveFig
+            savefig("$(FigUbi)StabilityRegion_$(mutau).png", dpi=800, pad_inches=0)
+        end
     end
     
     #Imaginary mu*tau:
-    for mutau in [1e1, 1e2, 1e3, 1e6]
-        PyPlotFigure(w=w, h=h, bottom=1.5, left=1.7, top=0.7)
-        EINRK_PlotStabilityRegion!("Ascher3", 1im*mutau, linspace(mutau, -mutau, 200), linspace(2.5*mutau, 0.05, 100), color="b")
-        EINRK_PlotStabilityRegion!("BPR3", 1im*mutau, linspace(mutau, -mutau, 200), linspace(3.0*mutau, 0.05, 100), color="c")
-        RoW_PlotStabilityRegion!("ROS34PRW", 1im*mutau, linspace(1.8*mutau, -1.8*mutau, 200), linspace(3.2*mutau, 0.05, 100), color="r")
-        title(latexstring("\\mu \\tau=i", sprintf1("%.2e", mutau)), fontsize=10)
+    for mutau in [1e1, 1e3, 1e6]
+        PyPlotFigure(w=w, h=h, bottom=1.2, left=1.9, top=0.7)
+        EINRK_PlotStabilityRegion!("Ascher3", 1im*mutau, linspace(mutau, -mutau, 201), linspace(2.5*mutau, 0.05, 100), color="b")
+        EINRK_PlotStabilityRegion!("BPR3", 1im*mutau, linspace(mutau, -mutau, 201), linspace(3.0*mutau, 0.05, 100), color="c")
+        RoW_PlotStabilityRegion!("ROS34PRW", 1im*mutau, linspace(1.8*mutau, -1.8*mutau, 201), linspace(3.2*mutau, 0.05, 100), color="r")
+        title(latexstring("\\mu \\tau=i", sprintf1("%.2E", mutau)), fontsize=10)
         tick_params(axis="both", which="both", labelsize=8)
         xlabel(latexstring("\\mathrm{Re}(\\lambda\\tau)"), fontsize=10)
-        xlabel(latexstring("\\mathrm{Im}(\\lambda\\tau)"), fontsize=10)
+        ylabel(latexstring("\\mathrm{Im}(\\lambda\\tau)"), fontsize=10)
         ax = gca()
         ax.xaxis.get_offset_text().set_fontsize(8)
         ax.yaxis.get_offset_text().set_fontsize(8)
         grid("on")
+        if SaveFig
+            savefig("$(FigUbi)StabilityRegion_$(mutau).png", dpi=800, pad_inches=0)
+        end
     end
     
 end
