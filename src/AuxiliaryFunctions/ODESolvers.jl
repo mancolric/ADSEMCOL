@@ -945,14 +945,14 @@ function RoW_PlotStabilityRegion!(RKMethod::String, muDeltat::Union{Float64,Comp
     A, D, b, bhat, c, ss, order   = RoW_Coefficients(RKMethod)
 
     #Compute stability function:
-    # K = lambda*U + tau*mu * D*K 
-    #   => K = (I-mutau*D)^{-1} lambda*U
-    # U = 1 + tau* A*K = 1 + lambdatau *A*(I-mutau*D)^{-1}*U
-    #   => U = (I-lambdatau*A*(I-mutau*D)^{-1})^{-1}*1
-    # R = b^T * U = b^T * (I-lambdatau*A*(I-mutau*D)^{-1})^{-1} * 1
+    # U = 1 + tau* A*K 
+    # K = lambda*U + mu*tau*Gamma*K = lambda*1 + lambda*tau*A*K
+    # K = (I - lambda*tau - mu*tau*Gamma - lambda*tau*A)\(lambda*1)
+    # R = 1 + tau * b^T * K = 1 + lambda*tau b^T * (I - lambda*tau - mu*tau*Gamma - lambda*tau*A)\(1)
     Im      = eye(ss)
     ev      = ones(ss)
-    Rfun    = (z::Number) -> [ dot(b, (Im-z*A/(Im-muDeltat*D))\ev) ]
+#     Rfun    = (z::Number) -> [ dot(b, (Im-z*A/(Im-muDeltat*D))\ev) ]
+    Rfun    = (z::Number) -> [ 1.0 + z * dot(b, (Im-z*A-muDeltat*D)\ev) ]
     
     #Plot stability region:
     PlotStabilityRegion!(Rfun, 1, xv, yv, color=color)
@@ -968,9 +968,9 @@ function PlotStabilityRegions1(; SaveFig::Bool=false, w::Float64=8.50, h::Float6
     
     #mu*tau = 0.0:
     PyPlotFigure(w=w, h=h, bottom=1.2, left=1.9, top=0.7)
-    EINRK_PlotStabilityRegion!("Ascher3", 0.0, linspace(-3.0, 0.05, 100), linspace(-3.0, 3.0, 200), color="b")
-    EINRK_PlotStabilityRegion!("BPR3", 0.0, linspace(-3.0, 0.05, 100), linspace(-3.0, 3.0, 200), color="c")
-    RoW_PlotStabilityRegion!("ROS34PRW", 0.0, linspace(-5.0, 0.5, 100), linspace(-4.0, 4.0, 200), color="r")
+    EINRK_PlotStabilityRegion!("Ascher3", 0.0, linspace(-3.5, 0.05, 100), linspace(-3.5, 3.5, 200), color="b")
+    EINRK_PlotStabilityRegion!("BPR3", 0.0, linspace(-3.5, 0.05, 100), linspace(-3.5, 3.5, 200), color="c")
+    RoW_PlotStabilityRegion!("ROS34PRW", 0.0, linspace(-3.5, 0.5, 100), linspace(-3.5, 3.5, 200), color="r")
     title(latexstring("\\mu \\tau=", 0.0), fontsize=10)
     tick_params(axis="both", which="both", labelsize=8)
     xlabel(latexstring("\\mathrm{Re}(\\lambda\\tau)"), fontsize=10)
@@ -986,9 +986,9 @@ function PlotStabilityRegions1(; SaveFig::Bool=false, w::Float64=8.50, h::Float6
     #Real mu*tau:
     for mutau in [-1e1, -1e3, -1e6]
         PyPlotFigure(w=w, h=h, bottom=1.2, left=1.9, top=0.7)
-        EINRK_PlotStabilityRegion!("Ascher3", mutau, linspace(2.5*mutau, 0.05, 100), linspace(mutau, -mutau, 201), color="b")
-        EINRK_PlotStabilityRegion!("BPR3", mutau, linspace(3.0*mutau, 0.05, 100), linspace(mutau, -mutau, 201), color="c")
-        RoW_PlotStabilityRegion!("ROS34PRW", mutau, linspace(3.2*mutau, 0.05, 100), linspace(1.8*mutau, -1.8*mutau, 201), color="r")
+        EINRK_PlotStabilityRegion!("Ascher3", mutau, linspace(2.7*mutau, 0.05, 100), linspace(mutau, -mutau, 201), color="b")
+        EINRK_PlotStabilityRegion!("BPR3", mutau, linspace(2.7*mutau, 0.05, 100), linspace(mutau, -mutau, 201), color="c")
+        RoW_PlotStabilityRegion!("ROS34PRW", mutau, linspace(2.7*mutau, 0.05, 100), linspace(1.8*mutau, -1.8*mutau, 201), color="r")
         title(latexstring("\\mu \\tau=", sprintf1("%.2E", mutau)), fontsize=10)
         tick_params(axis="both", which="both", labelsize=8)
         xlabel(latexstring("\\mathrm{Re}(\\lambda\\tau)"), fontsize=10)
@@ -1005,9 +1005,9 @@ function PlotStabilityRegions1(; SaveFig::Bool=false, w::Float64=8.50, h::Float6
     #Imaginary mu*tau:
     for mutau in [1e1, 1e3, 1e6]
         PyPlotFigure(w=w, h=h, bottom=1.2, left=1.9, top=0.7)
-        EINRK_PlotStabilityRegion!("Ascher3", 1im*mutau, linspace(mutau, -mutau, 201), linspace(2.5*mutau, 0.05, 100), color="b")
-        EINRK_PlotStabilityRegion!("BPR3", 1im*mutau, linspace(mutau, -mutau, 201), linspace(3.0*mutau, 0.05, 100), color="c")
-        RoW_PlotStabilityRegion!("ROS34PRW", 1im*mutau, linspace(1.8*mutau, -1.8*mutau, 201), linspace(3.2*mutau, 0.05, 100), color="r")
+        EINRK_PlotStabilityRegion!("Ascher3", 1im*mutau, linspace(mutau, -mutau, 201), linspace(2.7*mutau, -0.2, 100), color="b")
+        EINRK_PlotStabilityRegion!("BPR3", 1im*mutau, linspace(mutau, -mutau, 201), linspace(2.7*mutau, -0.2, 100), color="c")
+        RoW_PlotStabilityRegion!("ROS34PRW", 1im*mutau, linspace(1.8*mutau, -1.8*mutau, 201), linspace(2.7*mutau, -0.2, 100), color="r")
         title(latexstring("\\mu \\tau=i", sprintf1("%.2E", mutau)), fontsize=10)
         tick_params(axis="both", which="both", labelsize=8)
         xlabel(latexstring("\\mathrm{Re}(\\lambda\\tau)"), fontsize=10)
