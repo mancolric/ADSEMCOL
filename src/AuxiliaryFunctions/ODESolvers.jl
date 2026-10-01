@@ -713,7 +713,7 @@ end
 
 #Plot stability region for ydot = [g(y)-mu*y] + mu*y:
 function EINRK_PlotStabilityRegion!(RKMethod::String, muDeltat::Union{Float64,Complex{Float64}}, xv::Array{Float64,1}, yv::Array{Float64,1};
-    color::String="b")
+    color::Union{String, NTuple{4, Float64}}="b")
 
     #Load coefficients:
     RK      = RK_Coefficients(RKMethod)
@@ -731,7 +731,7 @@ function EINRK_PlotStabilityRegion!(RKMethod::String, muDeltat::Union{Float64,Co
     
 end
 function EINRK_PlotStabilityRegion_LO!(RKMethod::String, muDeltat::Union{Float64,Complex{Float64}}, xv::Array{Float64,1}, yv::Array{Float64,1};
-    color::String="b")
+    color::Union{String, NTuple{4, Float64}}="b")
 
     #Load coefficients:
     RK      = RK_Coefficients(RKMethod)
@@ -763,7 +763,7 @@ function PlotStabilityRegion(Rfun::Function, stages::Int, xv::Array{Float64,1}, 
 end
 
 function PlotStabilityRegion!(Rfun::Function, stages::Int, xv::Array{Float64,1}, yv::Array{Float64,1};
-    color::String="b")
+    color::Union{String, NTuple{4, Float64}}="b")
 
     #Compute R at each point of the grid:
     xm,ym   = ndgrid(xv,yv)
@@ -939,7 +939,7 @@ function RoW_Coefficients(RKMethod::String)
 end
 
 function RoW_PlotStabilityRegion!(RKMethod::String, muDeltat::Union{Float64,Complex{Float64}}, xv::Array{Float64,1}, yv::Array{Float64,1};
-    color::String="b")
+    color::Union{String, NTuple{4, Float64}}="b")
 
     #Load coefficients:
     A, D, b, bhat, c, ss, order   = RoW_Coefficients(RKMethod)
@@ -966,11 +966,25 @@ function PlotStabilityRegions1(; SaveFig::Bool=false, w::Float64=8.50, h::Float6
     #Colors:
     colorv          = PyPlotColors("jet2", 6)
     
+    #Pintar leyenda:
+    PyPlotFigure(w=w, h=h, bottom=0.0, left=0.0, top=0.0, right=0.0)
+#     PyPlotFigure(w=w, h=h, bottom=1.2, left=1.9, top=0.7)
+    plot(NaN, NaN, color=colorv[1], label="R34-W")
+    plot(NaN, NaN, color=colorv[2], label="ARS443-LIRK")
+    plot(NaN, NaN, color=colorv[3], label="BPR353-LIRK")
+    plot(NaN, NaN, color="k", linestyle="none", marker="o", markersize=4, 
+        label=latexstring("\\lambda=\\mu"))
+    axis("off")
+    legend(loc="center", borderaxespad=0.0, fontsize=10)
+    if SaveFig
+        savefig("$(FigUbi)StabilityRegion_Legend.png", dpi=800, pad_inches=0)
+    end
+    
     #mu*tau = 0.0:
     PyPlotFigure(w=w, h=h, bottom=1.2, left=1.9, top=0.7)
-    EINRK_PlotStabilityRegion!("Ascher3", 0.0, linspace(-3.5, 0.05, 100), linspace(-3.5, 3.5, 200), color="b")
-    EINRK_PlotStabilityRegion!("BPR3", 0.0, linspace(-3.5, 0.05, 100), linspace(-3.5, 3.5, 200), color="c")
-    RoW_PlotStabilityRegion!("ROS34PRW", 0.0, linspace(-3.5, 0.5, 100), linspace(-3.5, 3.5, 200), color="r")
+    RoW_PlotStabilityRegion!("ROS34PRW", 0.0, linspace(-3.5, 0.5, 100), linspace(-3.5, 3.5, 200), color=colorv[1])
+    EINRK_PlotStabilityRegion!("Ascher3", 0.0, linspace(-3.5, 0.05, 100), linspace(-3.5, 3.5, 200), color=colorv[2])
+    EINRK_PlotStabilityRegion!("BPR3", 0.0, linspace(-3.5, 0.05, 100), linspace(-3.5, 3.5, 200), color=colorv[3])
     plot(0.0, 0.0, color="k", marker="o", markersize=4)
     title(latexstring("\\mu \\tau=", 0.0), fontsize=10)
     tick_params(axis="both", which="both", labelsize=8)
@@ -987,9 +1001,9 @@ function PlotStabilityRegions1(; SaveFig::Bool=false, w::Float64=8.50, h::Float6
     #Real mu*tau:
     for mutau in [-1e1, -1e3, -1e6]
         PyPlotFigure(w=w, h=h, bottom=1.2, left=1.9, top=0.7)
-        EINRK_PlotStabilityRegion!("Ascher3", mutau, linspace(2.7*mutau, 0.05, 100), linspace(mutau, -mutau, 201), color="b")
-        EINRK_PlotStabilityRegion!("BPR3", mutau, linspace(2.7*mutau, 0.05, 100), linspace(mutau, -mutau, 201), color="c")
-        RoW_PlotStabilityRegion!("ROS34PRW", mutau, linspace(2.7*mutau, 0.05, 100), linspace(1.8*mutau, -1.8*mutau, 201), color="r")
+        RoW_PlotStabilityRegion!("ROS34PRW", mutau, linspace(2.7*mutau, 0.05, 100), linspace(1.8*mutau, -1.8*mutau, 201), color=colorv[1])
+        EINRK_PlotStabilityRegion!("Ascher3", mutau, linspace(2.7*mutau, 0.05, 100), linspace(mutau, -mutau, 201), color=colorv[2])
+        EINRK_PlotStabilityRegion!("BPR3", mutau, linspace(2.7*mutau, 0.05, 100), linspace(mutau, -mutau, 201), color=colorv[3])
         plot(mutau, 0.0, color="k", marker="o", markersize=4)
         title(latexstring("\\mu \\tau=", sprintf1("%.2E", mutau)), fontsize=10)
         tick_params(axis="both", which="both", labelsize=8)
@@ -1007,9 +1021,9 @@ function PlotStabilityRegions1(; SaveFig::Bool=false, w::Float64=8.50, h::Float6
     #Imaginary mu*tau:
     for mutau in [1e1, 1e3, 1e6]
         PyPlotFigure(w=w, h=h, bottom=1.2, left=1.9, top=0.7)
-        EINRK_PlotStabilityRegion!("Ascher3", 1im*mutau, linspace(mutau, -mutau, 201), linspace(2.7*mutau, -0.2, 100), color="b")
-        EINRK_PlotStabilityRegion!("BPR3", 1im*mutau, linspace(mutau, -mutau, 201), linspace(2.7*mutau, -0.2, 100), color="c")
-        RoW_PlotStabilityRegion!("ROS34PRW", 1im*mutau, linspace(1.8*mutau, -1.8*mutau, 201), linspace(2.7*mutau, -0.2, 100), color="r")
+        RoW_PlotStabilityRegion!("ROS34PRW", 1im*mutau, linspace(1.8*mutau, -1.8*mutau, 201), linspace(2.7*mutau, -0.2, 100), color=colorv[1])
+        EINRK_PlotStabilityRegion!("Ascher3", 1im*mutau, linspace(mutau, -mutau, 201), linspace(2.7*mutau, -0.2, 100), color=colorv[2])
+        EINRK_PlotStabilityRegion!("BPR3", 1im*mutau, linspace(mutau, -mutau, 201), linspace(2.7*mutau, -0.2, 100), color=colorv[3])
         plot(0.0, mutau, color="k", marker="o", markersize=4)
         title(latexstring("\\mu \\tau=i", sprintf1("%.2E", mutau)), fontsize=10)
         tick_params(axis="both", which="both", labelsize=8)
