@@ -3,8 +3,8 @@ include("InputData/ReactiveGasAuxFunctions.jl")
 
 function ShockFlame_FXP(; FesOrder::Int=5, 
     tf::Float64=20.0, RKMethod::String="Ascher3",
-    epsilon::Float64=1e-2, nu::Float64=0e-3, kappa_rho_cv::Float64=0e-6, 
-    Pr::Float64=0.73, Le::Float64=1.0, YF0::Float64=1.0-1e-8, 
+    epsilon::Float64=0e-2, nu::Float64=1e-2, kappa_rho_cv::Float64=0e-6, D::Float64=0.0, 
+    YF0::Float64=1.0-1e-8, YX0::Float64=0.0,  
     delta_flame::Float64=1.0, delta_shock::Float64=max(epsilon,nu),
     q::Float64=5.0, ML::Float64=2.0, 
     RThatI::Float64=10.0, RThatB::Float64=10.0, #RThat=RT_a/RT_1, #1: means post-shock condition
@@ -64,11 +64,11 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     GasModel.gamma          = gamma
     GasModel.nu             = nu
     GasModel.beta           = 0.0
-    GasModel.kappa_rho_cv   = nu/Pr * GasModel.gamma
+    GasModel.kappa_rho_cv   = kappa_rho_cv
     GasModel.hfF            = 0.0
     GasModel.hfX            = 0.0
     GasModel.hfP            = -Q0
-    GasModel.D              = nu/Pr/Le
+    GasModel.D              = D
     GasModel.BR             = 1.0   #tc = BR^{-1} 
     GasModel.BI             = BIhat * GasModel.BR 
     GasModel.BB             = BBhat * GasModel.BR/rhoCJ
@@ -78,7 +78,8 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     #Define domain:
     x2                  = Lx
     y2                  = 1.0*delta_flame
-    x0_flame            = 10.0*delta_flame
+#     x0_flame            = 10.0*delta_flame
+    x0_flame            = -10.0*Lx
     x0_shock            = 20.0*delta_flame
     MeshFile            = "$(@__DIR__)/../../temp/SC$(SC).geo"
     TrMesh_Rectangle_Create!(MeshFile, 0.0, x2, 5, 0.0, y2, 2)
@@ -87,8 +88,8 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     function u0fun(x::Vector{Matrix{Float64}})
         
         rhoYF           = @mlv SmoothHeaviside(x[1]-x0_flame, delta_flame, rho0*YF0, 0.0)
-        rhoYX           = @mlv SmoothHeaviside(x[1]-x0_flame, delta_flame, rho0*(1.0-YF0), 0.0)
-        rhoYP           = @mlv SmoothHeaviside(x[1]-x0_flame, delta_flame, 0.0, rhoL) + 
+        rhoYX           = @mlv SmoothHeaviside(x[1]-x0_flame, delta_flame, rho0*YX0, 0.0)
+        rhoYP           = @mlv SmoothHeaviside(x[1]-x0_flame, delta_flame, rho0*(1-YF0-YX0), rhoL) + 
                                 SmoothHeaviside(x[1]-x0_shock, delta_shock, 0.0, rhoR-rhoL)
         rhovx           = @mlv SmoothHeaviside(x[1]-x0_flame, delta_flame, rho0*u0, rhoL*uL) + 
                                 SmoothHeaviside(x[1]-x0_shock, delta_shock, 0.0, rhoR*uR-rhoL*uL)
@@ -204,6 +205,8 @@ function ShockFlame_FXP(; FesOrder::Int=5,
                     plot([xs, xs], [0.9*minimum(v_plot), 1.1*maximum(v_plot)], "--g")
                 end
                 
+                println(PlotVars[ii], ": min=", minimum(v_plot), ", max=", maximum(v_plot))
+                
             end
             if SaveFig
                 savefig("$(VideosUbi)ShockFlame_FXP_SC$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
@@ -274,7 +277,7 @@ function ShockFlame_FXP(; FesOrder::Int=5,
             save("$(ResUbi)LIRKHyp_SC$(SC)_$(nb_SaveRes).jld2", "StudyCase", "ShockFlame_FXP",
                 "ConvFlag", ConvFlag, "solver", save(solver), 
                 "epsilon", epsilon, "nu", nu, "kappa_rho_cv", kappa_rho_cv, "gamma", gamma, 
-                "Pr", Pr, "Le", Le, "YF0", YF0,
+                "YF0", YF0,
                 "delta_flame", delta_flame, "delta_shock", delta_shock, 
                 "q", q, "ML", ML,
                 "D", GasModel.D, "BI", GasModel.BI, "BR", GasModel.BR, "BB", GasModel.BB, 
@@ -389,13 +392,13 @@ function xsxf_ShockFlame(solver::SolverData, pref::Float64, YFref::Float64)
     #Get shock and flame positions:
     xf          = NaN
     T           = findlast(YFv.>YFref)
-    if T<length(x1v)
+    if !isnothing(T) && T<length(x1v)
         xf      = x1v[T] + (x1v[T+1]-x1v[T])*(YFref-YFv[T])/(YFv[T+1]-YFv[T])
     end
     #
     xs          = NaN
     T           = findlast(pv.<pref)
-    if T<length(x1v)
+    if !isnothing(T) && T<length(x1v)
         xs      = x1v[T] + (x1v[T+1]-x1v[T])*(pref-pv[T])/(pv[T+1]-pv[T])
     end
         
