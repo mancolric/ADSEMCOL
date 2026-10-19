@@ -114,9 +114,9 @@ function ShockFlame_FXP(; FesOrder::Int=5,
         return u0fun(x)
         
     end
-#     BC_outlet       = SubsonicOutlet1(FWt11((t,x)->pOutlet(t,x)))
+    BC_outlet       = SubsonicOutlet1(FWt11((t,x)->pOutlet(t,x)))
 #     BC_outlet       = SupersonicOutlet1()
-    BC_outlet       = DoNothing1()
+#     BC_outlet       = DoNothing1()
     BC_inlet        = SupersonicInlet1(FWt11((t,x)->uInlet(t,x)))
     
     #---------------------------------------------------------------------
