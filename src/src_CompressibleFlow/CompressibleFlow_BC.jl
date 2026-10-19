@@ -658,6 +658,12 @@ function bflux!(model::GasModel0, BC::SubsonicOutlet1,
         uBC[nSpecies+3]     = @mlv pDir/(gamma-1.0) + model.hfF*u[1] + model.hfP*u[2] + 
                                 0.5*(u[nSpecies+1]*u[nSpecies+1] + 
                                     u[nSpecies+2]*u[nSpecies+2])/rho
+    elseif GasModel0==GasFPX
+        gamma               = model.gamma
+        uBC[nSpecies+3]     = @mlv pDir/(gamma-1.0) + model.hfF*u[1] + model.hfX*u[2] + 
+                                model.hfP*u[3] + 
+                                0.5*(u[nSpecies+1]*u[nSpecies+1] + 
+                                    u[nSpecies+2]*u[nSpecies+2])/rho
     else
         error("Unexpected model")
     end
