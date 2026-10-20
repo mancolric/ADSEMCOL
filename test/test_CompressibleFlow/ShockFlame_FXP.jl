@@ -136,7 +136,7 @@ function ShockFlame_FXP(; FesOrder::Int=5,
         return sigma, uBC
         
     end
-    GasModel.SpoungeBool    = true
+    GasModel.SpoungeBool    = false
     GasModel.SpoungeFun     = SpoungeFun
     
     #---------------------------------------------------------------------
