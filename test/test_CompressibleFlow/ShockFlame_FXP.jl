@@ -126,7 +126,7 @@ function ShockFlame_FXP(; FesOrder::Int=5,
         Lc          = 10.0
         lambda      = abs(uR) + sqrt(gamma*RTR)
         tc          = Lc/lambda         #Characteristic wave propagation time 
-        sigma       = @tturbo @. 10.0/tc * exp(-5*(x[1]-Lx)^2/(Lc^2))
+        sigma       = @tturbo @. 2.0/tc * exp(-5*(x[1]-Lx)^2/(Lc^2))
         uBC         = [ 0.0, 0.0, rhoR, rhoR*uR, 0.0, pR/(gamma-1.0) + 0.5*rhoR*uR^2 - rhoR*Q0 ]
         
 #         figure()
