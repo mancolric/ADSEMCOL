@@ -112,6 +112,10 @@ Base.@kwdef mutable struct GasFXP <: ReactiveGas
     RTI             ::Float64           = NaN
     RTB             ::Float64           = NaN
     
+    #Spounge function:
+    SpoungeBool     ::Bool              = false
+    SpoungeFun      ::Function          = (t,x) -> NaN
+    
     #Dependent variables. NOTE: DepVars contains variables to be evaluated when
     #Jacobian is not necessary. DepVarsJ contains variables to be evaluated when
     #Jacobian is to be computed. Variables in DepVars and DepVarsJ must be sorted in 

@@ -119,6 +119,26 @@ function ShockFlame_FXP(; FesOrder::Int=5,
 #     BC_outlet       = DoNothing1()
     BC_inlet        = SupersonicInlet1(FWt11((t,x)->uInlet(t,x)))
     
+    #Spounge boundary condition:
+    #Add a source term Q_alpha = - sigma(t,x) * (u_alpha - uBC(t))
+    function SpoungeFun(t::Float64, x::Vector{Matrix{Float64}})
+    
+        Lc          = 10.0
+        lambda      = abs(uR) + sqrt(gamma*RTR)
+        tc          = Lc/lambda         #Characteristic wave propagation time 
+        sigma       = @tturbo @. 10.0/tc * exp(-5*(x[1]-Lx)^2/(Lc^2))
+        uBC         = [ 0.0, 0.0, rhoR, rhoR*uR, 0.0, pR/(gamma-1.0) + 0.5*rhoR*uR^2 - rhoR*Q0 ]
+        
+#         figure()
+#         plot3D(x[1][:], x[2][:], sigma[:], ".b")
+#         error("")
+        
+        return sigma, uBC
+        
+    end
+    GasModel.SpoungeBool    = true
+    GasModel.SpoungeFun     = SpoungeFun
+    
     #---------------------------------------------------------------------
     #PRE-PROCESS STAGE:
     

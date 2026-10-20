@@ -599,6 +599,21 @@ function source!(model::ReactiveGas, t::Float64, x::Vector{MFloat},
         
     end
     
+    #Add spounge term:
+    if typeof(model)==GasFXP && model.SpoungeBool
+        
+        sigma, uBC                      = model.SpoungeFun(t, x)
+        for II=1:model.nVars
+            @mlv flux[II]               -= sigma*(u[II]-uBC[II])
+        end
+        if ComputeJ
+            for II=1:model.nVars
+                @mlv dflux_du[II,II]    -= sigma
+            end
+        end
+        
+    end
+    
     return lambda_reac
     
 end
