@@ -402,6 +402,8 @@ function ldiv_rows!(x::AbstractVector{nb}, F::SCILU0Fact{nb, int},
     N       = F.N
     auxv    = F.aux
     
+#     t_ini   = time()
+    
     #Solve Ux = L\b. Both r.h.s. and Ux are stored in aux:
     @mlv auxv           = b
     @inbounds for jj=1:N
@@ -416,6 +418,8 @@ function ldiv_rows!(x::AbstractVector{nb}, F::SCILU0Fact{nb, int},
         end
         
     end
+    
+#     println("L^{-1} b: ", time()-t_ini)
     
     #Solve x=U\(Ux). R.h.s. is stored in aux and x is stored in x.
     @inbounds for jj=N:-1:1
@@ -432,6 +436,12 @@ function ldiv_rows!(x::AbstractVector{nb}, F::SCILU0Fact{nb, int},
         end
         
     end
+    
+#     println("U^{-1} y: ", time()-t_ini)
+    
+    #DEBUG:
+#     z       = F.Ared_mm * x
+#     println("z: ", time()-t_ini)
     
     return
     

@@ -258,22 +258,22 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
     elseif uppercase(solver.LSType)=="DOMINANTILU0"
         solver.JPatt            = "Dominant"
         solver.KrylovApprox     = false
-        #compute only products concerning the same dof:
-        aux                     = GetDominantTerms(solver.fes)
-        solver.Jm_ilocal        = aux[1]
-        solver.Jm_jlocal        = aux[2]
-        solver.Jm_localterms    = length(solver.Jm_ilocal)
+        #compute dominant terms:
+#         aux                     = GetDominantTerms(solver.fes)
+#         solver.Jm_ilocal        = aux[1]
+#         solver.Jm_jlocal        = aux[2]
+#         solver.Jm_localterms    = length(solver.Jm_ilocal)
         #compute only products concerning the same dof:
 #         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
 #         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
 #         solver.Jm_localterms    = solver.fes.DofPerElem
 #         @warn "BLOCKJACOBI"
         #complete:
-#         imat, jmat              = ndgrid(1:solver.fes.DofPerElem, 1:solver.fes.DofPerElem)
-#         solver.Jm_ilocal        = imat[:]
-#         solver.Jm_jlocal        = jmat[:]
-#         solver.Jm_localterms    = solver.fes.DofPerElem^2
-#         @warn "Complete"
+        imat, jmat              = ndgrid(1:solver.fes.DofPerElem, 1:solver.fes.DofPerElem)
+        solver.Jm_ilocal        = imat[:]
+        solver.Jm_jlocal        = jmat[:]
+        solver.Jm_localterms    = solver.fes.DofPerElem^2
+        @warn "Complete"
     elseif uppercase(solver.LSType)=="DOMINANT"
         solver.JPatt            = "Dominant"
         solver.KrylovApprox     = false
@@ -2302,8 +2302,12 @@ function IRK_Step!(solver::SolverData)
                 #Define preconditioned residual:
                 function QNResidualJ!(uhat::Vector{Float64}, gres::Vector{Float64})
                     
+                    t_ini2      = time()
+                    
                     #Unscale u:
                     u           = @tturbo @. scalv*uhat
+                    
+#                     println("Unscale: ", time()-t_ini2)
                     
                     #Compute flux and save derivatives:
     #                 t_ini                   = time()
@@ -2314,23 +2318,15 @@ function IRK_Step!(solver::SolverData)
                         return flag
                     end
                     
-#                     DEBUG:
-#                     println("Setting up linear system")
-#                     t_ini                   = time()
-#                     BLAS.axpby!(1.0, solver.Mm.nzval, 0.0, solver.Am.nzval)
-#                     BLAS.axpby!(-Deltat_n*solver.RK.AI[kk,kk], solver.Jm.nzval, 1.0, solver.Am.nzval)
-#                     LinearSystem!(solver.Am_LS.LS)                
-#                     solver.tSCILU           += time()-t_ini
-#                     printstyled("Linear system set up in ", time()-t_ini, " seconds \n", color=:cyan)
-#                     if flag<0
-#                         return flag
-#                     end
+#                     println("Rhs: ", time()-t_ini2) #BOTTLENECK
                     
                     #Compute residual f:
                     #   f = M*u - b - Deltat*a_kk*f(t_k,u_k)
                     fres        = MuProduct(solver.MII, u, solver.nVars) - 
                                         solver.bv - (Deltat_n*solver.RK.AI[kk,kk])*
                                         view(solver.f_RK,:,kk)
+                                        
+#                     println("fres: ", time()-t_ini2)
                     
                     #Compute preconditioned residual. Since this equation is linear and 
                     #f does not need to be computed at each iteration, we ask for a very
@@ -2339,12 +2335,22 @@ function IRK_Step!(solver::SolverData)
                     LSOutput    = LS_solve!(solver.Am_LS.LS, gres, fres, 
                                     RelTol=0.0, AbsTol=TolA, 
                                     Display="notify", MaxIter=solver.LS_iters_max)
-                    
+                                    
                     #Returns flag, nIters, etaA
                     flag        = LSOutput[1]
                     
                     #Scale gres:
                     @tturbo @. gres     /= scalv
+                    
+#                     println("gres: ", time()-t_ini2) #BOTTLENECK
+                    
+#                     Usar PETSc:
+#                     A_PETSc     = Mat(A)
+#                     f_PETSc     = Vec(f)
+#                     g_PETSc     = similar(f_PETSc)
+#                     ksp         = KSP(A)
+#                     setType(ksp, KSPGMRES)
+#                     pc          = getPC(ksp)
                     
                     return flag
                     

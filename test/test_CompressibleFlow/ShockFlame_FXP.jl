@@ -9,7 +9,7 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     q::Float64=5.0, ML::Float64=2.0, 
     RThatI::Float64=10.0, RThatB::Float64=10.0, #RThat=RT_a/RT_1, #1: means post-shock condition
     BIhat::Float64=2.5e-3, BBhat::Float64=4.4e5, 
-    Lx::Float64=120.0, 
+    Lx::Float64=120.0, SpoungeBool::Bool=false, 
     #
     TolS::Float64=1e-6, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2, 
     #
@@ -78,8 +78,8 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     #Define domain:
     x2                  = Lx
     y2                  = 1.0*delta_flame
-#     x0_flame            = 10.0*delta_flame
-    x0_flame            = -10.0*Lx
+    x0_flame            = 10.0*delta_flame
+#     x0_flame            = -10.0*Lx
     x0_shock            = 20.0*delta_flame
     MeshFile            = "$(@__DIR__)/../../temp/SC$(SC).geo"
     TrMesh_Rectangle_Create!(MeshFile, 0.0, x2, 5, 0.0, y2, 2)
@@ -136,7 +136,7 @@ function ShockFlame_FXP(; FesOrder::Int=5,
         return sigma, uBC
         
     end
-    GasModel.SpoungeBool    = false
+    GasModel.SpoungeBool    = SpoungeBool
     GasModel.SpoungeFun     = SpoungeFun
     
     #---------------------------------------------------------------------
@@ -159,6 +159,7 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     solver.TolS_min         = 0.01*TolS
     solver.TolT             = TolT
 #     solver.CA_max           = Inf
+    solver.LSType           = "DominantILU0"
     
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x)) 
@@ -323,8 +324,11 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     
     while solver.t<tf
     
-        ConvFlag    = LIRKHyp_Step!(solver)
-#         ConvFlag    = IRK_Step!(solver)
+        if uppercase(RKMethod)=="KC35"
+            ConvFlag    = IRK_Step!(solver)
+        else
+            ConvFlag    = LIRKHyp_Step!(solver)
+        end
         
         if ConvFlag<=0
             break

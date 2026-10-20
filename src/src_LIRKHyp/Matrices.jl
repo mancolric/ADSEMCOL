@@ -352,7 +352,7 @@ function LinearSystem_DominantILU0(A::SparseMatrixCSC{Float64,Int}, solver::Solv
     
     #Nb of variables, master dof and slave dof:
     nVars           = length(nFacts)
-    nMaster         = solver.fes.nDof                 #no master dofs, system is solved directly
+    nMaster         = solver.fes.nDof                 #no slave dofs, system is solved directly
     nDof            = solver.fes.nDof
     nSlaves         = 0
     
@@ -823,6 +823,8 @@ end
 function LS_solve!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Float64};
     RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
     
+#     t_ini           = time()
+    
     #Optional arguments are necessary for compatibility with the calling function
     
     #Exit early if there are NaNs or Infs in b:
@@ -838,9 +840,14 @@ function LS_solve!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Floa
     bhat            = b[LS.p]
     uhat            = u[LS.p]
     
+#     println("Start: ", time()-t_ini)
+    
     #Solve ILU0(Aapprox) uhat = bhat (no iterative solver):
-    ldiv_master!(uhat, F, bhat)     #Overwrites uhat
+#     ldiv_master!(uhat, F, bhat)     #Overwrites uhat
+    ldiv!(uhat, F, bhat)     #Overwrites uhat
     u[LS.p]         .= uhat
+    
+#     println("ldiv_master: ", time()-t_ini)
     
     return 1, 0, 0.0   #flag, nIters, etaA
     

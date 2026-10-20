@@ -197,6 +197,8 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
     xnp1            = zeros(Nx)
     gnp1            = zeros(Nx)
   
+#     println("Inicio: ", time()-t_start)
+    
     #Iterate:
     while true
 
@@ -230,6 +232,8 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
         end
         #(Line search should be done here)
         
+#         println("Funcion: ", time()-t_start)
+            
         #Update matrices X and F:
         if Iter2Restart==0 || memory==0
         
@@ -271,6 +275,8 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
             
         end
         
+#         println("XG: ", time()-t_start)
+        
         #Update variables:
         @mlv xn         = xnp1
         @mlv gn         = gnp1
@@ -310,6 +316,8 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
         pnorm           = NormFun(pn)
         gnorm           = NormFun(gn)
         _NLS_ch_update!()
+        
+#         println("p: ", time()-t_start)
         
 #         if mod(ch.nIter,5)==0
 #             semilogy(abs.(gn))
