@@ -7,9 +7,9 @@ function calc_mdot(model::GasFXP, rhoY::Vector{Matrix{Float64}}, RT::Matrix{Floa
     
     #mdot:
     mdot        = Vector{Matrix{Float64}}(undef, model.nSpecies)
-    mdot[1]     = @tturbo @. - rhoY[1]*kI - rhoY[1]*rhoY[2]*kB
-    mdot[2]     = @tturbo @.   rhoY[1]*kI + rhoY[1]*rhoY[2]*kB - rhoY[2]*kR
-    mdot[3]     = @tturbo @.                                   + rhoY[2]*kR
+    mdot[1]     = @tturbo @. - rhoY[1]*kI - rhoY[1]*abs(rhoY[2])*kB
+    mdot[2]     = @tturbo @.   rhoY[1]*kI + rhoY[1]*abs(rhoY[2])*kB - rhoY[2]*kR
+    mdot[3]     = @tturbo @.                                        + rhoY[2]*kR
     
     return mdot
     
