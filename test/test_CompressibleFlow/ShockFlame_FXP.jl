@@ -24,7 +24,8 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     #
     CSS::Float64=0.1, 
     #
-    SC::Int=0)
+    SC::Int=0, 
+    LFact::Float64=1.0)     #LFact is for debugging
 
     #---------------------------------------------------------------------
     #PROBLEM DATA:
@@ -78,11 +79,15 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     #Define domain:
     x2                  = Lx
     y2                  = 1.0*delta_flame
+#     y2                  = 0.1*Lx
     x0_flame            = 10.0*delta_flame
 #     x0_flame            = -10.0*Lx
     x0_shock            = 20.0*delta_flame
     MeshFile            = "$(@__DIR__)/../../temp/SC$(SC).geo"
     TrMesh_Rectangle_Create!(MeshFile, 0.0, x2, 5, 0.0, y2, 2)
+
+    #DEBUG:
+#     TrMesh_Rectangle_Create!(MeshFile, -5.0*LFact, 5.0*LFact, 100, -0.5*LFact, 0.5*LFact, 10) #DEBUG
     
     #Initial conditions:
     function u0fun(x::Vector{Matrix{Float64}})
@@ -100,7 +105,32 @@ function ShockFlame_FXP(; FesOrder::Int=5,
         return [rhoYF, rhoYX, rhoYP, rhovx, rhovy, rhoE]
         
     end
-
+    
+    #DEBUG:
+#     function u0fun(x::Vector{Matrix{Float64}})
+#         
+#         delta0          = 1e-2*LFact
+#         gamma           = 1.4
+#         xdisc           = -2.5*LFact
+#         ML              = 3.0
+#         rhoL            = 3.857143
+#         uL              = 2.629369
+#         pL              = 10.33333
+#         rhoEL           = pL/(gamma-1.0)+0.5*rhoL*uL^2
+#         pR              = 1.0
+#         WaveAmpl        = 0.0
+#         
+#         rho         = @. SmoothHeaviside(x[1]-xdisc, delta0, rhoL, 1.0) + 
+#                         WaveAmpl*sin(5.0*x[1])*SmoothHeaviside(x[1]-xdisc, delta0, 0.0, 1.0)
+#         rhovx       = @. rho * SmoothHeaviside(x[1]-xdisc, delta0, uL, 0.0)
+#         rhovy       = @. 0.0*x[1]
+#         p           = @. SmoothHeaviside(x[1]-xdisc, delta0, pL, pR)
+#         rhoE        = @. p/(gamma-1.0) + 0.5*rhovx^2/rho
+#         
+#         return [rho, 0.0*rho, 0.0*rho, rhovx, rhovy, rhoE]
+#         
+#     end
+    
     #Boundary conditions:
     BC_walls        = SlipAdiabatic()
     function pOutlet(t::Float64, x::Vector{Matrix{Float64}})
@@ -169,7 +199,7 @@ function ShockFlame_FXP(; FesOrder::Int=5,
     #INITIAL CONDITION:
     
     #Compute initial condition:
-    ConvFlag            = LIRKHyp_InitialCondition!(solver)
+    ConvFlag            = LIRKHyp_InitialCondition!(solver, DEq_MaxIter=10)
 #     CheckJacobian(solver, Plot_dQ_du=true)
 #     return
     
@@ -327,7 +357,7 @@ function ShockFlame_FXP(; FesOrder::Int=5,
         if uppercase(RKMethod)=="KC35"
             ConvFlag    = IRK_Step!(solver)
         else
-            ConvFlag    = LIRKHyp_Step!(solver)
+            ConvFlag    = LIRKHyp_Step!(solver, DEq_MaxIter=10)
         end
         
         if ConvFlag<=0

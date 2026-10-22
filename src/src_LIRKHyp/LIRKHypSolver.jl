@@ -413,7 +413,7 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
     
 end
 
-function LIRKHyp_Step_Pre!(solver::SolverData)
+function LIRKHyp_Step_Pre!(solver::SolverData; DEq_MaxIter::Int=0)
 
     println()
     t_start     = time()
@@ -464,7 +464,8 @@ function LIRKHyp_Step_Pre!(solver::SolverData)
                                     0.1*solver.SfS*solver.TolS_max)
     t_ini                   = time()
     AMA_flag, AMA_iters     = AdaptMesh!(solver, (solver.u, solver.fes), 
-                                solver.TolS_min, min(solver.TolS_max, TolS_req) )
+                                solver.TolS_min, min(solver.TolS_max, TolS_req), 
+                                DEq_MaxIter=DEq_MaxIter)
 #     AMA_flag, AMA_iters     = AdaptMesh!(solver, (solver.u, solver.fes), 
 #                                 solver.TolS_min, min(solver.TolS_max, TolS_req), 
 #                                 AMA_RefineFactor=0.5, DEq_MaxIter=10)
@@ -1063,7 +1064,7 @@ function AdaptMesh!(solver::SolverData,
                 metric          = AMA_OptimalAniso!(solver.urec, solver.rec_fes,
                                     solver.nFacts, max(1, solver.AMA_AnisoOrder), 
                                     DeltaAR=10.0, q=solver.SpaceNorm)
-                
+                                    
             #Isotropic mesh adaptation:
             if solver.AMA_AnisoOrder==0
                 metric.sf[1]    .= 1.0
@@ -1082,8 +1083,19 @@ function AdaptMesh!(solver::SolverData,
                                         q=solver.SpaceNorm)
             @mlv metric.lambda_bar  = TrElem_Area/A1v
             
+#             A1v             = areas(metric)
+#             L0              = sqrt(sum(areas(solver.mesh.metric)))
+#             println("L_0=", L0) 
+#             @mlv metric.lambda_bar  /= L0^2
+            
             #Correct metric (impose maximum radius):
             nElems_est              = AMA_CorrectMetric!(solver.Av, metric)
+            
+#             figure()
+#             xbar                = barycenters(solver.mesh)
+#             plot3D(xbar[:,1], xbar[:,2], log10.(A1v), ".b")
+#             plot3D(xbar[:,1], xbar[:,2], log10.(metric.sf[1]), ".b")
+#             error("")
             
             if false && solver.t+solver.Deltat>5e-4
             
@@ -1133,7 +1145,8 @@ function AdaptMesh!(solver::SolverData,
             #Call bamg to refine. The new mesh is first written in .db.new file and 
             #then overwritten in the solver.MeshFile:
             #previous ratio 2.7
-            run(pipeline(`bamg -AbsError -NoRescaling -NbJacobi 3 -NbSmooth 5 -ratio 2.7 -nbv $(1000000) -v 0 -M $(MetricFile) -b $(MeshFileDb) -o $(MeshFileDb).new`, 
+#             run(pipeline(`bamg -AbsError -NoRescaling -NbJacobi 3 -NbSmooth 5 -ratio 2.7 -nbv $(1000000) -v 0 -M $(MetricFile) -b $(MeshFileDb) -o $(MeshFileDb).new`, 
+            run(pipeline(`bamg -KeepBackVertices -ratio 2.7 -nbv 1000000 -hmin 1e-9 -hmax 1e9 -v 0 -M $(MetricFile) -b $(MeshFileDb) -o $(MeshFileDb).new`, 
                 stdout="$(@__DIR__)/../../temp/BamgSC$(solver.SC).out", 
                 stderr="$(@__DIR__)/../../temp/BamgSC$(solver.SC).err"))  
             mv(string(MeshFileDb,".new"), MeshFileDb, force=true)
@@ -2006,8 +2019,8 @@ end
 #-----------------------------------------------------------------
 #Choose default step function:
 
-function LIRKHyp_Step!(solver::SolverData)
-    return LIRKHyp_Step_Pre!(solver)
+function LIRKHyp_Step!(solver::SolverData; DEq_MaxIter::Int=0)
+    return LIRKHyp_Step_Pre!(solver, DEq_MaxIter=DEq_MaxIter)
 end
 
 #-----------------------------------------------------------------
