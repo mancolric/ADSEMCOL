@@ -1,7 +1,7 @@
 include("test_CompressibleFlow.jl")
 include("InputData/ReactiveGasAuxFunctions.jl")
 
-function ShockFlame_FXP(; FesOrder::Int=5, 
+function ShockFlame_FXP(; FesOrder::Int=2, 
     tf::Float64=20.0, RKMethod::String="Ascher3",
     epsilon::Float64=0e-2, nu::Float64=1e-2, kappa_rho_cv::Float64=0e-6, D::Float64=0.0, 
     YF0::Float64=1.0-1e-8, YX0::Float64=0.0,  
