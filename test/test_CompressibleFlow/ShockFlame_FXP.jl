@@ -357,7 +357,7 @@ function ShockFlame_FXP(; FesOrder::Int=2,
         if uppercase(RKMethod)=="KC35"
             ConvFlag    = IRK_Step!(solver)
         else
-            ConvFlag    = LIRKHyp_Step!(solver, DEq_MaxIter=10)
+            ConvFlag    = LIRKHyp_Step!(solver, DEq_MaxIter=0)
         end
         
         if ConvFlag<=0
