@@ -13,7 +13,7 @@ function ShockFlame2_FXP(; FesOrder::Int=3,
     #
     TolS::Float64=1e-6, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2, 
     #
-    TolT::Float64=1e-5, Deltat0::Float64=1e-6,
+    TolT::Float64=1e-4, Deltat0::Float64=1e-6,
     #
     PlotFig::Bool=false, MarkSF::Bool=true, wFig::Float64=9.50, hFig::Float64=6.50, 
     PlotVars::Vector{String}=String[], 
