@@ -845,6 +845,9 @@ function LIRKHyp_Step_Pre!(solver::SolverData; DEq_MaxIter::Int=0)
                 etaS_np1_est    = etaS_n * exp(solver.dlogetaS_dt * Deltat_n)
                 etaT_np1_est    = etaT_np1 * Deltat_ratio^(solver.RK.order)
                 TolA            = max(solver.TolA_min, solver.CA*min(etaS_np1_est, etaT_np1_est, etaS_n))
+                if isnan(TolA) #happens if etaS_n=0.0 (initial condition = 0) (dlogetaS_dt=Inf)
+                    TolA        = solver.TolA_min
+                end
                 
                 #Save iteration:
                 push!(solver.validv, false)
@@ -857,14 +860,20 @@ function LIRKHyp_Step_Pre!(solver::SolverData; DEq_MaxIter::Int=0)
                 
                 #Correct time step:
                 Deltat_ratio    = max(0.2, log(solver.SfS*solver.TolS_max/etaS_n)/solver.dlogetaS_dt)
+                if isnan(Deltat_ratio) #happens if etaS_n=0.0 (initial condition = 0 and dlogetaS_dt=0)
+                    Deltat_ratio    = 0.2
+                end
                 Deltat_n        *= Deltat_ratio
                 t_np1           = t_n + Deltat_n
-                
+    
                 #Next iteration:
                 RepeatTA        = true
                 etaS_np1_est    = etaS_n * exp(solver.dlogetaS_dt * Deltat_n)
                 etaT_np1_est    = etaT_np1 * Deltat_ratio^(solver.RK.order)
                 TolA            = max(solver.TolA_min, solver.CA*min(etaS_np1_est, etaT_np1_est, etaS_n))
+                if isnan(TolA) #happens if etaS_n=0.0 (initial condition = 0 and dlogetaS_dt=0)
+                    TolA        = solver.TolA_min
+                end
                 
                 #Save iteration:
                 push!(solver.validv, false)
@@ -891,7 +900,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData; DEq_MaxIter::Int=0)
             
         #LS did not converge. Decrease step size or abort.
         else
-        
+                
             #Save errors:
             push!(solver.tv, t_np1)
             push!(solver.etaSv, NaN)
@@ -913,6 +922,7 @@ function LIRKHyp_Step_Pre!(solver::SolverData; DEq_MaxIter::Int=0)
             else
             
                 #Reduce time step.:
+                display(Deltat_n)
                 LSFailed_iters      += 1
                 rDeltat             = max(0.2, (0.8*TolA/etaA_np1)^(2))
                 Deltat_n            *= rDeltat
@@ -2510,6 +2520,9 @@ function IRK_Step!(solver::SolverData)
                 etaS_np1_est    = etaS_n * exp(solver.dlogetaS_dt * Deltat_n)
                 etaT_np1_est    = etaT_np1 * Deltat_ratio^(solver.RK.order)
                 TolA            = max(solver.TolA_min, solver.CA*min(etaS_np1_est, etaT_np1_est, etaS_n))
+                if isnan(TolA) #happens if etaS_n=0.0 (initial condition = 0 and dlogetaS_dt=0)
+                    TolA        = solver.TolA_min
+                end
                 
                 #Save iteration:
                 push!(solver.validv, false)
@@ -2522,6 +2535,9 @@ function IRK_Step!(solver::SolverData)
                 
                 #Correct time step:
                 Deltat_ratio    = max(0.2, log(solver.SfS*solver.TolS_max/etaS_n)/solver.dlogetaS_dt)
+                if isnan(Deltat_ratio) #happens if etaS_0=0 (initial condition = 0 and dlogetaS_dt=0)
+                    Deltat_ratio    = 0.2
+                end
                 Deltat_n        *= Deltat_ratio
                 t_np1           = t_n + Deltat_n
                 
@@ -2530,6 +2546,9 @@ function IRK_Step!(solver::SolverData)
                 etaS_np1_est    = etaS_n * exp(solver.dlogetaS_dt * Deltat_n)
                 etaT_np1_est    = etaT_np1 * Deltat_ratio^(solver.RK.order)
                 TolA            = max(solver.TolA_min, solver.CA*min(etaS_np1_est, etaT_np1_est, etaS_n))
+                if isnan(TolA) #happens if etaS_0=0 (initial condition = 0 and dlogetaS_dt=0)
+                    TolA        = solver.TolA_min
+                end
                 
                 #Save iteration:
                 push!(solver.validv, false)

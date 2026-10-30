@@ -1420,15 +1420,15 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
     #Check NaN's:
     for II=1:solver.nVars
         if !all(isfinite.(_qp.f[II]))
-#             error("flux $(II) is not finite")
+            printstyled("flux $(II) is not finite", color=:orange)
             flag    = -1
         end
         if !all(isfinite.(_qp.fB[II]))
-#             error("bubble flux $(II) is not finite")
+            printstyled("bubble flux $(II) is not finite", color=:orange)
             flag    = -1
         end
         if !all(isfinite.(_qp.Q[II]))
-#             error("source term $(II) is not finite")
+            printstyled("source term $(II) is not finite", color=:orange)
             flag    = -1
         end
     end
@@ -1531,7 +1531,7 @@ function Rhs!(solver::SolverData, t::Float64, uv::Vector{Float64},
         t_ini2                      = time()
         for II=1:solver.nVars
             if !all(isfinite.(_bqp.f[II]))
-#                 error("flux $(II) for boundary $(bound_id) is not finite")
+                printstyled("flux $(II) for boundary $(bound_id) is not finite \n", color=:orange)
                 flag                = -1
             end
         end

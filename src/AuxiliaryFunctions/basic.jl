@@ -162,14 +162,19 @@ end
 
 function SmoothHeaviside(x::Float64, delta::Float64)
 
-    return 0.5+0.5*tanh(x/delta)
+    return SmoothHeaviside(x, delta, 0.0, 1.0)
+#     return 0.5+0.5*tanh(x/delta)
 
 end
 
 function SmoothHeaviside(x::Float64, delta::Float64, 
     a::Float64, b::Float64)
 
-    return (a+b)/2 + (b-a)/2*tanh(x/delta)
+    if delta==0.0 && x==0.0
+        return (a+b)/2
+    else
+        return (a+b)/2 + (b-a)/2*tanh(x/delta)
+    end
 
 end
 

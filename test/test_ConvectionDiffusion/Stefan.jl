@@ -1,15 +1,15 @@
 include("test_ConvectionDiffusion.jl")
 function Stefan(
     ;hp0::Float64=0.1, FesOrder::Int=5,
-    epsilon::Float64=0.01,
+    epsilon::Float64=0.01, Deltah1::Float64=0e-2, Deltah2::Float64=1e-2, 
     Deltat0::Float64=1e-6,
     TolT::Float64=1e-4, TolS::Float64=1e-4, AMA_MaxIter::Int=200, tf::Float64=2.5,
-    PostAdapt::Bool=false,
+    SpaceAdapt::Bool=true, TimeAdapt::Bool=true, 
     Ste::Float64=4.0,kappa::Float64=2/3, cp::Float64=4/3,
     #
     AMA_rDeltat::Float64=0.3,
     SaveFig::Bool=false, wFig::Float64=9.50, hFig::Float64=6.50,
-    Nt_SaveFig::Int=5,
+    Nt_SaveFig::Int=10, Deltat_SaveFig::Float64=Inf, 
     PlotRes::Bool=true,
     #
     SaveRes::Bool=true, Nt_SaveRes::Int=typemax(Int), Deltat_SaveRes::Float64=Inf,
@@ -40,6 +40,7 @@ function Stefan(
     #Viscosity:
     function epsilonfun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
 
+        #=
         #zona solido:
         epsilon0 = ones(size(x[1]))
 
@@ -50,14 +51,19 @@ function Stefan(
         #zona liquido:
         aux = u[1] .> (1.0 + 1.0/Ste)
         epsilon0[aux] .= kappa/cp
-
+        =#
+        
+        epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, epsilon) + 
+                            SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp-epsilon) 
 
         return [ epsilon0 ]
 
     end
     function depsilonfun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
 
-        depsilon0 = zeros(size(x[1]))
+#         depsilon0 = zeros(size(x[1]))
+        depsilon0   = @. (epsilon-1.0)*sech((u[1]-1.0)/Deltah2)^2 + 
+                            (kappa/cp-epsilon)*sech((u[1]-1.0-1.0/Ste)/Deltah2)
         return [ depsilon0 ]
 
     end
@@ -88,7 +94,7 @@ function Stefan(
 
     #Boundary conditions:
     function qLeft(t::Float64, x::Vector{<:AAF64})
-        return [0.0*x[1].-2.0]
+        return [0.0*x[1].-2.0*tanh(t/1e-3)]
     end
     function uRight(t::Float64, x::Vector{<:AAF64})
         return [0.0*x[1]]
@@ -128,17 +134,18 @@ function Stefan(
     solver.FesOrder     = FesOrder
     solver.Deltat0      = Deltat0
     solver.tf           = tf
-    solver.SpaceAdapt   = true
+    solver.SpaceAdapt   = SpaceAdapt
     solver.TolS_max     = TolS
     solver.TolS_min     = 0.0*TolS
 #     solver.SfS          = 1.0
 #     @warn "SfS"
-    solver.TimeAdapt    = true
+    solver.TimeAdapt    = TimeAdapt
     solver.TolT         = TolT
     solver.AMA_MaxIter  = AMA_MaxIter
     solver.AMA_SizeOrder    = FesOrder
     solver.AMA_AnisoOrder   = 2
     solver.AMA_rDeltat      = AMA_rDeltat
+    solver.LSType           = "DominantILU0"
 
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x))
@@ -168,11 +175,14 @@ function Stefan(
             return
         end
 
+        printstyled("Plotting \n", color=:yellow)
+        
         figure(figv[1].number)
         PyPlot.cla()
         plotNodes((x1,x2)->x1, solver.u[1], solver.fes)
 #         PlotContour(solver.u[1], solver.fes)
 #         axis("equal")
+        title(latexstring("t=", solver.t))
 
         figure(figv[2].number)
         PyPlot.cla()
@@ -189,6 +199,8 @@ function Stefan(
 
         NSave   += 1
 
+        printstyled("Plot ended \n", color=:yellow)
+        
     end
     PlotSol()
     #println("Min:", minimum(solver.u[1]))
@@ -235,11 +247,7 @@ function Stefan(
     while solver.t<solver.tf
 
         ConvFlag            = LIRKHyp_Step!(solver)
-#         if PostAdapt
-#             ConvFlag            = LIRKHyp_Step_Post!(solver)
-#         else
-#             ConvFlag            = LIRKHyp_Step_Pre!(solver)
-#         end
+#         ConvFlag            = IRK_Step!(solver)
         if ConvFlag<=0
             break
         end
@@ -249,7 +257,7 @@ function Stefan(
         push!(umaxv, maximum(uP[1]))
 
         NPlotSave   += 1
-        if solver.t-t_lastFig>=2e-3 || solver.t==tf || NPlotSave==Nt_SaveFig
+        if solver.t-t_lastFig>=Deltat_SaveFig || solver.t==tf || NPlotSave==Nt_SaveFig
             NPlotSave   = 0
             t_lastFig   = solver.t
             PlotSol()
