@@ -55,7 +55,7 @@ function Stefan(
         
         epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, epsilon) + 
                             SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp-epsilon) 
-
+                            
         return [ epsilon0 ]
 
     end
@@ -63,7 +63,8 @@ function Stefan(
 
 #         depsilon0 = zeros(size(x[1]))
         depsilon0   = @. (epsilon-1.0)*sech((u[1]-1.0)/Deltah2)^2 + 
-                            (kappa/cp-epsilon)*sech((u[1]-1.0-1.0/Ste)/Deltah2)
+                            (kappa/cp-epsilon)*sech((u[1]-1.0-1.0/Ste)/Deltah2)^2
+#         depsilon0   = max(1.0, kappa/cp) .+ 0.0*u[1]
         return [ depsilon0 ]
 
     end
