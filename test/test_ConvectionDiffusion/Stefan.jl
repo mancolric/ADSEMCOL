@@ -62,8 +62,8 @@ function Stefan(
     function depsilonfun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
 
 #         depsilon0 = zeros(size(x[1]))
-        depsilon0   = @. (epsilon-1.0)*sech((u[1]-1.0)/Deltah2)^2 + 
-                            (kappa/cp-epsilon)*sech((u[1]-1.0-1.0/Ste)/Deltah2)^2
+        depsilon0   = @. (epsilon-1.0)/Deltah2 * sech((u[1]-1.0)/Deltah2)^2 + 
+                            (kappa/cp-epsilon)/Deltah2 * sech((u[1]-1.0-1.0/Ste)/Deltah2)^2
 #         depsilon0   = max(1.0, kappa/cp) .+ 0.0*u[1]
         return [ depsilon0 ]
 
