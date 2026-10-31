@@ -145,7 +145,7 @@ function bflux!(model::SCD2, BC::Dirichlet, _bqp::TrBintVars, ComputeJ::Bool)
         depsilon_dgradu                 = ViscosityAllocate(1, size(u[1]), ComputeJ)
     
     #Natural viscosity:
-    epsilon                             = model.epsilon(t,x,u)[1]
+    epsilon                             = model.epsilon(t,x,u,du)[1]
     depsilon_du                         = zeros(0,0)
     depsilon_dgradu                     = Vector{Matrix{Float64}}(undef, 2)
     if ComputeJ

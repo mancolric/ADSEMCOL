@@ -50,7 +50,7 @@ mutable struct SCD2 <: ScalarConvectionDiffusion
 
     #Model's characteristic fields. These functions receive (t,[x1,x2],[u]) and return
     a               ::FWt21                     #Returns velocity [a1, a2]
-    epsilon         ::FWt21                     #Returns viscosity coefficient [epsilon]
+    epsilon         ::FW_svvm_v                 #Returns viscosity coefficient [epsilon]
     Q               ::FWt21                     #Returns source [Q]
     
     #Functions to compute the jacobians:
@@ -70,7 +70,7 @@ mutable struct SCD2 <: ScalarConvectionDiffusion
     
 end
 
-function SCD2(a::FWt21, epsilon::FWt21, Q::FWt21, 
+function SCD2(a::FWt21, epsilon::FW_svvm_v, Q::FWt21, 
     da_du::FWt21, depsilon_du::FW_svvm_v, depsilon_dgradu::FW_svvm_v, dQ_du::FWt21)
 
     PD                  = SCD2()
@@ -237,7 +237,7 @@ function FluxSource!(model::SCD2, _qp::TrIntVars, ComputeJ::Bool)
     a                       = model.a(t,x,u)
     da_du                   = Vector{Matrix{Float64}}(undef,2)
     lambda_max              = DepVars(model,t,x,u,["lambda_max"])[1][1]
-    epsilon                 = model.epsilon(t,x,u)[1]
+    epsilon                 = model.epsilon(t,x,u,du)[1]
     depsilon_du             = zeros(0,0)
     depsilon_dgradu         = Vector{Matrix{Float64}}(undef,2)
     if ComputeJ
