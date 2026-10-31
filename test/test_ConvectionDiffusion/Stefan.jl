@@ -54,7 +54,10 @@ function Stefan(
         =#
         
         epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, epsilon) + 
-                            SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp-epsilon) 
+                            SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp-epsilon)
+
+#         epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, 0.0) + 
+#                             SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp) 
                             
         return [ epsilon0 ]
 

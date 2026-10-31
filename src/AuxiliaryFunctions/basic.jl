@@ -117,6 +117,14 @@ const FWt21         = FunctionWrapper{
                         Tuple{  Float64, 
                                 Vector{<:AMF64},
                                 Vector{<:AMF64} } }
+                      
+#Custom alias for Float64. s=scalar, v=vector, m=matrix
+const FW_svvm_v     = FunctionWrapper{ 
+                        Vector{Matrix{Float64}}, 
+                        Tuple{  Float64, 
+                                Vector{<:AMF64}, 
+                                Vector{<:AMF64}, 
+                                Matrix{<:AMF64} } }
 
 "
     x   = linspace(a,b,n)

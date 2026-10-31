@@ -46,6 +46,50 @@ function SCD(a::FWt21, epsilon::FWt21, Q::FWt21,
     
 end
 
+mutable struct SCD2 <: ScalarConvectionDiffusion
+
+    #Model's characteristic fields. These functions receive (t,[x1,x2],[u]) and return
+    a               ::FWt21                     #Returns velocity [a1, a2]
+    epsilon         ::FWt21                     #Returns viscosity coefficient [epsilon]
+    Q               ::FWt21                     #Returns source [Q]
+    
+    #Functions to compute the jacobians:
+    da_du           ::FWt21
+    depsilon_du     ::FW_svvm_v
+    depsilon_dgradu ::FW_svvm_v
+    dQ_du           ::FWt21
+    
+    #Stabilization variables:
+    CSS             ::Float64   #Subgrid stabilization
+    CW              ::Float64   #Boundary penalty (50.0-200.0 for IIPG)
+    
+    #Mandatory fields:
+    nVars           ::Int                 
+    
+    SCD2()          = new()
+    
+end
+
+function SCD2(a::FWt21, epsilon::FWt21, Q::FWt21, 
+    da_du::FWt21, depsilon_du::FW_svvm_v, depsilon_dgradu::FW_svvm_v, dQ_du::FWt21)
+
+    PD                  = SCD2()
+    PD.a                = a
+    PD.epsilon          = epsilon
+    PD.Q                = Q
+    PD.da_du            = da_du
+    PD.depsilon_du      = depsilon_du
+    PD.depsilon_dgradu  = depsilon_dgradu
+    PD.dQ_du            = dQ_du
+    PD.CSS              = 0.1
+    PD.CW               = 50.0
+    PD.nVars            = 1
+
+    return PD
+    
+end
+
+
 mutable struct Dirichlet <: BoundConds
     uDir            ::FWt11     #must return Dirichlet condition at the boundary [u]
 end
@@ -84,12 +128,35 @@ function DepVars(model::SCD, t::Float64, x::Vector{<:AMF64}, u::Vector{<:AMF64},
     return xout
     
 end
+function DepVars(model::SCD2, t::Float64, x::Vector{<:AMF64}, u::Vector{<:AMF64}, 
+    vout::Vector{String})
+    
+    nout        = length(vout)
+    xout        = Vector{Vector{Matrix{Float64}}}(undef,nout)
+    for ivar in eachindex(vout)
+        vble    = vout[ivar]
+        if vble=="u"
+            xout[ivar]  = [ copy(u[1]) ]
+        elseif vble=="lambda_max"
+            a           = model.a(t, x, u)
+            da_du       = model.da_du(t, x, u)
+            #ahat_i = d(a_i u)/du = da_i/du * u + a_i 
+            lambda      = @avxt @. sqrt( (da_du[1]*u[1]+a[1])^2 + (da_du[2]*u[1]+a[2])^2 ) 
+            xout[ivar]  = [ lambda ]
+        else
+            error("Variable $(vble) not supported")
+        end
+    end
+    
+    return xout
+    
+end
 
 #-------------------------------------------------------------------------------
 #MANDATORY FUNCTIONS:
 
 #Compute normalization factors from solution. Mass matrix has already been computed.
-function nFactsCompute!(solver::SolverData{<:SCD})
+function nFactsCompute!(solver::SolverData{T}) where T<:Union{SCD, SCD2}
 
     solver.nFacts[1]    = 1.0
     
@@ -138,6 +205,67 @@ function FluxSource!(model::SCD, _qp::TrIntVars, ComputeJ::Bool)
 #         @avxt @. depsilonSS_du      = model.CSS*hp * (a[1]*da_du[1]+a[2]*da_du[2])/anorm
     end
     DiffusiveFlux!(model, epsilonSS, depsilonSS_du, 
+        u, duB, ComputeJ, 
+        _qp.fB, _qp.dfB_du, _qp.dfB_dgraduB)
+    
+    #Evaluate source terms:
+    _qp.Q[1]            .= model.Q(t,x,u)[1]
+    if ComputeJ
+        _qp.dQ_du[1]    .= model.dQ_du(t,x,u)[1]
+    end
+    
+    #Deltat imposed by CFL=1 (do not use @avxt, it does not work well with $ symbol)
+    hp_min              = _hmin(_qp.Integ2D.mesh)./_qp.FesOrder * ones(1, _qp.nqp)
+    Deltat_CFL_a        = @. $minimum(hp_min/lambda_max)
+    Deltat_CFL_epsilon  = @. $minimum(hp_min^2/epsilon) 
+    _qp.Deltat_CFL      = min(Deltat_CFL_a, Deltat_CFL_epsilon)
+    
+    return
+    
+end
+
+function FluxSource!(model::SCD2, _qp::TrIntVars, ComputeJ::Bool)
+
+    t               = _qp.t
+    x               = _qp.x
+    u               = _qp.u
+    du              = _qp.gradu
+    duB             = _qp.graduB
+    metric          = _qp.Integ2D.mesh.metric
+    
+    #Natural viscosity:
+    a                       = model.a(t,x,u)
+    da_du                   = Vector{Matrix{Float64}}(undef,2)
+    lambda_max              = DepVars(model,t,x,u,["lambda_max"])[1][1]
+    epsilon                 = model.epsilon(t,x,u)[1]
+    depsilon_du             = zeros(0,0)
+    depsilon_dgradu         = Vector{Matrix{Float64}}(undef,2)
+    if ComputeJ
+        da_du               = model.da_du(t,x,u)
+        depsilon_du         = model.depsilon_du(t,x,u,du)[1]
+        depsilon_dgradu     = model.depsilon_dgradu(t,x,u,du)
+    end
+    
+    #Convective and diffusive fluxes:
+    ConvectiveFlux!(model, a, da_du, u, du, ComputeJ, 
+        _qp.f, _qp.df_du, _qp.df_dgradu)
+    DiffusiveFlux!(model, epsilon, depsilon_du, depsilon_dgradu, u, du, ComputeJ, 
+        _qp.f, _qp.df_du, _qp.df_dgradu)
+    
+    #Evaluate subgrid stabilization flux:
+    A_Elems             = areas(_qp.Integ2D.mesh)
+    h_Elems             = @tturbo @. sqrt(A_Elems)
+    hp                  = h_Elems./_qp.FesOrder * ones(1, _qp.nqp)
+    epsilonSS           = @avxt @. model.CSS*lambda_max*hp
+    depsilonSS_du       = depsilon_du   #Copy pointer
+    depsilonSS_dgradu   = depsilon_dgradu #Copy pointer
+    if ComputeJ
+        @avxt @. depsilonSS_du          = 0.0
+        @avxt @. depsilonSS_dgradu[1]   = 0.0
+        @avxt @. depsilonSS_dgradu[2]   = 0.0
+#         @avxt @. depsilonSS_du      = model.CSS*hp * (a[1]*da_du[1]+a[2]*da_du[2])/anorm
+    end
+    DiffusiveFlux!(model, epsilonSS, depsilonSS_du, depsilon_dgradu, 
         u, duB, ComputeJ, 
         _qp.fB, _qp.dfB_du, _qp.dfB_dgraduB)
     
