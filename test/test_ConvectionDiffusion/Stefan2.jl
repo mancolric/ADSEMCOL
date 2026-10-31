@@ -1,0 +1,294 @@
+include("test_ConvectionDiffusion.jl")
+function Stefan2(
+    ;hp0::Float64=0.1, FesOrder::Int=3,
+    delta::Float64=0.01, alpha::Float64=6.0, Deltah1::Float64=1e-2, Deltah2::Float64=1e-2, 
+    Deltat0::Float64=1e-3,
+    TolT::Float64=1e-3, TolS::Float64=1e-3, AMA_MaxIter::Int=200, tf::Float64=2.5,
+    SpaceAdapt::Bool=true, TimeAdapt::Bool=true, 
+    Ste::Float64=0.25,kappa::Float64=2/3, cp::Float64=4/3,
+    #
+    AMA_rDeltat::Float64=0.3,
+    SaveFig::Bool=false, wFig::Float64=9.50, hFig::Float64=6.50,
+    Nt_SaveFig::Int=10, Deltat_SaveFig::Float64=Inf, 
+    PlotRes::Bool=true,
+    #
+    SaveRes::Bool=true, Nt_SaveRes::Int=typemax(Int), Deltat_SaveRes::Float64=Inf,
+    #
+    SC::Int=0)
+
+    #---------------------------------------------------------------------
+    #PROBLEM DATA:
+
+    #NOTE: The argument of the functions can be AbstractArray, and hence the output
+    #is a type-unstable AbstractArray. However, when FunctionWrapper is used, the
+    #argument is going to be <:AMF64 and the output a Matrix{Float64}.
+
+    #Velocity:
+    function a_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
+
+        a1  = zeros(size(x[1]))
+        a2  = zeros(size(x[1]))
+        return [a1, a2]
+    end
+    function da_du_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
+
+        da1     = zeros(size(x[1]))
+        da2 = zeros(size(x[1]))
+        return [da1, da2]
+    end
+
+    #Viscosity:
+    function epsilon_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64}, du::Matrix{<:AAF64})
+
+        du_norm     = @. sqrt( du[1,1]*du[1,1] + du[1,2]*du[1,2] ) + 1e-12
+#         epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, 0.0) + 
+#                             SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp) + 
+#                             delta^2 * du_norm
+        epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, 0.0) + 
+                            SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp) + 
+                            delta * tanh( (delta/1.0 * du_norm)^alpha )
+#         println("t=", t, ", |discontinuity sensor|=", norm((delta/1.0 * du_norm).^alpha, Inf))
+        return [ epsilon0 ]
+
+    end
+    function depsilon_du_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64}, du::Matrix{<:AAF64})
+
+        if Deltah2==0.0
+            return [ 0.0*u[1] ]
+        else
+            depsilon0_du    = @. (-1.0)/(2*Deltah2) * sech((u[1]-1.0)/Deltah2)^2 + 
+                                (kappa/cp)/(2*Deltah2) * sech((u[1]-1.0-1.0/Ste)/Deltah2)^2
+
+            return [ depsilon0_du ]
+        end 
+
+    end
+    function depsilon_dgradu_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64}, du::Matrix{<:AAF64})
+
+        du_norm             = @. sqrt( du[1,1]*du[1,1] + du[1,2]*du[1,2] ) + 1e-12
+#         depsilon0_du_dx1    = @. delta^2 *  du[1,1]/(du_norm + 1e-12)
+#         depsilon0_du_dx2    = @. delta^2 *  du[1,2]/(du_norm + 1e-12)
+        depsilon0_du_dx1    = @. delta *  sech( (delta/1.0 * du_norm)^alpha )^2 * 
+                                    alpha*(delta/1.0 * du_norm)^(alpha-1) * 
+                                    (delta/1.0) * du[1,1]/du_norm
+        depsilon0_du_dx2    = @. delta *  sech( (delta/1.0 * du_norm)^alpha )^2 * 
+                                    alpha*(delta/1.0 * du_norm)^(alpha-1) * 
+                                    (delta/1.0) * du[1,2]/du_norm
+        return [ depsilon0_du_dx1, depsilon0_du_dx2 ]
+
+    end
+
+    #Reaction terms:
+    function Q_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
+
+        #Q = u_t + a*u_x - epsilon*u_xx
+        Q0          = @mlv  0.0*x[1]
+        return [ Q0 ]
+
+    end
+    function dQ_du_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
+
+       return [ 0.0*u[1] ]
+
+    end
+
+    #Initial condition:
+    function u0fun(x::Vector{<:AAF64})
+
+        u0          = @avxt @. 0.0*x[1]
+#         u0          = @avxt @. 0.5 - 0.25*x[1]/2.5
+
+        return [ u0 ]
+
+    end
+
+    #Boundary conditions:
+    function qLeft(t::Float64, x::Vector{<:AAF64})
+        return [0.0*x[1].-2.0*tanh(t/1e-3)]
+    end
+    function uRight(t::Float64, x::Vector{<:AAF64})
+        return [0.0*x[1]]
+    end
+    function qTopBottom(t::Float64, x::Vector{<:AAF64})
+        return [ zeros(size(x[1])) ]
+    end
+    BC_left         = Neumann(FWt11((t,x)->qLeft(t,x)))
+    BC_right        = Dirichlet(FWt11((t,x)->uRight(t,x)))
+    BC_horiz        = Neumann(FWt11((t,x)->qTopBottom(t,x)))
+
+    #Structure with convection--diffusion problem data:
+    ProblemData     = SCD2( FWt21((t,x,u)->a_fun(t,x,u)),
+                            FW_svvm_v((t,x,u,du)->epsilon_fun(t,x,u,du)),
+                            FWt21((t,x,u)->Q_fun(t,x,u)),
+                            FWt21((t,x,u)->da_du_fun(t,x,u)),
+                            FW_svvm_v((t,x,u,du)->depsilon_du_fun(t,x,u,du)),
+                            FW_svvm_v((t,x,u,du)->depsilon_dgradu_fun(t,x,u,du)),
+                            FWt21((t,x,u)->dQ_du_fun(t,x,u)) )
+
+    #Mesh:
+    MeshFile            = "$(@__DIR__)/../../temp/Stefan_SC$(SC).geo"
+    NX                  = Int(ceil(2.5/(hp0*FesOrder)))
+    NY                  = Int(ceil(1.0/(hp0*FesOrder)))
+    TrMesh_Rectangle_Create!(MeshFile, 0.0, 2.5, NX, -1.0, 0.0, NY)
+
+    #----------------------------------------------------------
+    #INITIAL CONDITION:
+
+    t_ini               = time()
+
+    #Create solver structure:
+    solver              = LIRKHyp_Start(ProblemData)
+    solver.ProblemName  = "Stefan"
+    solver.SC           = SC
+    solver.MeshFile     = MeshFile
+    solver.nBounds      = 4
+    solver.FesOrder     = FesOrder
+    solver.Deltat0      = Deltat0
+    solver.tf           = tf
+    solver.SpaceAdapt   = SpaceAdapt
+    solver.TolS_max     = TolS
+    solver.TolS_min     = 0.0*TolS
+#     solver.SfS          = 1.0
+#     @warn "SfS"
+    solver.TimeAdapt    = TimeAdapt
+    solver.TolT         = TolT
+    solver.AMA_MaxIter  = AMA_MaxIter
+    solver.AMA_SizeOrder    = FesOrder
+    solver.AMA_AnisoOrder   = 2
+    solver.AMA_rDeltat      = AMA_rDeltat
+    solver.LSType           = "DominantILU0"
+
+    #Set initial and boundary conditions:
+    solver.u0fun        = FW11((x) -> u0fun(x))
+#     solver.BC           = [BCW(BC_horiz), BCW(BC_right), BCW(BC_horiz), BCW(BC_left)]
+    solver.BC           = [BCW(BC_horiz), BCW(BC_right), BCW(BC_horiz), BCW(BC_left)]
+
+    #Initial condition:
+    ConvFlag            = LIRKHyp_InitialCondition!(solver)
+    tv                  = [0.0]
+    uP                  = GetPolynomials(solver.u, solver.fes)
+    uminv               = [minimum(uP[1])]
+    umaxv               = [maximum(uP[1])]
+
+    #Function to plot solution:
+    figv                = Vector{Figure}(undef,3)
+    if PlotRes
+        for ii=1:length(figv)
+            figv[ii]    = figure()
+        end
+    end
+    t_lastFig           = 0.0
+    NPlotSave           = 0
+    NSave               = 0
+    function PlotSol()
+
+        if !PlotRes
+            return
+        end
+
+        printstyled("Plotting \n", color=:yellow)
+        
+        figure(figv[1].number)
+        PyPlot.cla()
+        plotNodes((x1,x2)->x1, solver.u[1], solver.fes)
+#         PlotContour(solver.u[1], solver.fes)
+#         axis("equal")
+        title(latexstring("t=", solver.t))
+
+        figure(figv[2].number)
+        PyPlot.cla()
+        PlotContour(solver.u[1], solver.fes, cmap="bwr")
+        PlotMesh!(solver.mesh, color="k")
+        axis("equal")
+
+        figure(figv[3].number)
+        PyPlot.cla()
+#         semilogy(solver.tv, solver.etaSv, ".-b")
+#         semilogy(solver.tv, solver.etaTv, ".-g")
+#         semilogy(solver.tv, solver.etaAv, ".-r")
+        plot(solver.tv, solver.nElemsv, ".-k")
+
+        NSave   += 1
+
+        printstyled("Plot ended \n", color=:yellow)
+        
+    end
+    PlotSol()
+    #println("Min:", minimum(solver.u[1]))
+   # println("Max:", maximum(solver.u[1]))
+
+    #Function to save intermediate results:
+    t_lastRes           = -Deltat_SaveRes
+    ct_SaveRes          = 0
+    nb_SaveRes          = 0
+    function SaveSol()
+
+        ct_SaveRes      += 1
+        if SaveRes && ( solver.t-t_lastRes>=Deltat_SaveRes ||
+                        ct_SaveRes==Nt_SaveRes || solver.t==tf || solver.t==0.0 )
+            save("$(ResUbi)LIRKHyp_SC$(SC)_$(nb_SaveRes).jld2", "StudyCase", "KPP",
+                "tv", tv, "uminv", uminv, "umaxv", umaxv,
+                "delta", delta, "solver", save(solver))
+            t_lastRes   += Deltat_SaveRes
+            ct_SaveRes  = 0
+            nb_SaveRes  += 1
+        end
+        return
+
+    end
+    SaveSol()
+
+    #Display info:
+    hmean       = 2.0*sqrt(solver.Omega/solver.mesh.nElems/TrElem_Area)
+    etaL2,      = etaS_reconstruction(solver, solver.u, q=2)
+    etaLinf,    = etaS_reconstruction(solver, solver.u, q=Inf)
+    println("h=", sprintf1("%.2e",hmean),
+        ", etaL2=", sprintf1("%.2e",etaL2),
+        ", etaLinf=", sprintf1("%.2e",etaLinf),
+        ", Delta u_min=", sprintf1("%.4e",0.25*pi-minimum(uP[1])),
+        ", Delta u_max=", sprintf1("%.4e",maximum(uP[1])-3.5*pi),
+        ", time=", time()-t_ini)
+
+    #----------------------------------------------------------
+    #MARCH IN TIME:
+
+    t_ini               = time()
+
+    nIter               = 0
+    while solver.t<solver.tf
+    
+        #DEBUG:
+        if solver.t>0.21 && false
+            CheckJacobian(solver, Plot_df_du=true, Plot_df_dgradu=true)
+            error("")
+        end 
+
+        ConvFlag            = LIRKHyp_Step!(solver)
+#         ConvFlag            = IRK_Step!(solver)
+        if ConvFlag<=0
+            break
+        end
+        push!(tv, solver.t)
+        uP                  = GetPolynomials(solver.u, solver.fes)
+        push!(uminv, minimum(uP[1]))
+        push!(umaxv, maximum(uP[1]))
+
+        NPlotSave   += 1
+        if solver.t-t_lastFig>=Deltat_SaveFig || solver.t==tf || NPlotSave==Nt_SaveFig
+            NPlotSave   = 0
+            t_lastFig   = solver.t
+            PlotSol()
+        end
+        SaveSol()
+
+        #Print info:
+        println("h=", sprintf1("%.2e",hmean),
+                ", Delta u_min=", sprintf1("%.4e",0.25*pi-minimum(uP[1])),
+                ", Delta u_max=", sprintf1("%.4e",maximum(uP[1])-3.5*pi),
+                ", time=", time()-t_ini)
+
+    end
+
+    return
+
+end
