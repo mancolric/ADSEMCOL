@@ -1,7 +1,7 @@
 include("test_ConvectionDiffusion.jl")
 function Stefan2(
     ;hp0::Float64=0.1, FesOrder::Int=3,
-    delta::Float64=0.01, alpha::Float64=6.0, Deltah1::Float64=1e-2, Deltah2::Float64=1e-2, 
+    delta::Float64=1e-2, tc::Float64=1e-2, alpha::Float64=6.0, Deltah1::Float64=1e-2, Deltah2::Float64=1e-2, 
     Deltat0::Float64=1e-3,
     TolT::Float64=1e-3, TolS::Float64=1e-3, AMA_MaxIter::Int=200, tf::Float64=2.5,
     SpaceAdapt::Bool=true, TimeAdapt::Bool=true, 
@@ -46,7 +46,7 @@ function Stefan2(
 #                             delta^2 * du_norm
         epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, 0.0) + 
                             SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp) + 
-                            delta * tanh( (delta/1.0 * du_norm)^alpha )
+                            delta^2/tc * tanh( (delta/1.0 * du_norm)^alpha )
 #         println("t=", t, ", |discontinuity sensor|=", norm((delta/1.0 * du_norm).^alpha, Inf))
         return [ epsilon0 ]
 
@@ -68,10 +68,10 @@ function Stefan2(
         du_norm             = @. sqrt( du[1,1]*du[1,1] + du[1,2]*du[1,2] ) + 1e-12
 #         depsilon0_du_dx1    = @. delta^2 *  du[1,1]/(du_norm + 1e-12)
 #         depsilon0_du_dx2    = @. delta^2 *  du[1,2]/(du_norm + 1e-12)
-        depsilon0_du_dx1    = @. delta *  sech( (delta/1.0 * du_norm)^alpha )^2 * 
+        depsilon0_du_dx1    = @. delta^2/tc *  sech( (delta/1.0 * du_norm)^alpha )^2 * 
                                     alpha*(delta/1.0 * du_norm)^(alpha-1) * 
                                     (delta/1.0) * du[1,1]/du_norm
-        depsilon0_du_dx2    = @. delta *  sech( (delta/1.0 * du_norm)^alpha )^2 * 
+        depsilon0_du_dx2    = @. delta^2/tc *  sech( (delta/1.0 * du_norm)^alpha )^2 * 
                                     alpha*(delta/1.0 * du_norm)^(alpha-1) * 
                                     (delta/1.0) * du[1,2]/du_norm
         return [ depsilon0_du_dx1, depsilon0_du_dx2 ]
