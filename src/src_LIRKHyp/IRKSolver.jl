@@ -678,7 +678,7 @@ function IRK_UpdatedJ_Step!(solver::SolverData)
                     #small tolerance. In that case, having an accurate Newton step gres will 
                     #allow for a reduction in the number of Newton steps (and evaluations of f):
                     flag        = NaN
-                    if true && uppercase(solver.LSType)=="SCILU0"
+                    if false && uppercase(solver.LSType)=="SCILU0"
                         @warn "DEBUG: Direct solver"
                         flag    = 1
                         gres    .= solver.Am\fres
