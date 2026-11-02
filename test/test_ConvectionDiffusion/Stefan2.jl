@@ -98,7 +98,7 @@ function Stefan2(
 
         u0          = @avxt @. 0.0*x[1]
 #         u0          = @avxt @. 0.5 - 0.25*x[1]/2.5
-
+#         u0          = @avxt @. 0.0 + 0.25*exp(-((x[1]-1.25)/0.25)^2)
         return [ u0 ]
 
     end
@@ -158,13 +158,11 @@ function Stefan2(
     solver.AMA_SizeOrder    = FesOrder
     solver.AMA_AnisoOrder   = 2
     solver.AMA_rDeltat      = AMA_rDeltat
-    solver.LSType           = "SCILU0"
-#     solver.LSType       = "BlockJacobi"
-#     solver.LSType       = "DominantILU0"
+    solver.RKMethod     = RKMethod
 
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x))
-#     solver.BC           = [BCW(BC_horiz), BCW(BC_right), BCW(BC_horiz), BCW(BC_left)]
+#     solver.BC           = [BCW(BC_horiz), BCW(BC_horiz), BCW(BC_horiz), BCW(BC_left)]
     solver.BC           = [BCW(BC_horiz), BCW(BC_right), BCW(BC_horiz), BCW(BC_left)]
 
     #Initial condition:
@@ -269,8 +267,9 @@ function Stefan2(
 
         #March in time:
         if uppercase(RKMethod)=="KC35"
-            ConvFlag            = IRK_Step!(solver)
+#             ConvFlag            = IRK_Step!(solver)
 #             ConvFlag            = IRK_UpdatedJ_Step!(solver)
+            ConvFlag            = hNewton_Step!(solver, Ste, kappa/cp)
         else
             ConvFlag            = LIRKHyp_Step!(solver)
         end     

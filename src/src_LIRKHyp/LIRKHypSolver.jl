@@ -462,6 +462,9 @@ function LIRKHyp_Step_Pre!(solver::SolverData; DEq_MaxIter::Int=0)
     #Adapt mesh before time step:
     TolS_req                = max(solver.SfS*solver.TolS_max * exp(-solver.dlogetaS_dt*Deltat_n),
                                     0.1*solver.SfS*solver.TolS_max)
+    if isnan(TolS_req)  #May happen for the first time step, if etaS=0 and dlogetaS_dt=Inf:
+        TolS_req            = 0.1*solver.SfS*solver.TolS_max
+    end
     t_ini                   = time()
     AMA_flag, AMA_iters     = AdaptMesh!(solver, (solver.u, solver.fes), 
                                 solver.TolS_min, min(solver.TolS_max, TolS_req), 

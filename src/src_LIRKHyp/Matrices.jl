@@ -543,7 +543,7 @@ function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Floa
                                 memory=100, MaxIter=MaxIter, 
                                 AbsTolX=AbsTol, RelTolX=RelTol,
                                 AbsTolG=0.0, RelTolG=0.0, 
-                                Display="iter", history=true,
+                                Display=Display, history=true,
                                 NormFun=LS.NormFun)
     @mlv uhat[F.nSlaves+1:F.N]  = solver_output[1]*scaleP_m
     ldiv_slave!(uhat, F, bred)
