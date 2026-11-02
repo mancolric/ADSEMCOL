@@ -158,8 +158,8 @@ function Stefan2(
     solver.AMA_SizeOrder    = FesOrder
     solver.AMA_AnisoOrder   = 2
     solver.AMA_rDeltat      = AMA_rDeltat
-#     solver.LSType           = "SCILU0"
-    solver.LSType       = "BlockJacobi"
+    solver.LSType           = "SCILU0"
+#     solver.LSType       = "BlockJacobi"
 #     solver.LSType       = "DominantILU0"
 
     #Set initial and boundary conditions:
