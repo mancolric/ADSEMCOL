@@ -104,7 +104,7 @@ mutable struct LS_DominantILU0 <: LinearSystems
     
 end
 
-#Row-dominant terms:
+#Row-dominant terms + ILU0 + GMRES:
 mutable struct LS_Dominant <: LinearSystems
 
     A                   ::SparseMatrixCSC{Float64,Int}  #Original matrix
@@ -481,6 +481,7 @@ function DisplayTimes(solver::SD) where SD<:Union{SolverData,SolverDataSave}
 end
     
 include("LIRKHypSolver.jl")
+include("IRKSolver.jl")
 include("Matrices.jl")
 include("PlotUtils.jl")
 include("Compatibility.jl")

@@ -4,6 +4,7 @@ function Stefan2(
     delta::Float64=1e-2, tc::Float64=1e-2, alpha::Float64=6.0, Deltah1::Float64=1e-2, Deltah2::Float64=1e-2, 
     Deltat0::Float64=1e-3,
     TolT::Float64=1e-3, TolS::Float64=1e-3, AMA_MaxIter::Int=200, tf::Float64=2.5,
+    RKMethod::String="Ascher3", 
     SpaceAdapt::Bool=true, TimeAdapt::Bool=true, 
     Ste::Float64=0.25,kappa::Float64=2/3, cp::Float64=4/3,
     #
@@ -152,11 +153,14 @@ function Stefan2(
 #     @warn "SfS"
     solver.TimeAdapt    = TimeAdapt
     solver.TolT         = TolT
+    solver.TolA_min     = 1e-3*min(TolT, TolS)
     solver.AMA_MaxIter  = AMA_MaxIter
     solver.AMA_SizeOrder    = FesOrder
     solver.AMA_AnisoOrder   = 2
     solver.AMA_rDeltat      = AMA_rDeltat
-    solver.LSType           = "DominantILU0"
+#     solver.LSType           = "SCILU0"
+    solver.LSType       = "BlockJacobi"
+#     solver.LSType       = "DominantILU0"
 
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x))
@@ -263,8 +267,13 @@ function Stefan2(
             error("")
         end 
 
-        ConvFlag            = LIRKHyp_Step!(solver)
-#         ConvFlag            = IRK_Step!(solver)
+        #March in time:
+        if uppercase(RKMethod)=="KC35"
+            ConvFlag            = IRK_Step!(solver)
+#             ConvFlag            = IRK_UpdatedJ_Step!(solver)
+        else
+            ConvFlag            = LIRKHyp_Step!(solver)
+        end     
         if ConvFlag<=0
             break
         end
