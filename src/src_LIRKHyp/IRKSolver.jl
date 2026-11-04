@@ -317,7 +317,8 @@ function IRK_Step!(solver::SolverData)
                     ") \n", color=:light_yellow)
                     
                 #Correct target algebraic tolerance:
-                TolA        = max(solver.TolA_min, solver.CA*min(etaS_np1, etaT_np1))
+#                 TolA        = max(solver.TolA_min, solver.CA*min(etaS_np1, etaT_np1))
+                TolA        = TolA_required
                 
                 #Loop again with same time step and same mesh:
                 RepeatTA    = true
@@ -805,7 +806,8 @@ function IRK_UpdatedJ_Step!(solver::SolverData)
                     ") \n", color=:light_yellow)
                     
                 #Correct target algebraic tolerance:
-                TolA        = max(solver.TolA_min, solver.CA*min(etaS_np1, etaT_np1))
+#                 TolA        = max(solver.TolA_min, solver.CA*min(etaS_np1, etaT_np1))
+                TolA        = TolA_required
                 
                 #Loop again with same time step and same mesh:
                 RepeatTA    = true

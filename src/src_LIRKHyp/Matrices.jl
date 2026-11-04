@@ -549,8 +549,8 @@ function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Floa
     ldiv_slave!(uhat, F, bred)
     @mlv u[LS.p]                = uhat
     nIter                       = solver_output[2].nIter 
-    resv                        = solver_output[2].gnorms
-#     resv                        = solver_output[2].pnorms
+#     resv                        = solver_output[2].gnorms
+    resv                        = solver_output[2].pnorms
     etaA                        = resv[length(resv)]
     if solver_output[2].flag==2
         #Exit due to convergence in residual g

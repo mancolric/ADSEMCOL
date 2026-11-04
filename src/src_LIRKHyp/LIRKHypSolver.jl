@@ -817,14 +817,15 @@ function LIRKHyp_Step_Pre!(solver::SolverData; DEq_MaxIter::Int=0)
             #NOTE: We should avoid this as much as possible:
             TolA_required       = max(solver.TolA_min, 
                                     solver.CA_max*min(etaS_n, etaS_np1, etaT_np1))
-            if etaA_np1>TolA_required
+            if etaA_np1>TolA_required 
             
                 printstyled("Algebraic error (", sprintf1("%.2e", etaA_np1), 
                     ") larger than required (", sprintf1("%.2e", TolA_required),
                     ") \n", color=:light_yellow)
                     
                 #Correct target algebraic tolerance:
-                TolA        = max(solver.TolA_min, solver.CA*min(etaS_np1, etaT_np1))
+#                 TolA        = max(solver.TolA_min, solver.CA*min(etaS_np1, etaT_np1))
+                TolA        = TolA_required
                 
                 #Loop again with same time step and same mesh:
                 RepeatTA    = true
@@ -1654,7 +1655,8 @@ function LIRKHyp_Step_Post_Dolejsi!(solver::SolverData)
                         ") \n", color=:light_yellow)
                         
                     #Correct target algebraic tolerance:
-                    TolA        = max(solver.TolA_min, solver.CA*min(etaS_np1, etaT_np1))
+#                     TolA        = max(solver.TolA_min, solver.CA*min(etaS_np1, etaT_np1))
+                    TolA        = TolA_required
                     
                     #Loop again with same time step and same mesh:
                     RepeatTA    = true
