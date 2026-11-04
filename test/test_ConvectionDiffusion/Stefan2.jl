@@ -1,7 +1,18 @@
 include("test_ConvectionDiffusion.jl")
+include("../../src/src_LIRKHyp/StefanSolver.jl")
+
+#Stagnation and oscillations with
+#   Stefan2(FesOrder=3, hp0=0.1, TolS=1e-3, TolT=1e-3, delta=0e-2, tc=1e-2, alpha=6.0, Deltah1=0.02, Deltah2=0.02, Deltat0=1e-3, Ste=0.25, tf=0.50, TimeAdapt=true)
+
+#Good behavior with:
+#   Stefan2(FesOrder=3, hp0=0.1, TolS=1e-3, TolT=1e-3, delta=1e-2, tc=1e-2, alpha=6.0, Deltah1=0.02, Deltah2=0.02, Deltat0=1e-3, Ste=0.25, tf=0.50, TimeAdapt=true)
+
+#Slow convergence with:
+#   Stefan2(FesOrder=3, hp0=0.1, TolS=1e-3, TolT=1e-3, delta=1e-2, tc=1e-2, alpha=6.0, Deltah1=0.0, Deltah2=0.0, Deltat0=1e-3, Ste=0.25, tf=0.50, TimeAdapt=true)
+
 function Stefan2(
     ;hp0::Float64=0.1, FesOrder::Int=3,
-    delta::Float64=1e-2, tc::Float64=1e-2, alpha::Float64=6.0, Deltah1::Float64=1e-2, Deltah2::Float64=1e-2, 
+    delta::Float64=1e-2, tc::Float64=1e-2, alpha::Float64=6.0, Deltah1::Float64=0e-2, Deltah2::Float64=0e-2, 
     Deltat0::Float64=1e-3,
     TolT::Float64=1e-3, TolS::Float64=1e-3, AMA_MaxIter::Int=200, tf::Float64=2.5,
     RKMethod::String="Ascher3", 
@@ -267,9 +278,7 @@ function Stefan2(
 
         #March in time:
         if uppercase(RKMethod)=="KC35"
-#             ConvFlag            = IRK_Step!(solver)
-#             ConvFlag            = IRK_UpdatedJ_Step!(solver)
-            ConvFlag            = hNewton_Step!(solver, Ste, kappa/cp)
+            ConvFlag            = IRK_Step!(solver)
         else
             ConvFlag            = LIRKHyp_Step!(solver)
         end     
