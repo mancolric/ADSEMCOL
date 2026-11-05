@@ -211,3 +211,69 @@ function CompareTimeAdaptation_SolitonRelaxed(StudyCase::String;
     return
     
 end
+
+function Line_SolitonRelaxed(SC::Int, nb::Int; 
+    SaveFig::Bool=false, w::Float64=9.50, h::Float64=6.50,
+    PlotVars::Vector{String}=["h", "p"], mFig::Int=1, nFig::Int=2)
+
+    FileName    = GetFileName(SC, nb)
+    solver      = GetSolver(SC, nb)
+    SolitonId   = load(FileName, "SolitonId")
+    
+    #Load data:
+    SolitonData         = readdlm("$(@__DIR__)/../test_NonHydrostaticWaterWaves/SolitonRelaxed$(SolitonId)_data.txt")
+    SolitonCoeffs       = readdlm("$(@__DIR__)/../test_NonHydrostaticWaterWaves/SolitonRelaxed$(SolitonId)_coefficients.txt")
+    alpha               = SolitonData[1]
+    g                   = SolitonData[2]
+    h0                  = SolitonData[3]
+    A                   = SolitonData[4]
+    
+    #Define model:
+    model               = NHWW()
+    model.g             = g
+    model.c             = alpha*sqrt(g*h0)
+
+    #Domain limits:
+    c0      = sqrt(g*(A+h0))
+    l0      = h0*sqrt((A+h0)/h0)
+    x11     = c0*solver.t-10*l0
+    x12     = c0*solver.t+10*l0
+            
+    #Exact solution:
+    x1v     = linspace(x11, x12, 500)
+    x2v     = zeros(size(x1v))
+    xm      = [ x1v, x2v ]
+    um      = SolitonRelaxedFun(solver.t, Vector{<:AMF64}(xm), SolitonData, SolitonCoeffs)
+    vm      = DepVars(model, solver.t, Vector{<:AMF64}(xm), um, PlotVars)
+    isel    = Int.(ceil.(linspace(1.0, 1.0*length(x1v), 40)))
+    
+    #Numerical solution:
+    u_terp, = SolutionCompute(solver.u, solver.fes, [x1v, x2v])
+    vm_terp = DepVars(model, solver.t, Vector{<:AMF64}(xm), Vector{<:AMF64}(u_terp), PlotVars)
+    
+    #Loop plot variables:
+#     fig     = PyPlotSubPlots(mFig, nFig, w=w, h=h, left=1.7, right=0.4, bottom=1.1, top=1.0) #for suptitle
+    fig     = PyPlotSubPlots(mFig, nFig, w=w, h=h, left=1.7, right=0.4, bottom=1.1, top=0.2) #for suptitle
+    for ii=1:length(PlotVars)
+        PyPlot.subplot(mFig, nFig, ii)
+        PyPlot.cla()
+        plot(NaN, NaN, "-xr", linewidth=0.5, markersize=5.0, label=latexstring("\\mathrm{Exact}"))
+        plot(x1v, vm[ii][1], "r", linewidth=0.5, label="_NoLabel")
+        plot(x1v[isel], vm[ii][1][isel], "xr", markersize=5.0, label="_NoLabel")
+        plot(x1v, vm_terp[ii][1], "b", linewidth=0.5, label=latexstring("\\mathrm{Numerical}"))
+        xlabel(latexstring("x_1"), fontsize=10)
+#         title(latexstring(LatexString(model, PlotVars[ii])), fontsize=10)
+        ylabel(latexstring(LatexString(model, PlotVars[ii])), fontsize=10, rotation=0, 
+            labelpad=9)
+        tick_params(axis="both", which="both", labelsize=TickSize)
+        legend(fontsize=10, labelspacing=0.2)
+        xlim([x11, x12])
+#         suptitle(latexstring("\\mathrm{Relaxed~soliton}, t=", sprintf1("%.2f", solver.t)), fontsize=10)
+    end
+    if SaveFig
+        savefig("$(FigUbi)SC$(SC)_Line.png", dpi=800, pad_inches=0)
+    end
+    
+    return
+    
+end
