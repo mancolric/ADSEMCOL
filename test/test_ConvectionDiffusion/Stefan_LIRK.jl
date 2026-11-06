@@ -1,11 +1,22 @@
 include("test_ConvectionDiffusion.jl")
-function Stefan(
-    ;hp0::Float64=0.1, FesOrder::Int=5,
-    epsilon::Float64=0.01, Deltah1::Float64=0e-2, Deltah2::Float64=1e-2, 
-    Deltat0::Float64=1e-6,
-    TolT::Float64=1e-4, TolS::Float64=1e-4, AMA_MaxIter::Int=200, tf::Float64=2.5,
+
+#Stagnation and oscillations with
+#   Stefan2(FesOrder=3, hp0=0.1, TolS=1e-3, TolT=1e-3, delta=0e-2, tc=1e-2, alpha=6.0, Deltah1=0.02, Deltah2=0.02, Deltat0=1e-3, Ste=0.25, tf=0.50, TimeAdapt=true)
+
+#Good behavior with:
+#   Stefan2(FesOrder=3, hp0=0.1, TolS=1e-3, TolT=1e-3, delta=1e-2, tc=1e-2, alpha=6.0, Deltah1=0.02, Deltah2=0.02, Deltat0=1e-3, Ste=0.25, tf=0.50, TimeAdapt=true)
+
+#Slow convergence with:
+#   Stefan2(FesOrder=3, hp0=0.1, TolS=1e-3, TolT=1e-3, delta=1e-2, tc=1e-2, alpha=6.0, Deltah1=0.0, Deltah2=0.0, Deltat0=1e-3, Ste=0.25, tf=0.50, TimeAdapt=true)
+
+function Stefan_LIRK(
+    ;hp0::Float64=0.1, FesOrder::Int=3,
+    delta::Float64=1e-2, tc::Float64=1e-2, alpha::Float64=6.0, Deltah1::Float64=0e-2, Deltah2::Float64=0e-2, 
+    Deltat0::Float64=1e-3,
+    TolT::Float64=1e-3, TolS::Float64=1e-3, AMA_MaxIter::Int=200, tf::Float64=2.5,
+    RKMethod::String="Ascher3", 
     SpaceAdapt::Bool=true, TimeAdapt::Bool=true, 
-    Ste::Float64=4.0,kappa::Float64=2/3, cp::Float64=4/3,
+    Ste::Float64=0.25,kappa::Float64=2/3, cp::Float64=4/3,
     #
     AMA_rDeltat::Float64=0.3,
     SaveFig::Bool=false, wFig::Float64=9.50, hFig::Float64=6.50,
@@ -24,13 +35,13 @@ function Stefan(
     #argument is going to be <:AMF64 and the output a Matrix{Float64}.
 
     #Velocity:
-    function afun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
+    function a_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
 
         a1  = zeros(size(x[1]))
         a2  = zeros(size(x[1]))
         return [a1, a2]
     end
-    function dafun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
+    function da_du_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
 
         da1     = zeros(size(x[1]))
         da2 = zeros(size(x[1]))
@@ -38,49 +49,55 @@ function Stefan(
     end
 
     #Viscosity:
-    function epsilonfun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
+    function epsilon_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64}, du::Matrix{<:AAF64})
 
-        #=
-        #zona solido:
-        epsilon0 = ones(size(x[1]))
-
-        #zona cambio de fase:
-        aux = u[1] .> 1.0
-        epsilon0[aux] .= epsilon
-
-        #zona liquido:
-        aux = u[1] .> (1.0 + 1.0/Ste)
-        epsilon0[aux] .= kappa/cp
-        =#
-        
-        epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, epsilon) + 
-                            SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp-epsilon)
-
+        du_norm     = @. sqrt( du[1,1]*du[1,1] + du[1,2]*du[1,2] ) + 1e-12
 #         epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, 0.0) + 
-#                             SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp) 
-                            
+#                             SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp) + 
+#                             delta^2 * du_norm
+        epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, 0.0) + 
+                            SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp) + 
+                            delta^2/tc * tanh( (delta/1.0 * du_norm)^alpha )
+#         println("t=", t, ", |discontinuity sensor|=", norm((delta/1.0 * du_norm).^alpha, Inf))
         return [ epsilon0 ]
 
     end
-    function depsilonfun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
+    function depsilon_du_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64}, du::Matrix{<:AAF64})
 
-#         depsilon0 = zeros(size(x[1]))
-        depsilon0   = @. (epsilon-1.0)/(2*Deltah2) * sech((u[1]-1.0)/Deltah2)^2 + 
-                            (kappa/cp-epsilon)/(2*Deltah2) * sech((u[1]-1.0-1.0/Ste)/Deltah2)^2
-#         depsilon0   = max(1.0, kappa/cp) .+ 0.0*u[1]
-        return [ depsilon0 ]
+        if Deltah2==0.0
+            return [ 0.0*u[1] ]
+        else
+            depsilon0_du    = @. (-1.0)/(2*Deltah2) * sech((u[1]-1.0)/Deltah2)^2 + 
+                                (kappa/cp)/(2*Deltah2) * sech((u[1]-1.0-1.0/Ste)/Deltah2)^2
+
+            return [ depsilon0_du ]
+        end 
+
+    end
+    function depsilon_dgradu_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64}, du::Matrix{<:AAF64})
+
+        du_norm             = @. sqrt( du[1,1]*du[1,1] + du[1,2]*du[1,2] ) + 1e-12
+#         depsilon0_du_dx1    = @. delta^2 *  du[1,1]/(du_norm + 1e-12)
+#         depsilon0_du_dx2    = @. delta^2 *  du[1,2]/(du_norm + 1e-12)
+        depsilon0_du_dx1    = @. delta^2/tc *  sech( (delta/1.0 * du_norm)^alpha )^2 * 
+                                    alpha*(delta/1.0 * du_norm)^(alpha-1) * 
+                                    (delta/1.0) * du[1,1]/du_norm
+        depsilon0_du_dx2    = @. delta^2/tc *  sech( (delta/1.0 * du_norm)^alpha )^2 * 
+                                    alpha*(delta/1.0 * du_norm)^(alpha-1) * 
+                                    (delta/1.0) * du[1,2]/du_norm
+        return [ depsilon0_du_dx1, depsilon0_du_dx2 ]
 
     end
 
     #Reaction terms:
-    function Qfun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
+    function Q_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
 
         #Q = u_t + a*u_x - epsilon*u_xx
         Q0          = @mlv  0.0*x[1]
         return [ Q0 ]
 
     end
-    function dQfun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
+    function dQ_du_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64})
 
        return [ 0.0*u[1] ]
 
@@ -91,7 +108,7 @@ function Stefan(
 
         u0          = @avxt @. 0.0*x[1]
 #         u0          = @avxt @. 0.5 - 0.25*x[1]/2.5
-
+#         u0          = @avxt @. 0.0 + 0.25*exp(-((x[1]-1.25)/0.25)^2)
         return [ u0 ]
 
     end
@@ -111,12 +128,13 @@ function Stefan(
     BC_horiz        = Neumann(FWt11((t,x)->qTopBottom(t,x)))
 
     #Structure with convection--diffusion problem data:
-    ProblemData     = SCD(  FWt21((t,x,u)->afun(t,x,u)),
-                            FWt21((t,x,u)->epsilonfun(t,x,u)),
-                            FWt21((t,x,u)->Qfun(t,x,u)),
-                            FWt21((t,x,u)->dafun(t,x,u)),
-                            FWt21((t,x,u)->depsilonfun(t,x,u)),
-                            FWt21((t,x,u)->dQfun(t,x,u)) )
+    ProblemData     = SCD2( FWt21((t,x,u)->a_fun(t,x,u)),
+                            FW_svvm_v((t,x,u,du)->epsilon_fun(t,x,u,du)),
+                            FWt21((t,x,u)->Q_fun(t,x,u)),
+                            FWt21((t,x,u)->da_du_fun(t,x,u)),
+                            FW_svvm_v((t,x,u,du)->depsilon_du_fun(t,x,u,du)),
+                            FW_svvm_v((t,x,u,du)->depsilon_dgradu_fun(t,x,u,du)),
+                            FWt21((t,x,u)->dQ_du_fun(t,x,u)) )
 
     #Mesh:
     MeshFile            = "$(@__DIR__)/../../temp/Stefan_SC$(SC).geo"
@@ -145,15 +163,16 @@ function Stefan(
 #     @warn "SfS"
     solver.TimeAdapt    = TimeAdapt
     solver.TolT         = TolT
+    solver.TolA_min     = 1e-3*min(TolT, TolS)
     solver.AMA_MaxIter  = AMA_MaxIter
     solver.AMA_SizeOrder    = FesOrder
     solver.AMA_AnisoOrder   = 2
     solver.AMA_rDeltat      = AMA_rDeltat
-    solver.LSType           = "DominantILU0"
+    solver.RKMethod     = RKMethod
 
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x))
-#     solver.BC           = [BCW(BC_horiz), BCW(BC_right), BCW(BC_horiz), BCW(BC_left)]
+#     solver.BC           = [BCW(BC_horiz), BCW(BC_horiz), BCW(BC_horiz), BCW(BC_left)]
     solver.BC           = [BCW(BC_horiz), BCW(BC_right), BCW(BC_horiz), BCW(BC_left)]
 
     #Initial condition:
@@ -221,7 +240,7 @@ function Stefan(
                         ct_SaveRes==Nt_SaveRes || solver.t==tf || solver.t==0.0 )
             save("$(ResUbi)LIRKHyp_SC$(SC)_$(nb_SaveRes).jld2", "StudyCase", "KPP",
                 "tv", tv, "uminv", uminv, "umaxv", umaxv,
-                "epsilon", epsilon, "solver", save(solver))
+                "delta", delta, "solver", save(solver))
             t_lastRes   += Deltat_SaveRes
             ct_SaveRes  = 0
             nb_SaveRes  += 1
@@ -249,9 +268,19 @@ function Stefan(
 
     nIter               = 0
     while solver.t<solver.tf
+    
+        #DEBUG:
+        if solver.t>0.21 && false
+            CheckJacobian(solver, Plot_df_du=true, Plot_df_dgradu=true)
+            error("")
+        end 
 
-        ConvFlag            = LIRKHyp_Step!(solver)
-#         ConvFlag            = IRK_Step!(solver)
+        #March in time:
+        if uppercase(RKMethod)=="KC35"
+            ConvFlag            = IRK_Step!(solver)
+        else
+            ConvFlag            = LIRKHyp_Step!(solver)
+        end     
         if ConvFlag<=0
             break
         end

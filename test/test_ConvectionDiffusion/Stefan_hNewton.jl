@@ -1,21 +1,25 @@
 include("test_ConvectionDiffusion.jl")
-include("../../src/src_LIRKHyp/StefanSolver.jl")
-
-#Stagnation and oscillations with
-#   Stefan2(FesOrder=3, hp0=0.1, TolS=1e-3, TolT=1e-3, delta=0e-2, tc=1e-2, alpha=6.0, Deltah1=0.02, Deltah2=0.02, Deltat0=1e-3, Ste=0.25, tf=0.50, TimeAdapt=true)
+include("StefanSolver.jl")
 
 #Good behavior with:
-#   Stefan2(FesOrder=3, hp0=0.1, TolS=1e-3, TolT=1e-3, delta=1e-2, tc=1e-2, alpha=6.0, Deltah1=0.02, Deltah2=0.02, Deltat0=1e-3, Ste=0.25, tf=0.50, TimeAdapt=true)
+#   Stefan_hNewton(FesOrder=3, hp0=0.05, TolS=1e-3, TolT=1e-3, delta=0e-2, tc=1e-2, alpha=6.0, Deltat0=1e-2, Ste=0.25, tf=0.50, SpaceAdapt=false, TimeAdapt=false, RKMethod="KC35")
+#   Stefan_hNewton(FesOrder=3, hp0=0.05, TolS=1e-3, TolT=1e-3, delta=0e-2, tc=1e-2, alpha=6.0, Deltat0=1e-2, Ste=0.25, tf=0.50, SpaceAdapt=false, TimeAdapt=true, RKMethod="KC35")
+#   Stefan_hNewton(FesOrder=3, hp0=0.05, TolS=1e-3, TolT=1e-5, delta=0e-2, tc=1e-2, alpha=6.0, Deltat0=1e-2, Ste=0.25, tf=0.50, SpaceAdapt=false, TimeAdapt=true, RKMethod="KC35")
+#   Stefan_hNewton(FesOrder=3, hp0=0.05, TolS=1e-2, TolT=1e-3, delta=0e-2, tc=1e-2, alpha=6.0, Deltat0=1e-2, Ste=0.25, tf=0.80, SpaceAdapt=true, TimeAdapt=true, RKMethod="KC35")
+#Problems start with SpaceAdapt=true and TolS=1e-3. TolS=1e-2 shows good behavior and TolT<=1e-3.
+
+#Stagnation with:
+#   Stefan_hNewton(FesOrder=3, hp0=0.1, TolS=1e-3, TolT=1e-3, delta=0e-2, tc=1e-2, alpha=6.0, Deltat0=1e-3, Ste=0.25, tf=0.50, TimeAdapt=true, RKMethod="KC35")
 
 #Slow convergence with:
-#   Stefan2(FesOrder=3, hp0=0.1, TolS=1e-3, TolT=1e-3, delta=1e-2, tc=1e-2, alpha=6.0, Deltah1=0.0, Deltah2=0.0, Deltat0=1e-3, Ste=0.25, tf=0.50, TimeAdapt=true)
+#   Stefan_hNewton(FesOrder=3, hp0=0.1, TolS=1e-3, TolT=1e-3, delta=1e-2, tc=1e-2, alpha=6.0, Deltat0=1e-3, Ste=0.25, tf=0.50, TimeAdapt=true, RKMethod="KC35")
 
-function Stefan2(
+function Stefan_hNewton(
     ;hp0::Float64=0.1, FesOrder::Int=3,
-    delta::Float64=1e-2, tc::Float64=1e-2, alpha::Float64=6.0, Deltah1::Float64=0e-2, Deltah2::Float64=0e-2, 
+    delta::Float64=1e-2, tc::Float64=1e-2, alpha::Float64=6.0, 
     Deltat0::Float64=1e-3,
     TolT::Float64=1e-3, TolS::Float64=1e-3, AMA_MaxIter::Int=200, tf::Float64=2.5,
-    RKMethod::String="Ascher3", 
+    RKMethod::String="KC35", 
     SpaceAdapt::Bool=true, TimeAdapt::Bool=true, 
     Ste::Float64=0.25,kappa::Float64=2/3, cp::Float64=4/3,
     #
@@ -49,37 +53,25 @@ function Stefan2(
         return [da1, da2]
     end
 
-    #Viscosity:
+    #Artificial viscosity:
     function epsilon_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64}, du::Matrix{<:AAF64})
 
         du_norm     = @. sqrt( du[1,1]*du[1,1] + du[1,2]*du[1,2] ) + 1e-12
-#         epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, 0.0) + 
-#                             SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp) + 
-#                             delta^2 * du_norm
-        epsilon0    = @. SmoothHeaviside(u[1]-1.0, Deltah1, 1.0, 0.0) + 
-                            SmoothHeaviside(u[1]-1.0-1.0/Ste, Deltah1, 0.0, kappa/cp) + 
-                            delta^2/tc * tanh( (delta/1.0 * du_norm)^alpha )
+        epsilon0    = @. delta^2/tc * tanh( (delta/1.0 * du_norm)^alpha )
 #         println("t=", t, ", |discontinuity sensor|=", norm((delta/1.0 * du_norm).^alpha, Inf))
         return [ epsilon0 ]
 
     end
     function depsilon_du_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64}, du::Matrix{<:AAF64})
+    
+        depsilon0_du    = @. 0.0*u[1]
 
-        if Deltah2==0.0
-            return [ 0.0*u[1] ]
-        else
-            depsilon0_du    = @. (-1.0)/(2*Deltah2) * sech((u[1]-1.0)/Deltah2)^2 + 
-                                (kappa/cp)/(2*Deltah2) * sech((u[1]-1.0-1.0/Ste)/Deltah2)^2
-
-            return [ depsilon0_du ]
-        end 
+        return [ depsilon0_du ]
 
     end
     function depsilon_dgradu_fun(t::Float64, x::Vector{<:AAF64}, u::Vector{<:AAF64}, du::Matrix{<:AAF64})
 
         du_norm             = @. sqrt( du[1,1]*du[1,1] + du[1,2]*du[1,2] ) + 1e-12
-#         depsilon0_du_dx1    = @. delta^2 *  du[1,1]/(du_norm + 1e-12)
-#         depsilon0_du_dx2    = @. delta^2 *  du[1,2]/(du_norm + 1e-12)
         depsilon0_du_dx1    = @. delta^2/tc *  sech( (delta/1.0 * du_norm)^alpha )^2 * 
                                     alpha*(delta/1.0 * du_norm)^(alpha-1) * 
                                     (delta/1.0) * du[1,1]/du_norm
@@ -169,7 +161,8 @@ function Stefan2(
     solver.AMA_SizeOrder    = FesOrder
     solver.AMA_AnisoOrder   = 2
     solver.AMA_rDeltat      = AMA_rDeltat
-    solver.RKMethod     = RKMethod
+    solver.RKMethod         = RKMethod
+#     solver.LS_iters_target  = 10
 
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x))
@@ -210,7 +203,9 @@ function Stefan2(
 
         figure(figv[2].number)
         PyPlot.cla()
-        PlotContour(solver.u[1], solver.fes, cmap="bwr")
+        umin        = minimum(solver.u[1][1:solver.fes.PSpace.nDof])-1e-4
+        umax        = maximum(solver.u[1][1:solver.fes.PSpace.nDof])+1e-4
+        PlotContour(solver.u[1], solver.fes, cmap="bwr", zv=linspace(umin,umax,500))
         PlotMesh!(solver.mesh, color="k")
         axis("equal")
 
@@ -277,11 +272,7 @@ function Stefan2(
         end 
 
         #March in time:
-        if uppercase(RKMethod)=="KC35"
-            ConvFlag            = IRK_Step!(solver)
-        else
-            ConvFlag            = LIRKHyp_Step!(solver)
-        end     
+        ConvFlag            = hNewton_Step!(solver, Ste, kappa/cp)
         if ConvFlag<=0
             break
         end
