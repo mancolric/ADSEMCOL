@@ -226,6 +226,7 @@ function SolutionNorm(MII::SparseMatrixCSC{Float64,Int}, x::Vector{Float64},
     
 end
 
+#Set up linear systems:
 function LinearSystem(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
     nFacts::Vector{Float64}; LSType::String="SCILU0")
     
@@ -712,6 +713,44 @@ function LS_solve!(LS::LS_Dominant, u::GenVector{Float64}, b::GenVector{Float64}
 #     println("t_ldiv=", t_ldiv)
     
     return flag, nIter, etaA
+    
+end
+
+#Compute preconditioner * vector:
+function LS_precxvector(LS::LS_SCILU0_GMRES, u::GenVector)
+
+    return LS.A * u
+    
+end
+function LS_precxvector(LS::LS_BlockJacobi, u::GenVector)
+
+    return LS.A * u
+    
+end
+#TODO: Optimize.
+#If we have a system A*x = b, the ILU0 preconditioner rewrites the latter as
+#   P A P^T P x = P b
+#   L U P x = P b
+#   x = P^T U ^{-1} L^{-1} P b
+#So 
+#   Ainv \approx P^T U ^{-1} L^{-1} P 
+#and therefore 
+#   A \approx P^T L U P
+#Note that the latter relation also stems directly 
+#from P A P^T \approx L U 
+function LS_precxvector(LS::LS_DominantILU0, x::GenVector)
+
+    L, U            = LUFactors(LS.Pl)
+    Px              = x[LS.p]
+    LUPx            = L*(U*Px)
+    y               = 0.0*x
+    y[LS.p]         = LUPx
+    return y
+    
+end
+function LS_precxvector(LS::LS_Dominant, u::GenVector)
+
+    return LS.A * u
     
 end
 
