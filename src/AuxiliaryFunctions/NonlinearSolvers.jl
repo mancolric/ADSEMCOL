@@ -125,7 +125,7 @@ The residual g(x) should be preconditioned iin such a way that
     
     --sigma_min[1e-10]: drop tolerance after SVD decomposition
     
-    --NormFun: FunctionWrapper that receives vector x and returns the norm of x.
+    --NormFun[norm(x)/sqrt(length(x))]: FunctionWrapper that receives vector x and returns the norm of x.
 
 Output:
 
@@ -141,7 +141,8 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
     MaxIter::Int=length(x0), Restart::Int=MaxIter+1, 
     history::Bool=false, Display::String="notify",
     sigma_min::Float64=1e-10,
-    NormFun::FW_NLS_norm=FW_NLS_norm((x)->norm(x)))
+    NormFun::FW_NLS_norm=FW_NLS_norm((x)->norm(x)/sqrt(length(x))))
+#     NormFun::FW_NLS_norm=FW_NLS_norm((x)->norm(x)))
     
     #-----------------------------------------------------------------------------
     #ALLOCATE VARIABLES:
@@ -365,7 +366,7 @@ In particular, we apply an acceleration method to the quasi-Newton iteration
     
     --sigma_min[1e-10]: drop tolerance after SVD decomposition
     
-    --NormFun: FunctionWrapper that receives vector x and returns the norm of x.
+    --NormFun[norm(x)/sqrt(length(x)): FunctionWrapper that receives vector x and returns the norm of x.
 
 Output:
 
@@ -381,7 +382,7 @@ function NLS_gmres(fun!::FW_NLS, x0::GenVector{Float64};
     MaxIter::Int=length(x0), Restart::Int=MaxIter+1, 
     history::Bool=false, Display::String="notify",
     sigma_min::Float64=1e-10,
-    NormFun::FW_NLS_norm=FW_NLS_norm((x)->norm(x)))
+    NormFun::FW_NLS_norm=FW_NLS_norm((x)->norm(x)/sqrt(length(x))))
     
     #-----------------------------------------------------------------------------
     #ALLOCATE VARIABLES:
