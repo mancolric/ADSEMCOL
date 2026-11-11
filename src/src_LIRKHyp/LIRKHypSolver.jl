@@ -193,15 +193,13 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
     end
     
     #Copy db file or create from geo. The input is solver.MeshFile.
-    #The output (copied db file or new db file from geo) is solver.MeshFileSC.
+    #The output (copied db file or new db file from geo) is MeshFileDb.
     MeshFileGeo         = "$(@__DIR__)/../../temp/BamgSC$(solver.SC).geo"
     MeshFileDb          = "$(@__DIR__)/../../temp/BamgSC$(solver.SC).db"
     MeshFileExtension   = solver.MeshFile[findlast('.',solver.MeshFile)+1:length(solver.MeshFile)]
     if MeshFileExtension=="db"
-        #We need the geo file, because we need to copy it:
-        error("Mesh file has to be of geo type")
         #Copy db file to DbFile:
-        cp(solver.MeshFile, MeshFileSC, force=true)
+        cp(solver.MeshFile, MeshFileDb, force=true)
     elseif MeshFileExtension=="geo"
         #Generate db file:
         cp(solver.MeshFile, MeshFileGeo, force=true)
