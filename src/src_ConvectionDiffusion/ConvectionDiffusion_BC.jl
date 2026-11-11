@@ -61,16 +61,24 @@ function bflux!(model::SCD, BC::Dirichlet, _bqp::TrBintVars, ComputeJ::Bool)
     ahat_1                      = @avxt @. da_du[1]*u[1] + a[1]
     ahat_2                      = @avxt @. da_du[2]*u[1] + a[2]
     ahat_n                      = @avxt @. ahat_1*nb[1] + ahat_2*nb[2]
-    inflow                      = @avxt @. ahat_n <= 0.0
-    outflow                     = @avxt @. !inflow
+    inflow                      = zeros(Bool, size(u[1]))
+    @tturbo for ii in eachindex(u[1])
+        inflow[ii]              = ahat_n[ii] <= 0.0
+    end
     #
     aBC                         = model.a(t,x,uBC)
     aBC_n                       = @avxt @. aBC[1]*nb[1] + aBC[2]*nb[2]
-    @avxt @. _bqp.f[1][inflow]  += aBC_n[inflow]*uBC[1][inflow]
-    @avxt @. _bqp.f[1][outflow] += a_n[outflow]*u[1][outflow]
+    @tturbo for ii in eachindex(u[1])
+        _bqp.f[1][ii]           += ifelse(inflow[ii], aBC_n[ii]*uBC[1][ii], a_n[ii]*u[1][ii])
+    end
+#     @avxt @. _bqp.f[1][inflow]  += aBC_n[inflow]*uBC[1][inflow]
+#     @avxt @. _bqp.f[1][outflow] += a_n[outflow]*u[1][outflow]
     if ComputeJ
-        @avxt @. _bqp.df_du[1,1][inflow]    += 0.0
-        @avxt @. _bqp.df_du[1,1][outflow]   += ahat_n[outflow]
+#         @avxt @. _bqp.df_du[1,1][inflow]    += 0.0
+#         @avxt @. _bqp.df_du[1,1][outflow]   += ahat_n[outflow]
+        @tturbo for ii in eachindex(u[1])
+            _bqp.df_du[1,1][ii] += ifelse(inflow[ii], 0.0, ahat_n[ii])
+        end
     end
     
     #Allocate viscous fluxes:

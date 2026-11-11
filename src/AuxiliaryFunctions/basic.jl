@@ -1127,3 +1127,94 @@ function sprintf1(format::String, x::Any)
     return cfmt(format, x)
     
 end
+
+#-----------------------------------------------------------
+#Show warnings:
+
+using Logging
+
+# Custom logger to catch and print every warning and its stacktrace
+struct StackTraceLogger <: AbstractLogger
+    underlying::AbstractLogger
+    seen_stacktraces::Set{Vector{Tuple{Symbol, String, Int}}}
+end
+StackTraceLogger(underlying) = StackTraceLogger(underlying, Set{Vector{Tuple{Symbol, String, Int}}}())
+
+Logging.min_enabled_level(::StackTraceLogger) = Logging.Warn
+Logging.shouldlog(::StackTraceLogger, args...) = true
+
+function Logging.handle_message(logger::StackTraceLogger, level, message, _module, group, id, file, line; kwargs...)
+    
+    #Avoid logger to process itself:
+    if _module === Main && occursin("StackTraceLogger", string(message))
+        return nothing
+    end
+    
+    #Ignore some modules:
+    if _module === Revise || occursin("Revise", string(_module))
+        @goto delegate
+    end
+    
+    #Show message:
+    if level >= Logging.Warn
+
+        #Filter stacktrace:
+        st = stacktrace()
+        filtered_st = filter(st) do frame
+            f_str   = string(frame.func)
+            f_path  = string(frame.file)
+            #Exclude logging functions:
+            not_logger      = !occursin("handle_message", f_str) && !occursin("StackTraceLogger", f_str)
+            #Keep users functions:
+            is_user_code    = !occursin(".julia/packages", f_path) && 
+                                !occursin("julia/base", f_path) && 
+                                !occursin("julia/core", f_path) && 
+                                !contains(f_path, "REPL.jl")
+            #Output (true if frame is to be saved):
+            return not_logger && is_user_code
+                                
+        end
+        
+        #Build a unique signature based on the clean stacktrace
+        stack_signature = [(frame.func, string(frame.file), frame.line) for frame in filtered_st]
+        
+        #Check against the logger's internal set (stored inside 'logger')
+        if stack_signature in logger.seen_stacktraces
+            @goto delegate
+        end
+        push!(logger.seen_stacktraces, stack_signature)
+        
+        #Print warning and stacktrace:
+        printstyled("\n[!] $(level): $(message)\n", color=:yellow, bold=true)
+        for (i, frame) in enumerate(filtered_st)
+            func    = frame.func
+            f_name  = basename(string(frame.file)) #just file name
+#             f_name = string(frame.file) #full route to file
+            l_num   = frame.line
+            printstyled("  [$i] $func at ")
+            printstyled("$f_name:$l_num\n", color=:light_black)
+        end
+        println("\n" * "-"^60 * "\n")
+    end
+    
+    #Delegate to the original logger so normal execution continues:
+    @label delegate
+    Logging.handle_message(logger.underlying, level, message, _module, group, id, file, line; kwargs...)
+    
+end
+
+#Intialize or reset logger:
+function reset_logger!()
+    current = global_logger()
+    if current isa StackTraceLogger
+        empty!(current.seen_stacktraces)
+        println("[+] StackTraceLogger reset: warning history cleared.")
+    else
+        #If it wasn't active, activate it by wrapping the current logger:
+        global_logger(StackTraceLogger(current))
+        println("[+] StackTraceLogger activated for the first time with a clean history.")
+    end
+end
+
+#Auto-execute when first included:
+reset_logger!()
