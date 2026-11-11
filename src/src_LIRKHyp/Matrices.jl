@@ -358,7 +358,8 @@ function LinearSystem_DominantILU0(A::SparseMatrixCSC{Float64,Int}, solver::Solv
     nSlaves         = 0
     
     #Optimal ordering for the degrees of freedom:
-    dof_RCM_inv             = invperm(symrcm(solver.Mm[1:nMaster,1:nMaster]))
+#     dof_RCM_inv             = invperm(symrcm(solver.Mm[1:nMaster,1:nMaster]))
+    dof_RCM_inv             = invperm(symrcm(A[1:nMaster,1:nMaster]))
     
     #For a single variable, dof "idof" goes to new position jdof=dof_RCM_inv[idof].
     #On the other hand, dof jdof of vble II goes to position
@@ -403,7 +404,8 @@ function LinearSystem_Dominant(A::SparseMatrixCSC{Float64,Int}, solver::SolverDa
     nSlaves         = 0
     
     #Optimal ordering for the degrees of freedom:
-    dof_RCM_inv             = invperm(symrcm(solver.Mm[1:nMaster,1:nMaster]))
+#     dof_RCM_inv             = invperm(symrcm(solver.Mm[1:nMaster,1:nMaster]))
+    dof_RCM_inv             = invperm(symrcm(A[1:nMaster,1:nMaster]))
     
     #For a single variable, dof "idof" goes to new position jdof=dof_RCM_inv[idof].
     #On the other hand, dof jdof of vble II goes to position

@@ -253,21 +253,14 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
                 BLAS.copy!(view(Gm,:,jj+1), view(Gm,:,jj))
             end
             
-            #=
-            #New columns:
-            @mlv Gm[:,1]    = gnp1-gn
-            Deltag_norm_inv = 1.0/(NormFun(view(Gm,:,1))+1e-10)
-            @mlv Gm[:,1]    *= Deltag_norm_inv
-            @mlv Xm[:,1]    = (xnp1-xn)*Deltag_norm_inv
-            XGcols          = min(memory, XGcols+1)
-            =#
-            
             #New columns:
             @mlv Gm[:,1]    = gnp1-gn
             @mlv Xm[:,1]    = xnp1-xn
             
             #Normalize new columns:
-            Deltag_norm_inv     = 1.0/(NormFun(view(Gm,:,1))+1e-14)
+#             Deltag_norm_inv     = 1.0/(NormFun(view(Gm,:,1))+1e-14)
+            Deltag_norm_inv     = 1.0/(norm(view(Gm,:,1),1)+1e-16)
+#             Deltag_norm_inv     = 1.0
             BLAS.scal!(Deltag_norm_inv, view(Gm,:,1))
             BLAS.scal!(Deltag_norm_inv, view(Xm,:,1))
             
@@ -309,6 +302,9 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
             BLAS.gemv!('N', -1.0, view(Xm,:,1:XGcols), gammav, 1.0, pn)
             BLAS.gemv!('N', 1.0, view(Gm,:,1:XGcols), gammav, 1.0, pn)
             nSigma              = sum(.!deg_bool)
+#             @warn "Debug"
+#             gammav              = Gm\gn
+#             nSigma              = length(gammav)
         else
             error("UpdateType must be 1 or 2. Current value is $(UpdateType).")
         end
@@ -386,6 +382,9 @@ function NLS_gmres(fun!::FW_NLS, x0::GenVector{Float64};
     
     #-----------------------------------------------------------------------------
     #ALLOCATE VARIABLES:
+    
+#     @warn "Display"
+#     Display         = "iter"
     
     t_start         = time()
     
@@ -505,9 +504,12 @@ function NLS_gmres(fun!::FW_NLS, x0::GenVector{Float64};
             
         end
         @mlv Gm[:,1]    = gnp1-gn
-        Deltag_norm_inv = 1.0/(NormFun(view(Gm,:,1))+1e-20)
-        @mlv Gm[:,1]    *= Deltag_norm_inv
-        @mlv Xm[:,1]    = (xnp1-xn)*Deltag_norm_inv
+        @mlv Xm[:,1]    = xnp1-xn
+#         Deltag_norm_inv     = 1.0/(NormFun(view(Gm,:,1))+1e-20)
+#         Deltag_norm_inv     = 1.0
+        Deltag_norm_inv     = 1.0/(norm(view(Gm,:,1),1)+1e-16)
+        BLAS.scal!(Deltag_norm_inv, view(Gm,:,1))
+        BLAS.scal!(Deltag_norm_inv, view(Xm,:,1))
         XGcols          = min(memory, XGcols+1)
         t_Matrices      += time()-t_ini
         

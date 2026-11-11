@@ -276,21 +276,21 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
         solver.JPatt            = "Dominant"
         solver.KrylovApprox     = false
         #compute only products concerning the same dof:
-        aux                     = GetDominantTerms(solver.fes)
-        solver.Jm_ilocal        = aux[1]
-        solver.Jm_jlocal        = aux[2]
-        solver.Jm_localterms    = length(solver.Jm_ilocal)
+#         aux                     = GetDominantTerms(solver.fes)
+#         solver.Jm_ilocal        = aux[1]
+#         solver.Jm_jlocal        = aux[2]
+#         solver.Jm_localterms    = length(solver.Jm_ilocal)
         #compute only products concerning the same dof:
 #         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
 #         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
 #         solver.Jm_localterms    = solver.fes.DofPerElem
 #         @warn "BLOCKJACOBI"
         #complete:
-#         imat, jmat              = ndgrid(1:solver.fes.DofPerElem, 1:solver.fes.DofPerElem)
-#         solver.Jm_ilocal        = imat[:]
-#         solver.Jm_jlocal        = jmat[:]
-#         solver.Jm_localterms    = solver.fes.DofPerElem^2
-#         @warn "Complete"
+        imat, jmat              = ndgrid(1:solver.fes.DofPerElem, 1:solver.fes.DofPerElem)
+        solver.Jm_ilocal        = imat[:]
+        solver.Jm_jlocal        = jmat[:]
+        solver.Jm_localterms    = solver.fes.DofPerElem^2
+        @warn "Complete"
         #complete transposed:
 #         imat, jmat              = ndgrid(1:solver.fes.DofPerElem, 1:solver.fes.DofPerElem)
 #         solver.Jm_ilocal        = jmat[:]
