@@ -536,24 +536,24 @@ function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Floa
     
     #Solve with GMRES:
     flag                    = 1
-#     solver_output           = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), uhat_m./scaleP_m,
-#                                 memory=100, MaxIter=MaxIter, 
-#                                 AbsTolX=0.0, RelTolX=0.0, 
-#                                 AbsTolG=AbsTol, RelTolG=RelTol,
-#                                 Display=Display, history=true,
-#                                 NormFun=LS.NormFun)
     solver_output           = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), uhat_m./scaleP_m,
                                 memory=100, MaxIter=MaxIter, 
-                                AbsTolX=AbsTol, RelTolX=RelTol,
-                                AbsTolG=0.0, RelTolG=0.0, 
+                                AbsTolX=0.0, RelTolX=0.0, 
+                                AbsTolG=AbsTol, RelTolG=RelTol,
                                 Display=Display, history=true,
                                 NormFun=LS.NormFun)
+    resv                        = solver_output[2].gnorms
+#     solver_output           = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), uhat_m./scaleP_m,
+#                                 memory=100, MaxIter=MaxIter, 
+#                                 AbsTolX=AbsTol, RelTolX=RelTol,
+#                                 AbsTolG=0.0, RelTolG=0.0, 
+#                                 Display=Display, history=true,
+#                                 NormFun=LS.NormFun)
+#     resv                        = solver_output[2].pnorms
     @mlv uhat[F.nSlaves+1:F.N]  = solver_output[1]*scaleP_m
     ldiv_slave!(uhat, F, bred)
     @mlv u[LS.p]                = uhat
     nIter                       = solver_output[2].nIter 
-#     resv                        = solver_output[2].gnorms
-    resv                        = solver_output[2].pnorms
     etaA                        = resv[length(resv)]
     if solver_output[2].flag==2
         #Exit due to convergence in residual g
@@ -685,21 +685,31 @@ function LS_solve!(LS::LS_Dominant, u::GenVector{Float64}, b::GenVector{Float64}
     solver_output   = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), 
                                     uhat./scaleP,
                                     memory=100, MaxIter=MaxIter, 
-                                    AbsTolX=AbsTol, RelTolX=AbsTol, 
-                                    AbsTolG=0.0, RelTolG=0.0,
-                                    Display="notify", history=true,
+                                    AbsTolG=AbsTol, RelTolG=RelTol, 
+                                    AbsTolX=0.0, RelTolX=0.0,
+                                    Display=Display, history=true,
                                     NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(uhat))))
+    resv            = solver_output[2].gnorms
+#     solver_output   = NLS_gmres(FW_NLS((x,g)->QN_ILU0!(x,g)), 
+#                                     uhat./scaleP,
+#                                     memory=100, MaxIter=MaxIter, 
+#                                     AbsTolX=AbsTol, RelTolX=RelTol, 
+#                                     AbsTolG=0.0, RelTolG=0.0,
+#                                     Display=Display, history=true,
+#                                     NormFun=FW_NLS_norm((x)->norm(x)/sqrt(length(uhat))))
+#     resv            = solver_output[2].pnorms
     @mlv uhat       = solver_output[1]*scaleP
     @mlv u[LS.p]    = uhat
     nIter           = solver_output[2].nIter 
-    resv            = solver_output[2].gnorms
     etaA            = resv[length(resv)]
     if solver_output[2].flag==2
         #Exit due to convergence in residual g
     elseif solver_output[2].flag==1
         #Exit due to convergence in unknown x
     else
-        if false
+        if true
+            display(AbsTol)
+            display(RelTol)
             figure()
             ch          = solver_output[2]
             semilogy(ch.pnorms, ".-b")
@@ -709,7 +719,7 @@ function LS_solve!(LS::LS_Dominant, u::GenVector{Float64}, b::GenVector{Float64}
         flag        = -1
     end
     
-    println("Inner linear solver, nIters=",nIter)
+#     println("Inner linear solver, nIters=",nIter)
     
 #     println("t_mult=", t_mult)
 #     println("t_ldiv=", t_ldiv)

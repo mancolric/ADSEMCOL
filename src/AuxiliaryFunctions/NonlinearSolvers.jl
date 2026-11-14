@@ -310,6 +310,7 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
         end
                 
         #Update norms:
+        xnorm           = NormFun(xn)
         pnorm           = NormFun(pn)
         gnorm           = NormFun(gn)
         _NLS_ch_update!()
@@ -528,6 +529,7 @@ function NLS_gmres(fun!::FW_NLS, x0::GenVector{Float64};
         t_SVD           += time()-t_ini
         
         #Update norms:
+        xnorm           = NormFun(xn)
         pnorm           = NormFun(pn)
         gnorm           = NormFun(gn)
         _NLS_ch_update!()
