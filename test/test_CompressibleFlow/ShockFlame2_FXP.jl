@@ -197,7 +197,7 @@ function ShockFlame2_FXP(; FesOrder::Int=3,
     solver.TolS_min         = 0.01*TolS
     solver.TolT             = TolT
 #     solver.CA_max           = Inf
-    solver.LSType           = "DominantILU0"
+    solver.LSType           = "SCILU0_GMRES"
     
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x)) 

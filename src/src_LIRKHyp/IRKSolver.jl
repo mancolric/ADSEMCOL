@@ -165,8 +165,12 @@ function IRK_Step!(solver::SolverData)
             
             #Solve nonlinear system
             #   Mu - b - a_ii*Deltat_n*f(t_k, u_k) = 0
-            if any(uppercase(solver.LSType).==["SCILU0", "BLOCKJACOBI", 
-                "DOMINANTILU0", "DOMINANT"])
+            #The nonlinear system is preconditioned with Mhat - alpha*tau*Jhat, where
+            #Jhat is possibly a more sparse approximation to J.
+            #Also, the preconditioner may be just an approximate factorization or some iterations
+            #of preconditioned GMRES:
+            if any(uppercase(solver.LSType).==["SCILU0_GMRES", "BLOCKJACOBI", 
+                "ILU0", "ILU0_GMRES"])
             
                 #Define preconditioned residual:
                 function QNResidualJ!(uhat::Vector{Float64}, gres::Vector{Float64})

@@ -88,7 +88,7 @@ mutable struct LS_BlockJacobi <: LinearSystems
 end
 
 #ILU0 factorization of row-dominant terms:
-mutable struct LS_DominantILU0 <: LinearSystems
+mutable struct LS_ILU0 <: LinearSystems
 
     A                   ::SparseMatrixCSC{Float64,Int}  #Original matrix
     APP                 ::SparseMatrixCSC{Float64,Int}  #Permuted matrix
@@ -100,12 +100,12 @@ mutable struct LS_DominantILU0 <: LinearSystems
     
     #nMaster, nSlaves, etc is in Pl
     
-    LS_DominantILU0()   = new()
+    LS_ILU0()           = new()
     
 end
 
 #Row-dominant terms + ILU0 + GMRES:
-mutable struct LS_Dominant <: LinearSystems
+mutable struct LS_ILU0_GMRES <: LinearSystems
 
     A                   ::SparseMatrixCSC{Float64,Int}  #Original matrix
     APP                 ::SparseMatrixCSC{Float64,Int}  #Permuted matrix
@@ -117,7 +117,7 @@ mutable struct LS_Dominant <: LinearSystems
     
     #nMaster, nSlaves, etc is in Pl
     
-    LS_Dominant()       = new()
+    LS_ILU0_GMRES()     = new()
     
 end
 

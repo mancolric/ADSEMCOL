@@ -29,7 +29,7 @@ function LIRKHyp_Start(model::ConstModel) where {ConstModel<:ConstModels}
     #Unassigned
     
     #Approximate Jacobian?
-    solver.LSType       = "SCILU0"
+    solver.LSType       = "SCILU0_GMRES"
     #Jm_ilocal, Jm_jlocal will be allocated in initial condition
     
     #Time integration method:
@@ -118,7 +118,7 @@ function ReadMesh!(solver::SolverData)
     #Variables for space reconstruction:
     solver.rec_fes      = TrQSpace(solver.mesh, solver.FesOrder+2)
     
-    #Condense and precondition mass matrix. Note that 
+    #Condense and precondition mass matrix:
     solver.MII_LS       = LinearSystem(solver.MII, solver, [1.0])
     LinearSystem!(solver.MII_LS)
     
@@ -225,13 +225,14 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
     solver.validv       = zeros(Int,0)
     
     #Set variables for ElemsDofCompute and UpsilonCompute:
-    if uppercase(solver.LSType)=="SCILU0"
+    if uppercase(solver.LSType)=="SCILU0_GMRES"
         solver.JPatt            = "Complete"
         solver.KrylovApprox     = false
         #compute all products in Jacobian matrix:
-        solver.Jm_ilocal        = zeros(Int, 0)     
+        solver.Jm_ilocal        = zeros(Int, 0)     #same as choosing all dof
         solver.Jm_jlocal        = zeros(Int, 0)   
         solver.Jm_localterms    = solver.fes.DofPerElem*solver.fes.DofPerElem
+    #=
     elseif uppercase(solver.LSType)=="SCILU0KRYLOV"
         solver.JPatt            = "Complete"
         solver.KrylovApprox     = true
@@ -239,6 +240,8 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
         solver.Jm_ilocal        = zeros(Int, 0)     
         solver.Jm_jlocal        = zeros(Int, 0)   
         solver.Jm_localterms    = solver.fes.DofPerElem*solver.fes.DofPerElem
+        error("deprecated")
+    =#
     elseif uppercase(solver.LSType)=="BLOCKJACOBI"
         solver.JPatt            = "BlockJacobi"
         solver.KrylovApprox     = false
@@ -246,6 +249,7 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
         solver.Jm_localterms    = solver.fes.DofPerElem
+    #=
     elseif uppercase(solver.LSType)=="BLOCKJACOBIKRYLOV"
         solver.JPatt            = "BlockJacobi"
         solver.KrylovApprox     = true
@@ -253,53 +257,25 @@ function LIRKHyp_InitialCondition!(solver::SolverData;
         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
         solver.Jm_localterms    = solver.fes.DofPerElem
-    elseif uppercase(solver.LSType)=="DOMINANTILU0"
-        solver.JPatt            = "Dominant"
+        error("deprecated")
+    =#
+    elseif uppercase(solver.LSType)=="ILU0"
+        solver.JPatt            = "Complete"
         solver.KrylovApprox     = false
-        #compute dominant terms:
-#         aux                     = GetDominantTerms(solver.fes)
-#         solver.Jm_ilocal        = aux[1]
-#         solver.Jm_jlocal        = aux[2]
-#         solver.Jm_localterms    = length(solver.Jm_ilocal)
-        #compute only products concerning the same dof:
-#         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
-#         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
-#         solver.Jm_localterms    = solver.fes.DofPerElem
-#         @warn "BLOCKJACOBI"
-        #complete:
         imat, jmat              = ndgrid(1:solver.fes.DofPerElem, 1:solver.fes.DofPerElem)
         solver.Jm_ilocal        = imat[:]
         solver.Jm_jlocal        = jmat[:]
         solver.Jm_localterms    = solver.fes.DofPerElem^2
-        @warn "Complete"
-    elseif uppercase(solver.LSType)=="DOMINANT"
-        solver.JPatt            = "Dominant"
+    elseif uppercase(solver.LSType)=="ILU0_GMRES"
+        solver.JPatt            = "Complete"
         solver.KrylovApprox     = false
-        #compute only products concerning the same dof:
-#         aux                     = GetDominantTerms(solver.fes)
-#         solver.Jm_ilocal        = aux[1]
-#         solver.Jm_jlocal        = aux[2]
-#         solver.Jm_localterms    = length(solver.Jm_ilocal)
-        #compute only products concerning the same dof:
-#         solver.Jm_ilocal        = 1:solver.fes.DofPerElem
-#         solver.Jm_jlocal        = 1:solver.fes.DofPerElem
-#         solver.Jm_localterms    = solver.fes.DofPerElem
-#         @warn "BLOCKJACOBI"
-        #complete:
         imat, jmat              = ndgrid(1:solver.fes.DofPerElem, 1:solver.fes.DofPerElem)
         solver.Jm_ilocal        = imat[:]
         solver.Jm_jlocal        = jmat[:]
         solver.Jm_localterms    = solver.fes.DofPerElem^2
-        @warn "Complete"
-        #complete transposed:
-#         imat, jmat              = ndgrid(1:solver.fes.DofPerElem, 1:solver.fes.DofPerElem)
-#         solver.Jm_ilocal        = jmat[:]
-#         solver.Jm_jlocal        = imat[:]
-#         solver.Jm_localterms    = solver.fes.DofPerElem^2
-#         @warn "Complete"
     else
         error(string("Unknown option $(solver.LSType). Available options are: ", 
-                "SCILU0, SCILU0Krylov, BlockJacobi, BlockJacobiKrylov, DominantILU0, Dominant."))
+                "SCILU0_GMRES, BlockJacobi, ILU0, ILU0_GMRES"))
     end
     
     #--------------------------------------------------------
@@ -575,7 +551,9 @@ function LIRKHyp_Step_Pre!(solver::SolverData; DEq_MaxIter::Int=0)
             solver.tb               += time()-t_ini
             
             #Solve linear system:
-            if uppercase(solver.LSType)=="SCILU0"
+            #
+            #Solve (M-alpha*tau*J)*u=b with preconditioned GMRES:
+            if any(uppercase(solver.LSType).==["SCILU0_GMRES", "ILU0_GMRES"])
             
                 #J is computed exactly, solve with SC+ILU0+GMRES:
                 
@@ -605,7 +583,9 @@ function LIRKHyp_Step_Pre!(solver::SolverData; DEq_MaxIter::Int=0)
                 solver.tRhs             += time()-t_ini
     #             println("Rhs vector = ", time()-t_ini)
                 view(solver.Ju_RK,:,kk) .= solver.Jm*u_k
-                
+               
+            #Solve (M - alpha*tau*J)*U = b in Krylov fashion (i.e., approx M*U and J*U by finite differences).
+            #Precondition with Mhat - alpha*tau*Jhat, where _hat is a more sparse approximation.
             elseif uppercase(solver.LSType)=="BLOCKJACOBIKRYLOV"
             
                 #Solve Mu - b - tau*a_ii*Ju = 0
@@ -682,7 +662,9 @@ function LIRKHyp_Step_Pre!(solver::SolverData; DEq_MaxIter::Int=0)
     #             println("Rhs vector = ", time()-t_ini)
                 view(solver.Ju_RK,:,kk) .= Ju
             
-            elseif any(uppercase(solver.LSType).==["BLOCKJACOBI", "DOMINANTILU0", "DOMINANT"])
+            #Solve (M - alpha*tau*Jhat)*U = b in Krylov fashion (i.e., approx M*U by finite differences).
+            #Precondition with Mhat - alpha*tau*Jhat, where _hat is a more sparse approximation.
+            elseif any(uppercase(solver.LSType).==["BLOCKJACOBI", "ILU0"])
             
                 #Solve Mu = b + tau*a_ii*Jprec*u
                 
@@ -1380,6 +1362,8 @@ end
 
 function LIRKHyp_Step_Post_Dolejsi!(solver::SolverData)
 
+    @warn "Deprecated"
+    
     println()
     t_start     = time()
     

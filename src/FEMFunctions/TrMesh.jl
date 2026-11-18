@@ -3,8 +3,18 @@
 #and NodesCoords.
 #
 #Then, the meshes are post processed to create inner nodes if necessary.
-function TrMesh_CreateRegular(FesOrder::Int, x1::Float64, x2::Float64, Nx::Int, 
-    y1::Float64, y2::Float64, Ny::Int)
+function TrMesh_CreateRegular(x1::Float64, x2::Float64, Nx::Int, 
+    y1::Float64, y2::Float64, Ny::Int; MeshOrder::Int=1)
+
+    #Mesh nodes:
+    xv                  = linspace(x1,x2,Nx)
+    yv                  = linspace(y1,y2,Ny)
+    return TrMesh_CreateFromGrid(xv, yv, MeshOrder=MeshOrder)
+
+end
+
+function TrMesh_CreateFromGrid(xv::Vector{Float64}, yv::Vector{Float64}; 
+    MeshOrder::Int=1)
 
     #Allocate outputs:
     nBoundaries             = 4
@@ -14,16 +24,16 @@ function TrMesh_CreateRegular(FesOrder::Int, x1::Float64, x2::Float64, Nx::Int,
     #Set up some fields:
     mesh.dim                = 2
     mesh.VertsPerElem       = 3
-    mesh.NodesPerElem       = (FesOrder+1)*(FesOrder+2)÷2
-    mesh.order              = FesOrder
+    mesh.NodesPerElem       = (MeshOrder+1)*(MeshOrder+2)÷2
+    mesh.order              = MeshOrder
     mesh.nBounds            = nBoundaries
     mesh.bmesh              = boundary_meshes
     for ii=1:nBoundaries
         boundary_meshes[ii]                 = TrBmesh()
         boundary_meshes[ii].dim             = 2
         boundary_meshes[ii].VertsPerElem    = 2
-        boundary_meshes[ii].NodesPerElem    = FesOrder+1
-        boundary_meshes[ii].order           = FesOrder
+        boundary_meshes[ii].NodesPerElem    = MeshOrder+1
+        boundary_meshes[ii].order           = MeshOrder
         boundary_meshes[ii].nVerts          = 0
         boundary_meshes[ii].nNodes          = 0
         boundary_meshes[ii].nElems          = 0
@@ -34,8 +44,8 @@ function TrMesh_CreateRegular(FesOrder::Int, x1::Float64, x2::Float64, Nx::Int,
     #CREATE LINEAR MESH:
 
     #Mesh nodes:
-    xv                  = linspace(x1,x2,Nx)
-    yv                  = linspace(y1,y2,Ny)
+    Nx                  = length(xv)
+    Ny                  = length(yv)
     xm,ym               = ndgrid(xv,yv)
     mesh.NodesCoords    = [xm[:] ym[:]]
     mesh.nVerts         = Nx*Ny
@@ -173,11 +183,11 @@ function TrMesh_Rectangle_Create!(MeshFile::String,
 end 
 		
 		
-function TrMesh_Read(file::String, FesOrder::Int, nBoundaries::Int)
+function TrMesh_Read(file::String, MeshOrder::Int, nBoundaries::Int)
 
     file_extension      = file[findlast('.', file)+1:length(file)]
     if file_extension=="db"
-        return TrMesh_ReadFromBamg(file, FesOrder, nBoundaries)
+        return TrMesh_ReadFromBamg(file, MeshOrder, nBoundaries)
     else
         error("Mesh file extension $(file_extension) not supported")
     end
@@ -185,11 +195,11 @@ function TrMesh_Read(file::String, FesOrder::Int, nBoundaries::Int)
 end
 
 "
-    mesh, boundary_meshes = TrXN_ReadFromBamg!(file,FesOrder,nBoundaries)
+    mesh, boundary_meshes = TrXN_ReadFromBamg!(file,MeshOrder,nBoundaries)
 
 Read mesh from output Bamg file (version 2.2).
 "
-function TrMesh_ReadFromBamg(file::String, FesOrder::Int, nBoundaries::Int)
+function TrMesh_ReadFromBamg(file::String, MeshOrder::Int, nBoundaries::Int)
 
     #Allocate outputs:
     mesh                = TrMesh()
@@ -200,14 +210,14 @@ function TrMesh_ReadFromBamg(file::String, FesOrder::Int, nBoundaries::Int)
     #Set up some fields:
     mesh.dim                = 2
     mesh.VertsPerElem       = 3
-    mesh.NodesPerElem       = (FesOrder+1)*(FesOrder+2)÷2
-    mesh.order              = FesOrder
+    mesh.NodesPerElem       = (MeshOrder+1)*(MeshOrder+2)÷2
+    mesh.order              = MeshOrder
     for ii=1:nBoundaries
         boundary_meshes[ii]                 = TrBmesh()
         boundary_meshes[ii].dim             = 2
         boundary_meshes[ii].VertsPerElem    = 2
-        boundary_meshes[ii].NodesPerElem    = FesOrder+1
-        boundary_meshes[ii].order           = FesOrder
+        boundary_meshes[ii].NodesPerElem    = MeshOrder+1
+        boundary_meshes[ii].order           = MeshOrder
         boundary_meshes[ii].nVerts          = 0
         boundary_meshes[ii].nNodes          = 0
         boundary_meshes[ii].nElems          = 0

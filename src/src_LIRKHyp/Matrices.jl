@@ -228,23 +228,23 @@ end
 
 #Set up linear systems:
 function LinearSystem(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
-    nFacts::Vector{Float64}; LSType::String="SCILU0")
+    nFacts::Vector{Float64}; LSType::String="SCILU0_GMRES")
     
-    if uppercase(LSType)=="SCILU0" || uppercase(LSType)=="SCILU0KRYLOV"
-        return LinearSystem_Complete(A, solver, nFacts)
-    elseif uppercase(LSType)=="BLOCKJACOBI" || uppercase(LSType)=="BLOCKJACOBIKRYLOV"
+    if uppercase(LSType)=="SCILU0_GMRES" #|| uppercase(LSType)=="SCILU0KRYLOV"
+        return LinearSystem_SCILU0_GMRES(A, solver, nFacts)
+    elseif uppercase(LSType)=="BLOCKJACOBI" #|| uppercase(LSType)=="BLOCKJACOBIKRYLOV"
         return LinearSystem_BlockJacobi(A, solver, nFacts)
-    elseif uppercase(LSType)=="DOMINANTILU0"
-        return LinearSystem_DominantILU0(A, solver, nFacts)
-    elseif uppercase(LSType)=="DOMINANT"
-        return LinearSystem_Dominant(A, solver, nFacts)
+    elseif uppercase(LSType)=="ILU0"
+        return LinearSystem_ILU0(A, solver, nFacts)
+    elseif uppercase(LSType)=="ILU0_GMRES"
+        return LinearSystem_ILU0_GMRES(A, solver, nFacts)
     else
-        error("Unknown option")
+        error("Unknown option $(LSType)")
     end
     
 end
     
-function LinearSystem_Complete(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
+function LinearSystem_SCILU0_GMRES(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
     nFacts::Vector{Float64})
 
     t_ini           = time()
@@ -340,17 +340,18 @@ function LinearSystem_BlockJacobi(A::SparseMatrixCSC{Float64,Int}, solver::Solve
     
 end
 
-function LinearSystem_DominantILU0(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
+function LinearSystem_ILU0(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
     nFacts::Vector{Float64})
 
     t_ini           = time()
     
     #Create linear system:
-    LS              = LS_DominantILU0()
+    LS              = LS_ILU0()
     
     #Save pointer to original matrix:
     LS.A            = A
     
+    #=
     #Nb of variables, master dof and slave dof:
     nVars           = length(nFacts)
     nMaster         = solver.fes.nDof                 #no slave dofs, system is solved directly
@@ -358,8 +359,26 @@ function LinearSystem_DominantILU0(A::SparseMatrixCSC{Float64,Int}, solver::Solv
     nSlaves         = 0
     
     #Optimal ordering for the degrees of freedom:
-#     dof_RCM_inv             = invperm(symrcm(solver.Mm[1:nMaster,1:nMaster]))
     dof_RCM_inv             = invperm(symrcm(A[1:nMaster,1:nMaster]))
+    =#
+    
+    #Nb of variables, master dof and slave dof. We will solve anyway without condensing. 
+    #However, this is necessary for computing a more optimal permutation:
+    nVars           = length(nFacts)
+    nMaster         = maximum(view(solver.fes.ElemsDof,:,1:3*solver.fes.order))
+    nDof            = solver.fes.nDof
+    nSlaves         = nDof-nMaster
+    
+    #Optimal ordering for the degrees of freedom:
+    dof_RCM_inv                 = zeros(Int, nDof)
+    dof_RCM_inv[nMaster+1:nDof] = 1:nSlaves
+    #Master dof are permuted according to symmetric Cuthill-McKee:
+    dof_RCM_inv[1:nMaster]      = nSlaves .+ invperm(symrcm(solver.MII[1:nMaster,1:nMaster]))
+    
+    #Once the permutation is computed, change nSlaves and nMaster, 
+    #so that Ared_mm is an empty matrix:
+    nSlaves         = nDof
+    nMaster         = 0
     
     #For a single variable, dof "idof" goes to new position jdof=dof_RCM_inv[idof].
     #On the other hand, dof jdof of vble II goes to position
@@ -386,17 +405,18 @@ function LinearSystem_DominantILU0(A::SparseMatrixCSC{Float64,Int}, solver::Solv
     
 end
 
-function LinearSystem_Dominant(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
+function LinearSystem_ILU0_GMRES(A::SparseMatrixCSC{Float64,Int}, solver::SolverData,
     nFacts::Vector{Float64})
 
     t_ini           = time()
     
     #Create linear system:
-    LS              = LS_Dominant()
+    LS              = LS_ILU0_GMRES()
     
     #Save pointer to original matrix:
     LS.A            = A
     
+    #=
     #Nb of variables, master dof and slave dof:
     nVars           = length(nFacts)
     nMaster         = solver.fes.nDof                 #no master dofs, system is solved directly
@@ -406,6 +426,25 @@ function LinearSystem_Dominant(A::SparseMatrixCSC{Float64,Int}, solver::SolverDa
     #Optimal ordering for the degrees of freedom:
 #     dof_RCM_inv             = invperm(symrcm(solver.Mm[1:nMaster,1:nMaster]))
     dof_RCM_inv             = invperm(symrcm(A[1:nMaster,1:nMaster]))
+    =#
+    
+    #Nb of variables, master dof and slave dof. We will solve anyway without condensing. 
+    #However, this is necessary for computing a more optimal permutation:
+    nVars           = length(nFacts)
+    nMaster         = maximum(view(solver.fes.ElemsDof,:,1:3*solver.fes.order))
+    nDof            = solver.fes.nDof
+    nSlaves         = nDof-nMaster
+    
+    #Optimal ordering for the degrees of freedom:
+    dof_RCM_inv                 = zeros(Int, nDof)
+    dof_RCM_inv[nMaster+1:nDof] = 1:nSlaves
+    #Master dof are permuted according to symmetric Cuthill-McKee:
+    dof_RCM_inv[1:nMaster]      = nSlaves .+ invperm(symrcm(solver.MII[1:nMaster,1:nMaster]))
+    
+    #Once the permutation is computed, change nSlaves and nMaster, 
+    #so that Ared_mm is an empty matrix:
+    nSlaves         = nDof
+    nMaster         = 0
     
     #For a single variable, dof "idof" goes to new position jdof=dof_RCM_inv[idof].
     #On the other hand, dof jdof of vble II goes to position
@@ -427,7 +466,7 @@ function LinearSystem_Dominant(A::SparseMatrixCSC{Float64,Int}, solver::SolverDa
     LS.APP          = SparseMatrixCSC{Float64,Int}(S_aux.m, S_aux.n, S_aux.colptr, 
                         S_aux.rowval, A.nzval[LS.ssPP_ss])
     LS.Pl           = SCILU0_alloc(LS.APP, nSlaves*nVars)
-
+    
     return LS
     
 end
@@ -456,7 +495,7 @@ function LinearSystem!(LS::LS_SCILU0_GMRES)
     
 end
 
-function LinearSystem!(LS::Union{LS_BlockJacobi, LS_DominantILU0, LS_Dominant})
+function LinearSystem!(LS::Union{LS_BlockJacobi, LS_ILU0, LS_ILU0_GMRES})
 
 #     t_ini           = time()
     
@@ -524,12 +563,10 @@ function LS_solve!(LS::LS_SCILU0_GMRES, u::GenVector{Float64}, b::GenVector{Floa
         mul!(f, F.Ared_mm, x)              #f = 1.0*A*x
         axpby!(-1.0, bred_m, 1.0, f)
         t_mult      += time()-t_ini
-#         if !isnothing(g)
         t_ini       = time()
         ldiv_master!(g, F, f)
         @avxt @. g  /= scaleP_m     #g ~~ Delta u. We have to return the scaled g
         t_ldiv      += time()-t_ini
-#         end
         @avxt @. x  /= scaleP_m
         return 1
     end
@@ -609,8 +646,8 @@ function LS_solve!(LS::LS_BlockJacobi, u::GenVector{Float64}, b::GenVector{Float
     
 end
 
-#Solve ILU0(Dominant(A))*u=b:
-function LS_solve!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Float64};
+#Solve ILU0(A)*u=b:
+function LS_solve!(LS::LS_ILU0, u::GenVector{Float64}, b::GenVector{Float64};
     RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
     
 #     t_ini           = time()
@@ -633,7 +670,6 @@ function LS_solve!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Floa
 #     println("Start: ", time()-t_ini)
     
     #Solve ILU0(Aapprox) uhat = bhat (no iterative solver):
-#     ldiv_master!(uhat, F, bhat)     #Overwrites uhat
     ldiv!(uhat, F, bhat)     #Overwrites uhat
     u[LS.p]         .= uhat
     
@@ -643,8 +679,8 @@ function LS_solve!(LS::LS_DominantILU0, u::GenVector{Float64}, b::GenVector{Floa
     
 end
 
-#Solve Dominant(A)*u=b with ILU0 + GMRES:
-function LS_solve!(LS::LS_Dominant, u::GenVector{Float64}, b::GenVector{Float64};
+#Solve A*u=b with ILU0 + GMRES:
+function LS_solve!(LS::LS_ILU0_GMRES, u::GenVector{Float64}, b::GenVector{Float64};
     RelTol::Float64=0.0, AbsTol::Float64=1e-8, MaxIter::Int=100, Display::String="notify")
     
     #Optional arguments are necessary for compatibility with the calling function
@@ -670,13 +706,11 @@ function LS_solve!(LS::LS_Dominant, u::GenVector{Float64}, b::GenVector{Float64}
         mul!(f, LS.APP, x)              #f = 1.0*A*x
         axpby!(-1.0, bhat, 1.0, f)
 #         t_mult      += time()-t_ini
-        if !isnothing(g)
-            t_ini       = time()
-            ldiv_master!(g, F, f)
-            @avxt @. g  /= scaleP     #g ~~ Delta u. We have to return the scaled g
-#             t_ldiv      += time()-t_ini
-        end
-        @avxt @. x      /= scaleP
+        t_ini       = time()
+        ldiv!(g, F, f)
+        @avxt @. g  /= scaleP     #g ~~ Delta u. We have to return the scaled g
+#         t_ldiv      += time()-t_ini
+        @avxt @. x  /= scaleP
         return 1
     end
     
@@ -750,7 +784,7 @@ end
 #   A \approx P^T L U P
 #Note that the latter relation also stems directly 
 #from P A P^T \approx L U 
-function LS_precxvector(LS::LS_DominantILU0, x::GenVector)
+function LS_precxvector(LS::LS_ILU0, x::GenVector)
 
     L, U            = LUFactors(LS.Pl)
     Px              = x[LS.p]
@@ -760,7 +794,7 @@ function LS_precxvector(LS::LS_DominantILU0, x::GenVector)
     return y
     
 end
-function LS_precxvector(LS::LS_Dominant, u::GenVector)
+function LS_precxvector(LS::LS_ILU0_GMRES, u::GenVector)
 
     return LS.A * u
     
