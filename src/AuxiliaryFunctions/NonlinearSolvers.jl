@@ -259,7 +259,7 @@ function Anderson(fun!::FW_NLS, x0::GenVector{Float64};
             
             #Normalize new columns:
 #             Deltag_norm_inv     = 1.0/(NormFun(view(Gm,:,1))+1e-14)
-            Deltag_norm_inv     = 1.0/(norm(view(Gm,:,1),1)+1e-16)
+            Deltag_norm_inv     = 1.0/(norm(view(Gm,:,1),1)+1e-32)
 #             Deltag_norm_inv     = 1.0
             BLAS.scal!(Deltag_norm_inv, view(Gm,:,1))
             BLAS.scal!(Deltag_norm_inv, view(Xm,:,1))

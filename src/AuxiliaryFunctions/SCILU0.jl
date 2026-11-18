@@ -210,10 +210,6 @@ function SCILU0_rows!(ILU::SCILU0Fact{nb,int}, A::SparseMatrixCSC{nb,int}) where
         #Pivot inverse:
         s_ii        = diagptr[ii]
         a_ii        = nzval[s_ii]
-        if a_ii==0.0
-            display(ii)
-            error("")
-        end
         aii_inv     = 1.0/a_ii
         
         t_pivot     += time()-t_ini2
@@ -283,7 +279,14 @@ function SCILU0_rows!(ILU::SCILU0Fact{nb,int}, A::SparseMatrixCSC{nb,int}) where
 #     println("t_columns = ", t_columns)
 #     println("t_erase = ", t_erase)
 #     println("t_reduced = ", t_reduced)
-            
+    
+    #Check pivots:
+    a_diag      = nzval[diagptr]
+    aux         = findfirst(a_diag.==zero(nb))
+    if !isnothing(aux)
+        error("Pivot $(aux) is zero")
+    end
+    
     return
     
 end
