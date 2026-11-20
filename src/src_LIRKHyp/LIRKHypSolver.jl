@@ -1694,7 +1694,7 @@ function LIRKHyp_Step_Post_Dolejsi!(solver::SolverData)
                         AMA_TolS[kk]    *= AMA_RefineFact
                     else    #otherwise, leave TolS_kk as is 
                     end
-                    
+                        
                     #Optimal anisotropy:
                     emeanv0, emeanv, 
                         err0, err1, 

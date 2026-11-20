@@ -1392,9 +1392,9 @@ function AMA_MetricIntersection(metrics::Vector{SpectralDecomp{Vector{Float64},I
             @avxt @. Pv             = max(delta, Pv)
         
             #Update Pmaxv:
-            @avxt @. aux_max        = Pv > P1v
-            @avxt @. phiv[aux_max]  = thetav[iTheta]
-            @avxt @. P1v[aux_max]   = Pv[aux_max]
+            @. aux_max          = Pv > P1v
+            @. phiv[aux_max]    = thetav[iTheta]
+            @. P1v[aux_max]     = Pv[aux_max]
             
         end
         

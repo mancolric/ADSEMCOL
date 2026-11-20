@@ -2,7 +2,7 @@ include("test_CompressibleFlow.jl")
 include("InputData/ReactiveGasAuxFunctions.jl")
 
 function ShockFlame2_FXP(; FesOrder::Int=3, 
-    tf::Float64=20.0, RKMethod::String="Ascher3",
+    tf::Float64=20.0, RKMethod::String="KC35",
     epsilon_hat::Float64=0e-2, nu_hat::Float64=1e-2, kappa_rho_cv_hat::Float64=0e-6, D_hat::Float64=1e-2, 
     YF0::Float64=1.0-1e-8, YX0::Float64=0.0,  
     delta_flame_hat::Float64=1.0, delta_shock_hat::Float64=max(epsilon_hat,nu_hat),
@@ -197,7 +197,13 @@ function ShockFlame2_FXP(; FesOrder::Int=3,
     solver.TolS_min         = 0.01*TolS
     solver.TolT             = TolT
 #     solver.CA_max           = Inf
-    solver.LSType           = "SCILU0_GMRES"
+    if RKMethod=="KC35"
+        solver.LSType       = "ILU0"
+#         solver.LSType       = "ILU0_GMRES"
+    else
+        solver.LSType       = "SCILU0_GMRES"
+#         solver.LSType       = "ILU0"
+    end
     
     #Set initial and boundary conditions:
     solver.u0fun        = FW11((x) -> u0fun(x)) 
@@ -225,7 +231,7 @@ function ShockFlame2_FXP(; FesOrder::Int=3,
     xsdotv              = [ NaN ]
     
     #Function to plot solution:
-    figv                = Vector{Figure}(undef,3)
+    figv                = Vector{Figure}(undef,4)
     if PlotFig
         figv[1]         = PyPlotSubPlots(mFig, nFig, w=wFig, h=hFig, left=0.9, right=0.4, bottom=1.1, top=1.0)
         for ii=2:length(figv)
@@ -281,23 +287,24 @@ function ShockFlame2_FXP(; FesOrder::Int=3,
                 savefig("$(VideosUbi)ShockFlame_FXP_Mesh$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
             
-#             figure(figv[3].number)
-#             PyPlot.cla()
-#             semilogy(solver.tv, solver.etaSv, ".-b")
-#             semilogy(solver.tv, solver.etaTv, ".-g")
-#             semilogy(solver.tv, solver.etaAv, ".-r")
-#             if true
-#                 validv  = solver.validv .== 1
-#                 semilogy(solver.tv[validv], solver.etaSv[validv], "sb")
-#                 semilogy(solver.tv[validv], solver.etaTv[validv], "sg")
-#                 semilogy(solver.tv[validv], solver.etaAv[validv], "sr")
-#             end
-#             legend(["space", "time", "algebraic"])
-#             xlabel(L"t")
-#             if SaveFig && solver.t==tf
-#                 savefig("$(VideosUbi)ShockFlame_FXP_Errors$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
-#             end
+            figure(figv[3].number)
+            PyPlot.cla()
+            semilogy(solver.tv, solver.etaSv, ".-b")
+            semilogy(solver.tv, solver.etaTv, ".-g")
+            semilogy(solver.tv, solver.etaAv, ".-r")
+            if true
+                validv  = solver.validv .== 1
+                semilogy(solver.tv[validv], solver.etaSv[validv], "sb")
+                semilogy(solver.tv[validv], solver.etaTv[validv], "sg")
+                semilogy(solver.tv[validv], solver.etaAv[validv], "sr")
+            end
+            legend(["space", "time", "algebraic"])
+            xlabel(L"t")
+            if SaveFig && solver.t==tf
+                savefig("$(VideosUbi)ShockFlame_FXP_Errors$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
+            end
             
+            #=
             figure(figv[3].number)
             PyPlot.cla()
             #
@@ -314,7 +321,20 @@ function ShockFlame2_FXP(; FesOrder::Int=3,
             if SaveFig && solver.t==tf
                 savefig("$(VideosUbi)ShockFlame_FXP_Errors$(SC)_$(nb_SaveFig).png", dpi=400, pad_inches=0)
             end
+            =#
             
+            figure(figv[4].number)
+            semilogy(solver.tv, solver.nElemsv, ".-b")
+            if true
+                validv  = solver.validv .== 1
+                semilogy(solver.tv[validv], solver.nElemsv[validv], "sb")
+            end
+            xlabel(L"t")
+            ylabel(L"N_E")
+            if SaveFig && solver.t==tfv[length(tfv)]
+                savefig("$(VideosUbi)ShockFlame_FXP_NE$(SC)_$(NSave).png", dpi=400, pad_inches=0)
+            end
+        
             t_lastFig           += Deltat_SaveFig
             ct_SaveFig          = 0
             nb_SaveFig          += 1
@@ -369,6 +389,7 @@ function ShockFlame2_FXP(; FesOrder::Int=3,
             ConvFlag    = IRK_Step!(solver)
         else
             ConvFlag    = LIRKHyp_Step!(solver, DEq_MaxIter=0)
+#             ConvFlag    = IRK_Step!(solver)
         end
         
         if ConvFlag<=0

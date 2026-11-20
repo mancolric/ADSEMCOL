@@ -100,7 +100,7 @@ function SmoothVortex(hp::Float64, FesOrder::Int, tfv::Array{Float64,1};
     solver.TimeAdapt        = TimeAdapt
 #     solver.LSType           = "BlockJacobi"
 #     solver.LSType           = "BlockJacobiKrylov"
-#     solver.LSType           = "DominantILU0"
+    solver.LSType           = "ILU0"
 #     solver.LSType           = "Dominant"
     solver.LS_iters_target  = typemax(Int)
     solver.LS_iters_max     = 400
@@ -249,8 +249,8 @@ function SmoothVortex(hp::Float64, FesOrder::Int, tfv::Array{Float64,1};
     
     while solver.t<tfv[length(tfv)]
     
-        ConvFlag            = LIRKHyp_Step!(solver)
-#         ConvFlag            = IRK_Step!(solver)
+#         ConvFlag            = LIRKHyp_Step!(solver)
+        ConvFlag            = IRK_Step_Post!(solver)
         
         if ConvFlag<=0
             break

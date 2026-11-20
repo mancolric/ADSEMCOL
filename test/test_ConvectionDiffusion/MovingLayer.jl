@@ -264,9 +264,9 @@ function MovingLayer(hp0::Float64, FesOrder::Int;
         t0                  = time()
 #         ConvFlag            = LIRKHyp_Step!(solver)
         if PostAdapt
-            ConvFlag            = LIRKHyp_Step_Post!(solver)
+            ConvFlag            = IRK_Step_Post!(solver)
         else
-            ConvFlag            = LIRKHyp_Step_Pre!(solver)
+            ConvFlag            = IRK_Step_Pre!(solver)
         end
         if ConvFlag<=0
             break
