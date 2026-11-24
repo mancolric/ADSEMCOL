@@ -2,7 +2,7 @@ include("test_CompressibleFlow.jl")
 include("InputData/ReactiveGasAuxFunctions.jl")
 
 function ShockFlame2_FXP(; FesOrder::Int=3, 
-    tf::Float64=20.0, RKMethod::String="KC35",
+    tfhat::Float64=20.0, RKMethod::String="KC35",
     epsilon_hat::Float64=0e-2, nu_hat::Float64=1e-2, kappa_rho_cv_hat::Float64=0e-6, D_hat::Float64=1e-2, 
     YF0::Float64=1.0-1e-8, YX0::Float64=0.0,  
     delta_flame_hat::Float64=1.0, delta_shock_hat::Float64=max(epsilon_hat,nu_hat),
@@ -13,14 +13,14 @@ function ShockFlame2_FXP(; FesOrder::Int=3,
     #
     TolS::Float64=1e-6, AMA_MaxIter::Int=200, AMA_SizeOrder::Int=FesOrder, AMA_AnisoOrder::Int=2, 
     #
-    TolT::Float64=1e-4, Deltat0::Float64=1e-6,
+    TolT::Float64=1e-4, Deltat0hat::Float64=1e-6,
     #
     PlotFig::Bool=false, MarkSF::Bool=true, wFig::Float64=9.50, hFig::Float64=6.50, 
     PlotVars::Vector{String}=String[], 
-    SaveFig::Bool=false, Nt_SaveFig::Int=5, Deltat_SaveFig::Float64=Inf,
+    SaveFig::Bool=false, Nt_SaveFig::Int=5, Deltathat_SaveFig::Float64=Inf,
     mFig::Int=max(1,length(PlotVars)), nFig::Int=Int(ceil(length(PlotVars)/mFig)), cmap::String="jet",
     #
-    SaveRes::Bool=false, Nt_SaveRes::Int=typemax(Int), Deltat_SaveRes::Float64=0.1, 
+    SaveRes::Bool=false, Nt_SaveRes::Int=typemax(Int), Deltathat_SaveRes::Float64=0.1, 
     #
     CSS::Float64=0.1, 
     #
@@ -63,6 +63,12 @@ function ShockFlame2_FXP(; FesOrder::Int=3,
     uc              = sqrt(RT0)
     tc              = 1.0/BR
     Lc              = uc*tc
+    
+    #Update Deltats:
+    tf              = tfhat * tc
+    Deltat_SaveFig  = Deltathat_SaveFig * tc
+    Deltat_SaveRes  = Deltathat_SaveRes
+    Deltat0         = Deltat0hat * tc
     
     #Define gas:
     GasModel                = GasFXP()
@@ -161,10 +167,10 @@ function ShockFlame2_FXP(; FesOrder::Int=3,
     #Add a source term Q_alpha = - sigma(t,x) * (u_alpha - uBC(t))
     function SpoungeFun(t::Float64, x::Vector{Matrix{Float64}})
     
-        Lc          = 10.0
+        Lc_sp       = 10.0
         lambda      = abs(uR) + sqrt(gamma*RTR)
-        tc          = Lc/lambda         #Characteristic wave propagation time 
-        sigma       = @tturbo @. 2.0/tc * exp(-5*(x[1]-Lx)^2/(Lc^2))
+        tc_sp       = Lc_sp/lambda         #Characteristic wave propagation time 
+        sigma       = @tturbo @. 2.0/tc_sp * exp(-5*(x[1]-Lx)^2/(Lc_sp^2))
         uBC         = [ 0.0, 0.0, rhoR, rhoR*uR, 0.0, pR/(gamma-1.0) + 0.5*rhoR*uR^2 - rhoR*Q0 ]
         
 #         figure()
